@@ -1,0 +1,17 @@
+# Конфиг Cloudflare Tunnel для домена tendr.kz
+# Заполните <tunnel-id> и <zone-id> после cloudflared tunnel create
+
+tunnel: <tunnel-id>
+credentials-file: /etc/cloudflared/tunnel-credentials.json
+
+ingress:
+  # Веб-интерфейс (Vite dev или nginx)
+  - hostname: app.tendr.kz
+    service: http://localhost:5173
+
+  # API для интеграций (опционально)
+  - hostname: api.tendr.kz
+    service: http://localhost:8000
+
+  # Catch-all — обязательный, иначе туннель не стартует
+  - service: http_status:404

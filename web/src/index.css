@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --bg: #fafafa;
+        --bg-elevated: #ffffff;
+        --border: rgba(0, 0, 0, 0.06);
+        --border-strong: rgba(0, 0, 0, 0.12);
+        --text: #18181b;
+        --text-muted: #71717a;
+        --text-subtle: #a1a1aa;
+        --accent: #10b981;
+        --accent-glow: rgba(16, 185, 129, 0.08);
+    }
+    html.dark {
+        --bg: #09090b;
+        --bg-elevated: #18181b;
+        --border: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.15);
+        --text: #fafafa;
+        --text-muted: #a1a1aa;
+        --text-subtle: #71717a;
+        --accent: #10b981;
+        --accent-glow: rgba(16, 185, 129, 0.12);
+    }
+    html {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family:
+            "Inter",
+            system-ui,
+            -apple-system,
+            sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        transition:
+            background-color 0.15s,
+            color 0.15s;
+    }
+    body {
+        @apply bg-[var(--bg)] text-[var(--text)] min-h-screen;
+    }
+    /* Глобальный override для input/select/textarea в тёмной теме */
+    html.dark
+        input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    html.dark select,
+    html.dark textarea {
+        background-color: var(--bg-elevated);
+        color: var(--text);
+        border-color: var(--border-strong);
+    }
+    html.dark input::placeholder,
+    html.dark textarea::placeholder {
+        color: var(--text-subtle);
+    }
+    /* Плавные переходы */
+    * {
+        transition-property:
+            background-color, border-color, color, fill, stroke;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 150ms;
+    }
+    /* Скроллбар в тёмной теме */
+    html.dark ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    html.dark ::-webkit-scrollbar-track {
+        background: var(--bg);
+    }
+    html.dark ::-webkit-scrollbar-thumb {
+        background: var(--border-strong);
+        border-radius: 4px;
+    }
+    html.dark ::-webkit-scrollbar-thumb:hover {
+        background: var(--text-subtle);
+    }
+}

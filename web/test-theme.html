@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Test dark</title>
+</head>
+<body>
+<button id="btn">Toggle dark</button>
+<div class="bg-white dark:bg-slate-800 p-4 text-slate-900 dark:text-slate-100">
+  Hello world
+</div>
+<style>
+body { background: white; }
+.bg-white { background: white; padding: 1rem; }
+.text-slate-900 { color: #0f172a; }
+.dark .bg-white { background: #1e293b; }
+.dark .text-slate-900 { color: #e2e8f0; }
+</style>
+<script>
+document.getElementById('btn').onclick = () => {
+  document.documentElement.classList.toggle('dark');
+  console.log('Class:', document.documentElement.className);
+};
+</script>
+</body>
+</html>

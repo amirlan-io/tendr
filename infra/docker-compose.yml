@@ -1,0 +1,81 @@
+# Поднимаем лёгкие сервисы: Qdrant + Redis.
+# PostgreSQL используется системный (5432 уже занят нативным postgres).
+# Если у вас нет нативного postgres — раскомментируйте блок services.postgres ниже.
+#
+# Команды:
+#   docker compose up -d         — старт
+#   docker compose down          — остановка
+#   docker compose logs -f qdrant
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: tendr-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - tendr_qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__MAX_REQUEST_SIZE_MB: 16
+      QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS: 2
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:6333/healthz",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 800M
+
+  redis:
+    image: redis:7-alpine
+    container_name: tendr-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - tendr_redis_data:/data
+    command:
+      [
+        "redis-server",
+        "--maxmemory",
+        "128mb",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
+    deploy:
+      resources:
+        limits:
+          memory: 160M
+
+  # === Если у вас НЕТ нативного PostgreSQL, раскомментируйте: ===
+  #
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: tendr-postgres
+  #   environment:
+  #     POSTGRES_USER: tendr
+  #     POSTGRES_PASSWORD: tendr
+  #     POSTGRES_DB: tendr
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - tendr_pg_data:/var/lib/postgresql/data
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 300M
+
+volumes:
+  tendr_qdrant_data:
+  tendr_redis_data:
+  # tendr_pg_data:    # раскомментировать вместе с сервисом postgres
