@@ -8,6 +8,7 @@ import { HistoryPage } from "./pages/History";
 import { AdminPage } from "./pages/Admin";
 import { B2GPage } from "./pages/B2G";
 import { LotsPage } from "./pages/Lots";
+import { NotFoundPage } from "./pages/NotFound";
 import { getOrCreateClientId } from "./clientId";
 import { applyTheme, getTheme } from "./theme";
 
@@ -26,6 +27,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/b2g" element={<B2GPage />} />
         <Route path="/lots" element={<LotsPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,
