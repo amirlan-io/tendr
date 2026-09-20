@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.agents.b2g import B2GAgent
+from app.core.client_id import require_client_id
 from app.db import get_db
 from app.db import repo as db_repo
 from app.db.models import (
@@ -30,22 +31,13 @@ router = APIRouter(prefix="/b2g", tags=["b2g"])
 # ───── Helpers ─────
 
 
-def _client_id(request: Request) -> str:
-    raw = request.cookies.get("tendr_cid") or request.headers.get("X-Client-Id")
-    if raw is None:
-        return ""
-    if not raw or raw == "anon" or len(raw) < 8 or len(raw) > 128:
-        return ""
-    if any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in raw):
-        return ""
-    return raw
-
-
 async def _user_for_request(session: AsyncSession, request: Request) -> User:
-    """Резолвим юзера по X-Client-Id (cookie)."""
-    cid = _client_id(request)
-    if not cid:
-        raise HTTPException(status_code=400, detail="Invalid client identifier")
+    """Резолвим юзера по X-Client-Id (cookie).
+
+    This is not a full authorization mechanism; in production a server-side
+    session should be used instead.
+    """
+    cid = await require_client_id(request)
     stmt = select(User).where(User.web_client_id == cid)
     user = (await session.execute(stmt)).scalar_one_or_none()
     if not user:
