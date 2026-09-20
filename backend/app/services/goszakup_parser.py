@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import enum
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,6 +28,27 @@ class LotNotFoundError(Exception):
     def __init__(self, lot_id: str) -> None:
         self.lot_id = lot_id
         super().__init__(f"Лот с ID {lot_id} не найден на goszakup.gov.kz")
+
+
+class GoszakupReferenceField(str, enum.Enum):
+    ANNOUNCEMENT_ID = "announcement_id"
+    ANNOUNCEMENT_NUMBER = "announcement_number"
+    LOT_ID = "lot_id"
+    LOT_NUMBER = "lot_number"
+
+
+@dataclass(frozen=True, slots=True)
+class GoszakupReference:
+    """Canonical Goszakup reference information."""
+
+    raw: str
+    kind: GoszakupReferenceField
+    announcement_id: str | None = None
+    announcement_number: str | None = None
+    lot_id: str | None = None
+    lot_number: str | None = None
+    source_url: str | None = None
+    host: str | None = None
 
 
 @dataclass
@@ -60,46 +82,209 @@ class GoszakupParser:
         self._client = httpx.AsyncClient(
             timeout=30.0,
             headers={"User-Agent": "TendrBot/0.1 (+https://tendr.kz)"},
-            follow_redirects=True,
+            follow_redirects=False,
         )
 
     async def close(self) -> None:
         await self._client.aclose()
 
     async def fetch_lot(self, lot_id_or_url: str) -> ParsedLot:
-        """Универсальный метод: принимает ID лота или полный URL."""
-        lot_id = self._extract_lot_id(lot_id_or_url)
+        """Универсальный метод: принимает lot_number, announcement_number, lot_id или полный URL."""
+        reference = self.parse_reference(lot_id_or_url)
+        lookup_key = reference.lot_number or reference.announcement_number or reference.lot_id or reference.announcement_id
+        if lookup_key and ("-" in str(lookup_key) or str(lookup_key).startswith("0")):
+            resolved = await self.lookup_lot_number(reference)
+            lookup_key = resolved.lot_id or resolved.announcement_id or reference.lot_number or reference.announcement_number
+
         if self._api_token:
             try:
-                return await self._fetch_lot_via_api(lot_id)
+                return await self._fetch_lot_via_api(str(lookup_key))
             except Exception as e:
-                logger.warning("API fetch failed for {}, fallback to HTML: {}", lot_id, e)
-        return await self._fetch_lot_html(lot_id)
+                logger.warning("API fetch failed for {}, fallback to HTML: {}", lookup_key, e)
+        return await self._fetch_lot_html(str(lookup_key))
 
     @staticmethod
-    def _normalize_reference(value: str) -> str:
-        """Проверяет, что ссылка/ID относятся к goszakup.gov.kz и возвращает чистый numeric ID."""
+    def parse_reference(value: str) -> GoszakupReference:
+        """Normalize a Goszakup reference without stripping the lot suffix."""
         text = (value or "").strip()
         if not text:
             raise ValueError("Пустая ссылка на Goszakup")
 
         if re.fullmatch(r"\d{6,}(?:-\d+)?", text):
-            return re.search(r"(\d{6,})", text).group(1)
+            match = re.fullmatch(r"(\d{6,})(?:-(\d+))?", text)
+            if not match:
+                raise ValueError("Некорректный ID лота goszakup")
+            if match.group(2):
+                lot_number = match.group(0)
+                return GoszakupReference(
+                    raw=text,
+                    kind=GoszakupReferenceField.LOT_NUMBER,
+                    lot_number=lot_number,
+                    source_url=f"https://goszakup.gov.kz/ru/announce/index/{lot_number}",
+                    host="goszakup.gov.kz",
+                )
+            announcement_id = match.group(1)
+            return GoszakupReference(
+                raw=text,
+                kind=GoszakupReferenceField.ANNOUNCEMENT_ID,
+                announcement_id=announcement_id,
+                source_url=f"https://goszakup.gov.kz/ru/announce/index/{announcement_id}",
+                host="goszakup.gov.kz",
+            )
 
         parsed = urlsplit(text)
-        host = (parsed.hostname or "").lower()
-        if not host or host not in {"goszakup.gov.kz", "www.goszakup.gov.kz", "ows.goszakup.gov.kz", "v3bl.goszakup.gov.kz"}:
-            raise ValueError("Поддерживаются только ссылки goszakup.gov.kz")
+        if parsed.username or parsed.password:
+            raise ValueError("Ссылка goszakup содержит userinfo")
+        if parsed.fragment:
+            raise ValueError("Ссылка goszakup не должна содержать fragment")
+        if parsed.scheme.lower() != "https":
+            raise ValueError("Поддерживаются только HTTPS-ссылки goszakup.gov.kz")
+        if parsed.netloc and parsed.port not in (None, 443):
+            raise ValueError("Ссылки goszakup.gov.kz не должны содержать нестандартный порт")
 
-        match = re.search(r"(\d{6,})(?:-(\d+))?", parsed.path or "")
+        host = (parsed.hostname or "").lower()
+        allowed_hosts = {
+            "goszakup.gov.kz",
+            "www.goszakup.gov.kz",
+            "ows.goszakup.gov.kz",
+            "v3bl.goszakup.gov.kz",
+        }
+        if not host or host not in allowed_hosts:
+            raise ValueError("Поддерживаются только ссылки goszakup.gov.kz")
+        if host in {"localhost", "127.0.0.1", "0.0.0.0"}:
+            raise ValueError("Локальный адрес не поддерживается")
+        if re.fullmatch(r"\d+(?:\.\d+){3}", host):
+            raise ValueError("IP-адрес не поддерживается")
+        if not parsed.path or parsed.path == "/":
+            raise ValueError("Неизвестный URL pattern для goszakup")
+        if parsed.query:
+            raise ValueError("Запросы в ссылке goszakup не поддерживаются")
+
+        path_pattern = re.compile(r"/(?:ru|kk)/(?:announce|lot|view)/(?:index|show)/.*", re.IGNORECASE)
+        if not path_pattern.match(parsed.path):
+            raise ValueError("Неизвестный URL pattern для goszakup")
+
+        match = re.search(r"(\d{6,}(?:-\d+)?)", parsed.path or "")
         if not match:
-            raise ValueError("В ссылке не найден числовой ID лота goszakup")
-        return match.group(1)
+            raise ValueError("Неизвестный URL pattern для goszakup")
+
+        candidate = match.group(1)
+        if "-" in candidate:
+            kind = GoszakupReferenceField.LOT_NUMBER
+            lot_number = candidate
+            source_url = f"https://{host}/ru/announce/index/{lot_number}"
+            return GoszakupReference(
+                raw=text,
+                kind=kind,
+                lot_number=lot_number,
+                source_url=source_url,
+                host=host,
+            )
+
+        kind = GoszakupReferenceField.ANNOUNCEMENT_ID
+        source_url = f"https://{host}/ru/announce/index/{candidate}"
+        return GoszakupReference(
+            raw=text,
+            kind=kind,
+            announcement_id=candidate,
+            source_url=source_url,
+            host=host,
+        )
+
+    @staticmethod
+    def _normalize_reference(value: str) -> str:
+        """Возвращает полный lot_number без потери суффикса."""
+        return GoszakupParser.parse_reference(value).lot_number or ""
 
     @staticmethod
     def _extract_lot_id(value: str) -> str:
-        """Вытаскивает числовой ID лота из URL или возвращает как есть."""
-        return GoszakupParser._normalize_reference(value)
+        """Возвращает lot_number как есть, без обрезания суффикса."""
+        ref = GoszakupParser.parse_reference(value)
+        return ref.lot_number or ref.announcement_id or ""
+
+    async def lookup_lot_number(self, reference: GoszakupReference) -> GoszakupReference:
+        """Lookup по полному lot_number, без обрезки суффикса и без строковой интерполяции в GraphQL query."""
+        if not reference.lot_number:
+            raise ValueError("lot_number отсутствует в ссылке")
+        if not self._api_token:
+            raise ValueError("API токен goszakup не настроен для lookup по lot_number")
+
+        query = """
+        query LookupLotNumber($lot_number: String!) {
+          trd_buy(filters: { number_anno: $lot_number }, limit: 1) {
+            id
+            number_anno
+          }
+          lots(filters: { lot_number: $lot_number }, limit: 10) {
+            id
+            lot_number
+            trd_buy_id
+          }
+        }
+        """
+        variables = {"lot_number": reference.lot_number}
+        headers = {
+            "Authorization": f"Bearer {self._api_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        graphql_url = f"{self._api_url.rstrip('/')}/graphql"
+        try:
+            response = await self._client.post(
+                graphql_url,
+                headers=headers,
+                json={"query": query, "variables": variables},
+                timeout=15.0,
+                follow_redirects=False,
+            )
+        except TypeError:
+            response = await self._client.post(
+                graphql_url,
+                headers=headers,
+                json={"query": query, "variables": variables},
+                timeout=15.0,
+            )
+        except httpx.TimeoutException as exc:
+            raise ValueError("Timeout при lookup lot_number в Goszakup API") from exc
+        except httpx.HTTPError as exc:
+            raise ValueError("Сетевая ошибка при lookup lot_number в Goszakup API") from exc
+
+        if response.status_code in {301, 302, 303, 307, 308}:
+            raise ValueError("Получен redirect при lookup lot_number в Goszakup API")
+        if response.status_code != 200:
+            raise ValueError("API lookup по lot_number недоступен в текущей конфигурации")
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ValueError("Повреждённый JSON-ответ при lookup lot_number в Goszakup API") from exc
+
+        errors = payload.get("errors")
+        if errors:
+            raise ValueError("API не поддерживает lookup по lot_number или вернул ошибку")
+
+        data = payload.get("data") or {}
+        trd_buy_items = data.get("trd_buy") or []
+        lot_items = data.get("lots") or []
+        if not trd_buy_items and not lot_items:
+            raise ValueError("Не удалось найти лот по full lot_number в Goszakup API")
+
+        trd_buy = trd_buy_items[0] if trd_buy_items else {}
+        lot_item = lot_items[0] if lot_items else {}
+        actual_trd_buy_id = trd_buy.get("id") or lot_item.get("trd_buy_id") or lot_item.get("trdBuyId")
+        actual_lot_id = lot_item.get("id") or lot_item.get("lot_id")
+        if actual_trd_buy_id is None and actual_lot_id is None:
+            raise ValueError("API lookup не вернул фактический trd_buy_id/lot_id")
+
+        return GoszakupReference(
+            raw=reference.raw,
+            kind=reference.kind,
+            announcement_id=str(actual_trd_buy_id) if actual_trd_buy_id is not None else None,
+            lot_id=str(actual_lot_id) if actual_lot_id is not None else None,
+            lot_number=reference.lot_number,
+            source_url=reference.source_url,
+            host=reference.host,
+        )
 
     async def _fetch_lot_via_api(self, lot_id: str) -> ParsedLot:
         """Запрос к OWS goszakup.gov.kz (нужен токен).

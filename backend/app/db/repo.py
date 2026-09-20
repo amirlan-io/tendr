@@ -5,15 +5,250 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
+import uuid
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.client_id import validate_client_id
 from app.core.config import get_settings
-from app.db.models import Analysis, Payment, Subscription, User
+from app.db.models import Analysis, Payment, QuotaReservation, Subscription, User
+
+
+class QuotaLimitExceeded(RuntimeError):
+    """Внутреннее исключение при исчерпании квоты."""
+
+
+def _normalize_utc(dt: datetime | None) -> datetime:
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _utc_naive(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    return _normalize_utc(dt).replace(tzinfo=None)
+
+
+async def _run_in_transaction(session: AsyncSession, callback):
+    if session.in_transaction():
+        return await callback()
+    async with session.begin():
+        return await callback()
+
+
+def _month_start_utc(now: datetime | None = None) -> datetime:
+    now = _normalize_utc(now)
+    return datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+
+
+async def _current_reserved_amount(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    now: datetime | None = None,
+    month_key: str | None = None,
+) -> int:
+    now = _normalize_utc(now)
+    now_naive = now.replace(tzinfo=None)
+    month_key = month_key or now.strftime("%Y-%m")
+    stmt = select(func.coalesce(func.sum(QuotaReservation.amount), 0)).where(
+        and_(
+            QuotaReservation.user_id == user_id,
+            QuotaReservation.month_key == month_key,
+            QuotaReservation.status == "reserved",
+            QuotaReservation.expires_at > now_naive,
+        )
+    )
+    result = await session.execute(stmt)
+    return int(result.scalar() or 0)
+
+
+async def cleanup_expired_quota_reservations(
+    session: AsyncSession,
+    *,
+    now: datetime | None = None,
+) -> int:
+    """Освободить просроченные резервирования."""
+    now = _normalize_utc(now)
+    now_naive = now.replace(tzinfo=None)
+    rows = await session.execute(
+        select(QuotaReservation).where(
+            and_(
+                QuotaReservation.status == "reserved",
+                QuotaReservation.expires_at <= now_naive,
+            )
+        )
+    )
+    expired = rows.scalars().all()
+    for reservation in expired:
+        reservation.status = "released"
+        reservation.released_at = now
+        reservation.release_reason = "expired"
+    if expired:
+        await session.flush()
+    return len(expired)
+
+
+async def reserve_user_quota(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    operation_key: str,
+    amount: int = 1,
+    ttl_seconds: int = 300,
+    limit: int | None = None,
+    now_override: datetime | None = None,
+) -> dict[str, Any]:
+    """Atomically reserve quota for a single user operation.
+
+    The check and reservation are performed inside the same DB transaction to
+    prevent two concurrent requests from consuming the final slot.
+    """
+    if amount <= 0:
+        raise ValueError("amount must be positive")
+
+    now = _normalize_utc(now_override)
+    month_key = now.strftime("%Y-%m")
+    now_naive = now.replace(tzinfo=None)
+    effective_limit = limit if limit is not None else await _resolve_user_limit(session, user_id)
+
+    async def _reserve() -> dict[str, Any]:
+        await cleanup_expired_quota_reservations(session, now=now)
+        user = await session.get(User, user_id)
+        if user is None:
+            raise LookupError(f"User {user_id} not found")
+        used_this_month = await count_analyses_this_month(session, user_id, now_override=now)
+        reserved_this_month = await _current_reserved_amount(
+            session,
+            user_id,
+            now=now,
+            month_key=month_key,
+        )
+        if used_this_month + reserved_this_month + amount > effective_limit:
+            raise QuotaLimitExceeded(f"Quota limit exceeded for user {user_id}")
+
+        reservation = QuotaReservation(
+            user_id=user_id,
+            reservation_key=uuid.uuid4().hex,
+            operation_key=operation_key[:128],
+            amount=int(amount),
+            month_key=month_key,
+            status="reserved",
+            reserved_at=now_naive,
+            expires_at=now_naive + timedelta(seconds=max(1, int(ttl_seconds))),
+        )
+        session.add(reservation)
+        await session.flush()
+        return {
+            "status": "reserved",
+            "reservation_key": reservation.reservation_key,
+            "amount": reservation.amount,
+            "limit": effective_limit,
+            "expires_at": reservation.expires_at.isoformat(),
+        }
+
+    return await _run_in_transaction(session, _reserve)
+
+
+async def confirm_user_quota(
+    session: AsyncSession,
+    user_id: int,
+    reservation_key: str | None = None,
+    *,
+    now_override: datetime | None = None,
+) -> bool:
+    """Confirm a reservation; idempotent."""
+    if reservation_key is None:
+        raise ValueError("reservation_key is required")
+
+    now = _normalize_utc(now_override)
+    now_naive = now.replace(tzinfo=None)
+
+    async def _confirm() -> bool:
+        result = await session.execute(
+            select(QuotaReservation).where(
+                and_(
+                    QuotaReservation.user_id == user_id,
+                    QuotaReservation.reservation_key == reservation_key,
+                )
+            )
+        )
+        reservation = result.scalar_one_or_none()
+        if not reservation:
+            return False
+        if reservation.status == "confirmed":
+            return False
+        if reservation.status in {"released", "expired"}:
+            return False
+        if reservation.expires_at is not None and reservation.expires_at <= now_naive:
+            reservation.status = "released"
+            reservation.released_at = now_naive
+            reservation.release_reason = "expired"
+            await session.flush()
+            return False
+
+        reservation.status = "confirmed"
+        reservation.confirmed_at = now_naive
+        await session.flush()
+        return True
+
+    return await _run_in_transaction(session, _confirm)
+
+
+async def release_user_quota(
+    session: AsyncSession,
+    user_id: int,
+    reservation_key: str | None = None,
+    *,
+    now_override: datetime | None = None,
+) -> bool:
+    """Release a reservation; idempotent."""
+    if reservation_key is None:
+        raise ValueError("reservation_key is required")
+
+    now = _normalize_utc(now_override)
+
+    async def _release() -> bool:
+        result = await session.execute(
+            select(QuotaReservation).where(
+                and_(
+                    QuotaReservation.user_id == user_id,
+                    QuotaReservation.reservation_key == reservation_key,
+                )
+            )
+        )
+        reservation = result.scalar_one_or_none()
+        if not reservation:
+            return False
+        if reservation.status in {"released", "confirmed"}:
+            return False
+        reservation.status = "released"
+        reservation.released_at = now
+        reservation.release_reason = "manual"
+        await session.flush()
+        return True
+
+    return await _run_in_transaction(session, _release)
+
+
+async def _resolve_user_limit(session: AsyncSession, user_id: int) -> int:
+    user = await session.get(User, user_id)
+    if not user:
+        return 3
+
+    settings = get_settings()
+    if user.is_pilot:
+        return int(settings.pilot_free_tier_applications_per_month)
+    if user.is_subscribed and user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone.utc):
+        return 999
+    return int(settings.free_tier_applications_per_month)
+
 
 
 async def get_or_create_user(
@@ -58,10 +293,15 @@ async def get_user_by_web_id(session: AsyncSession, web_client_id: str) -> User 
     return result.scalar_one_or_none()
 
 
-async def count_analyses_this_month(session: AsyncSession, user_id: int) -> int:
-    """Сколько анализов юзер сделал в текущем месяце."""
-    now = datetime.utcnow()
-    start_of_month = datetime(now.year, now.month, 1)
+async def count_analyses_this_month(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    now_override: datetime | None = None,
+) -> int:
+    """Сколько анализов юзер сделал в текущем месяце, в UTC."""
+    now = _normalize_utc(now_override)
+    start_of_month = _month_start_utc(now).replace(tzinfo=None)
     stmt = select(func.count(Analysis.id)).where(
         and_(Analysis.user_id == user_id, Analysis.created_at >= start_of_month)
     )
@@ -110,12 +350,14 @@ async def get_user_history(
     user_id: int,
     *,
     limit: int = 20,
+    offset: int = 0,
 ) -> list[Analysis]:
     """История анализов пользователя (свежие первые)."""
     stmt = (
         select(Analysis)
         .where(Analysis.user_id == user_id)
         .order_by(Analysis.created_at.desc())
+        .offset(offset)
         .limit(limit)
     )
     result = await session.execute(stmt)
@@ -134,58 +376,51 @@ async def get_analysis_by_lot(session: AsyncSession, user_id: int, lot_id: str) 
     return result.scalar_one_or_none()
 
 
-async def get_user_quota(session: AsyncSession, user_id: int) -> dict[str, Any]:
-    """Получить квоту пользователя: лимит + использовано.
-
-    Возвращает словарь с ключами:
-        - limit: месячный лимит анализов
-        - used: сколько использовано в этом месяце
-        - remaining: сколько осталось
-        - is_pilot: является ли пилотным пользователем
-        - is_subscribed: есть ли активная подписка
-        - subscription_expires_at: ISO-дата окончания подписки или None
-        - monthly_limit: alias для limit (для совместимости со старым кодом)
-        - used_this_month: alias для used (для совместимости со старым кодом)
-    """
+async def get_user_quota(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    limit: int | None = None,
+    now_override: datetime | None = None,
+) -> dict[str, Any]:
+    """Получить квоту пользователя: лимит + использовано + активные резервы."""
     user = await session.get(User, user_id)
+    now = _normalize_utc(now_override)
+    month_key = now.strftime("%Y-%m")
+
     if not user:
+        default = 3
         return {
-            "limit": 3,
+            "limit": default,
             "used": 0,
-            "remaining": 3,
+            "used_this_month": 0,
+            "reserved_this_month": 0,
+            "remaining": default,
             "is_pilot": False,
             "is_subscribed": False,
             "subscription_expires_at": None,
-            "monthly_limit": 3,
-            "used_this_month": 0,
+            "monthly_limit": default,
+            "month_key": month_key,
         }
 
-    used = await count_analyses_this_month(session, user_id)
-    s = get_settings()
-
-    if user.is_pilot:
-        limit = s.pilot_free_tier_applications_per_month
-    elif (
-        user.is_subscribed
-        and user.subscription_expires_at
-        and user.subscription_expires_at > datetime.utcnow()
-    ):
-        limit = 999  # подписчикам — безлимит
-    else:
-        limit = s.free_tier_applications_per_month
+    effective_limit = limit if limit is not None else await _resolve_user_limit(session, user_id)
+    used = await count_analyses_this_month(session, user_id, now_override=now)
+    reserved = await _current_reserved_amount(session, user_id, now=now, month_key=month_key)
+    remaining = max(0, effective_limit - used - reserved)
 
     return {
-        "limit": limit,
+        "limit": effective_limit,
         "used": used,
-        "remaining": max(0, limit - used),
+        "used_this_month": used,
+        "reserved_this_month": reserved,
+        "remaining": remaining,
         "is_pilot": user.is_pilot,
         "is_subscribed": user.is_subscribed,
         "subscription_expires_at": user.subscription_expires_at.isoformat()
         if user.subscription_expires_at
         else None,
-        # aliases for backward compatibility (lots.py использует monthly_limit/used_this_month)
-        "monthly_limit": limit,
-        "used_this_month": used,
+        "monthly_limit": effective_limit,
+        "month_key": month_key,
     }
 
 

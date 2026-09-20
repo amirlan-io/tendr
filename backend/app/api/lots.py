@@ -5,20 +5,27 @@ P0: Конкуренция с ets-tender.kz и zakup.gov.kz.
 
 from __future__ import annotations
 
+import io
 import logging
 import os
+import re
+import tempfile
+import zipfile
+from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.client_id import validate_client_id
+from app.core.client_id import require_client_id, validate_client_id
 from app.core.config import get_settings
 from app.db import get_db
 from app.db import repo as db_repo
-from app.db.models import Lot, LotPartnership, User
+from app.db.models import Analysis, Lot, LotPartnership, User
 from app.schemas.lot import (
     LotItem,
     LotSearchRequest,
@@ -26,12 +33,165 @@ from app.schemas.lot import (
     PartnershipRequest,
     PartnershipResponse,
 )
+from app.services.doc_generator import generate_complaint_docx, generate_report_docx
 from app.services.goszakup_parser import GoszakupParser
 from app.services.lots import LotAggregator, LotAnalyzer
+from app.services.orchestrator import LotOrchestrator, analyze_uploaded_file
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/lots", tags=["lots"])
+router = APIRouter(prefix="/lots", tags=["lots"])
+
+UPLOAD_READ_CHUNK_SIZE = 64 * 1024
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_ZIP_ENTRIES = 200
+MAX_ZIP_TOTAL_UNCOMPRESSED = 64 * 1024 * 1024
+MAX_ZIP_ENTRY_SIZE = 16 * 1024 * 1024
+MAX_ZIP_COMPRESSION_RATIO = 200.0
+MAX_HISTORY_LIMIT = 50
+DEFAULT_HISTORY_LIMIT = 20
+ALLOWED_DOWNLOAD_KINDS = {"complaint", "report"}
+
+
+class UploadValidationError(ValueError):
+    def __init__(self, code: str, safe_message: str = "INVALID_FILE") -> None:
+        super().__init__(safe_message)
+        self.code = code
+        self.safe_message = safe_message
+
+
+def _normalize_mime(content_type: str | None) -> str:
+    if not content_type:
+        return ""
+    return content_type.split(";", 1)[0].strip().lower()
+
+
+async def read_upload_file_safely(
+    file: UploadFile,
+    *,
+    max_bytes: int = MAX_UPLOAD_BYTES,
+    chunk_size: int = UPLOAD_READ_CHUNK_SIZE,
+) -> bytes:
+    """Read an uploaded file in bounded chunks and reject oversize data early."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise UploadValidationError("FILE_TOO_LARGE", "FILE_TOO_LARGE")
+        chunks.append(chunk)
+
+    payload = b"".join(chunks)
+    if not payload:
+        raise UploadValidationError("EMPTY_FILE", "EMPTY_FILE")
+    return payload
+
+
+def _assert_no_zip_path_traversal(name: str) -> None:
+    cleaned = name.replace("\\", "/")
+    if cleaned.startswith("/") or cleaned.startswith("../") or cleaned == "..":
+        raise UploadValidationError("ZIP_PATH_TRAVERSAL", "INVALID_FILE")
+    parts = PurePosixPath(cleaned).parts
+    if ".." in parts:
+        raise UploadValidationError("ZIP_PATH_TRAVERSAL", "INVALID_FILE")
+
+
+def _validate_zip_container(data: bytes) -> None:
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            infos = archive.infolist()
+            if not infos:
+                raise UploadValidationError("INVALID_ZIP", "INVALID_FILE")
+            if len(infos) > MAX_ZIP_ENTRIES:
+                raise UploadValidationError("ZIP_BOMB", "INVALID_FILE")
+
+            total_uncompressed = 0
+            for info in infos:
+                if info.is_dir():
+                    continue
+                _assert_no_zip_path_traversal(info.filename)
+                if info.flag_bits & 0x1:
+                    raise UploadValidationError("ENCRYPTED_ZIP", "INVALID_FILE")
+                if info.file_size > MAX_ZIP_ENTRY_SIZE:
+                    raise UploadValidationError("ZIP_BOMB", "INVALID_FILE")
+                if info.compress_size and info.compress_size > 0:
+                    ratio = info.file_size / info.compress_size
+                    if ratio > MAX_ZIP_COMPRESSION_RATIO:
+                        raise UploadValidationError("ZIP_BOMB", "INVALID_FILE")
+                total_uncompressed += info.file_size
+
+            if total_uncompressed > MAX_ZIP_TOTAL_UNCOMPRESSED:
+                raise UploadValidationError("ZIP_BOMB", "INVALID_FILE")
+    except zipfile.BadZipFile as exc:
+        raise UploadValidationError("INVALID_ZIP", "INVALID_FILE") from exc
+    except RuntimeError as exc:
+        raise UploadValidationError("ZIP_BOMB", "INVALID_FILE") from exc
+
+
+def _get_supported_extension(filename: str | None) -> str:
+    name = os.path.basename(filename or "").strip()
+    if not name or name in {".", ".."}:
+        raise UploadValidationError("INVALID_FILE_NAME", "INVALID_FILE")
+    if name != os.path.basename(name):
+        raise UploadValidationError("INVALID_FILE_NAME", "INVALID_FILE")
+    if name.count(".") > 1:
+        raise UploadValidationError("DOUBLE_EXTENSION", "INVALID_FILE")
+    ext = os.path.splitext(name)[1].lower()
+    return ext
+
+
+def validate_upload_file(
+    *,
+    filename: str | None,
+    content_type: str | None,
+    data: bytes,
+    settings,
+) -> None:
+    """Проверяет размер, расширение, MIME и сигнатуру загружаемого файла."""
+    max_bytes = int(getattr(settings, "max_upload_bytes", MAX_UPLOAD_BYTES))
+    if not data:
+        raise UploadValidationError("EMPTY_FILE", "EMPTY_FILE")
+    if len(data) > max_bytes:
+        raise UploadValidationError("FILE_TOO_LARGE", "FILE_TOO_LARGE")
+
+    ext = _get_supported_extension(filename)
+    allowed_ext = {".pdf", ".docx", ".txt", ".csv", ".xlsx", ".xls"}
+    if ext not in allowed_ext:
+        raise UploadValidationError("UNSUPPORTED_FILE_TYPE", "UNSUPPORTED_FILE_TYPE")
+
+    mime = _normalize_mime(content_type)
+    allowed_mime = {
+        ".pdf": {"application/pdf"},
+        ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+        ".txt": {"text/plain", "application/octet-stream"},
+        ".csv": {"text/csv", "application/csv", "application/octet-stream"},
+        ".xlsx": {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/octet-stream",
+        },
+        ".xls": {"application/vnd.ms-excel", "application/octet-stream"},
+    }
+    if mime and mime not in allowed_mime.get(ext, set()):
+        raise UploadValidationError("MIME_MISMATCH", "INVALID_FILE")
+
+    if ext == ".pdf":
+        if not data.startswith(b"%PDF"):
+            raise UploadValidationError("INVALID_PDF", "INVALID_FILE")
+    elif ext in {".docx", ".xlsx"}:
+        if not data.startswith(b"PK"):
+            raise UploadValidationError("INVALID_ZIP", "INVALID_FILE")
+        _validate_zip_container(data)
+    elif ext == ".xls":
+        if not data.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
+            raise UploadValidationError("INVALID_XLS", "INVALID_FILE")
+    elif ext in {".txt", ".csv"}:
+        try:
+            data.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise UploadValidationError("INVALID_TEXT_ENCODING", "INVALID_FILE") from exc
 
 
 def _get_api_token() -> str:
@@ -54,56 +214,40 @@ def _parse_red_flags(raw: str | None) -> list[str]:
     return []
 
 
-def _client_id(request: Request) -> str:
-    raw = request.cookies.get("tendr_cid") or request.headers.get("X-Client-Id")
-    if raw is None:
-        return ""
-    if not validate_client_id(raw):
-        return ""
-    return raw
+def _sanitize_csv_cell(value: object) -> str:
+    """Гарантирует безопасный CSV/Excel экспорт без formula injection."""
+    text = str(value or "").replace("\r", " ").replace("\n", " ").strip()
+    if text and text[0] in {"=", "+", "-", "@", "\t"}:
+        text = "'" + text
+    return text
 
 
-def validate_upload_file(
-    *,
-    filename: str | None,
-    content_type: str | None,
-    data: bytes,
-    settings,
-) -> None:
-    """Проверяет размер, расширение и сигнатуру загружаемого файла."""
-    if not data:
-        raise ValueError("Файл пустой")
+def _safe_history_item(item: Analysis) -> dict:
+    result = item.result_json or {}
+    lot = result.get("lot") if isinstance(result, dict) else {}
+    legal = result.get("legal") if isinstance(result, dict) else {}
+    if not isinstance(lot, dict):
+        lot = {}
+    if not isinstance(legal, dict):
+        legal = {}
 
-    max_bytes = int(getattr(settings, "max_upload_bytes", 20 * 1024 * 1024))
-    if len(data) > max_bytes:
-        raise ValueError(f"Размер файла превышает лимит {max_bytes} байт")
-
-    ext = os.path.splitext(filename or "")[1].lower()
-    allowed_ext = {".pdf", ".docx", ".txt", ".csv", ".xlsx", ".xls"}
-    if ext not in allowed_ext:
-        raise ValueError("Не поддерживаемый тип файла")
-
-    mime = (content_type or "").lower()
-    allowed_mime = {
-        ".pdf": {"application/pdf"},
-        ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
-        ".txt": {"text/plain", "application/octet-stream"},
-        ".csv": {"text/csv", "application/csv", "application/octet-stream"},
-        ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"},
-        ".xls": {"application/vnd.ms-excel", "application/octet-stream"},
+    created_at = item.created_at.isoformat() if getattr(item, "created_at", None) else None
+    return {
+        "lot_id": str(item.lot_id),
+        "title": str((lot.get("title") or item.title or "")).strip(),
+        "customer": str((lot.get("customer") or item.customer or "")).strip(),
+        "method": str((lot.get("method") or item.method or "")).strip(),
+        "overall_risk": str((legal.get("overall_risk") or item.overall_risk or "needs_review")).strip(),
+        "n_requirements": int(item.n_requirements or len((lot.get("requirements") or []))),
+        "n_red_flags": int(item.n_red_flags or len((lot.get("red_flags") or []))),
+        "created_at": created_at,
     }
-    if mime and mime not in allowed_mime.get(ext, set()):
-        raise ValueError("Несоответствие MIME-типа файла")
 
-    if ext == ".pdf" and not data.startswith(b"%PDF"):
-        raise ValueError("PDF-файл повреждён или не является PDF")
-    if ext in {".docx", ".xlsx"} and not data.startswith(b"PK"):
-        raise ValueError("DOCX/XLSX-файл повреждён или не является архивом")
-    if ext in {".txt", ".csv"}:
-        try:
-            data.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise ValueError("Текстовый файл должен быть в UTF-8") from exc
+
+def _safe_download_filename(kind: str, lot_id: int | str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "_", str(kind)).strip("_") or "file"
+    safe_lot = re.sub(r"[^A-Za-z0-9_-]+", "_", str(lot_id)).strip("_") or "lot"
+    return f"{slug}_{safe_lot}.docx"
 
 
 @router.post("/search", response_model=LotSearchResult)
@@ -305,6 +449,114 @@ async def search_lots(
     )
 
 
+@router.get("/history")
+async def get_lot_history(
+    client_id: str = Depends(require_client_id),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=DEFAULT_HISTORY_LIMIT, ge=1, le=MAX_HISTORY_LIMIT),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    """Список истории анализов только текущего клиента."""
+    user = await db_repo.get_user_by_web_id(db, client_id)
+    if not user:
+        return {"items": [], "total": 0, "limit": limit, "offset": offset}
+
+    rows = await db_repo.get_user_history(db, user.id, limit=limit, offset=offset)
+    items = [_safe_history_item(item) for item in rows]
+    total = await db_repo.get_user_history(db, user.id, limit=MAX_HISTORY_LIMIT, offset=0)
+    return {
+        "items": items,
+        "total": len(total),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/{lot_id}/download")
+async def download_lot_document(
+    lot_id: int,
+    kind: str = Query(..., min_length=1, max_length=32),
+    client_id: str = Depends(require_client_id),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Скачать безопасный документ жалобы или отчёта по лоту текущего клиента."""
+    normalized_kind = (kind or "").strip().lower()
+    if normalized_kind not in ALLOWED_DOWNLOAD_KINDS:
+        raise HTTPException(status_code=400, detail="INVALID_DOWNLOAD_KIND")
+
+    user = await db_repo.get_user_by_web_id(db, client_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    analysis = await db_repo.get_analysis_by_lot(db, user.id, str(lot_id))
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    result = analysis.result_json or {}
+    lot = result.get("lot") if isinstance(result, dict) else {}
+    legal = result.get("legal") if isinstance(result, dict) else {}
+    if not isinstance(lot, dict):
+        lot = {}
+    if not isinstance(legal, dict):
+        legal = {}
+
+    filename = _safe_download_filename(normalized_kind, lot_id)
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-store",
+    }
+
+    if normalized_kind == "complaint":
+        complaint = legal.get("complaint_draft")
+        if not complaint:
+            raise HTTPException(status_code=404, detail="Not found")
+        payload = generate_complaint_docx(
+            str(lot_id),
+            complaint,
+            lot_title=str(lot.get("title") or analysis.title or ""),
+        )
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    else:
+        if not lot and not legal:
+            raise HTTPException(status_code=404, detail="Not found")
+        payload = generate_report_docx(
+            {
+                "lot_id": str(lot_id),
+                "title": str(lot.get("title") or analysis.title or ""),
+                "customer": str(lot.get("customer") or analysis.customer or ""),
+                "method": str(lot.get("method") or analysis.method or ""),
+                "budget_kzt": lot.get("budget_kzt") or analysis.budget_kzt,
+                "deadline": lot.get("deadline") or analysis.deadline,
+                "requirements": lot.get("requirements") or [],
+                "red_flags": lot.get("red_flags") or [],
+                "summary": lot.get("summary") or "",
+                "documents_required": lot.get("documents_required") or [],
+            },
+            legal,
+        )
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="download_", suffix=".docx", delete=False) as tmp:
+            tmp.write(payload)
+            tmp_path = tmp.name
+        with open(tmp_path, "rb") as fh:
+            content = fh.read()
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers=headers,
+        )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
 @router.get("/{lot_id}", response_model=LotItem)
 async def get_lot(lot_id: int, db: AsyncSession = Depends(get_db)) -> LotItem:
     """Получить один лот по ID."""
@@ -378,7 +630,7 @@ class AnalyzeLotRequest(BaseModel):
 @router.post("/analyze")
 async def analyze_lot_url(
     req: AnalyzeLotRequest,
-    request: Request,
+    client_id: str = Depends(require_client_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Полный AI-анализ лота: Documenter + Legal + Customer Score + Margin.
@@ -387,24 +639,6 @@ async def analyze_lot_url(
     """
     from app.services.orchestrator import LotOrchestrator
 
-    # Получаем или создаём пользователя
-    cid = (
-        request.cookies.get("tendr_cid")
-        or request.headers.get("X-Client-Id")
-        or "anon"
-    )
-    user = await db_repo.get_user_by_web_id(db, cid)
-    if not user:
-        user = await db_repo.get_or_create_user(db, web_client_id=cid)
-
-    # Получаем квоту
-    quota = await db_repo.get_user_quota(db, user.id)
-    # Поддерживаем оба варианта имён ключей: новые (limit/used) и старые (monthly_limit/used_this_month).
-    is_pilot = bool(quota.get("is_pilot", False))
-    free_limit = int(quota.get("monthly_limit") or quota.get("limit") or 3)
-    used_this_month = int(quota.get("used_this_month") or quota.get("used") or 0)
-
-    # Извлекаем source_id из URL если есть
     import re
 
     url = req.url.strip()
@@ -415,22 +649,47 @@ async def analyze_lot_url(
     if not source_id:
         raise HTTPException(status_code=400, detail="Невозможно извлечь ID лота из ссылки")
 
+    # Получаем или создаём пользователя только после успешной валидации ссылки.
+    cid = client_id
+    user = await db_repo.get_user_by_web_id(db, cid)
+    if not user:
+        user = await db_repo.get_or_create_user(db, web_client_id=cid)
+
+    quota = await db_repo.get_user_quota(db, user.id)
+    is_pilot = bool(quota.get("is_pilot", False))
+    free_limit = int(quota.get("monthly_limit") or quota.get("limit") or 3)
+    used_this_month = int(quota.get("used_this_month") or quota.get("used") or 0)
+
     from app.schemas.lot import LotCreate
 
+    reservation = None
     lot_create = LotCreate(source_url=url, source_id=source_id or "0")
-
     orchestrator = LotOrchestrator(session=db)
     try:
+        reservation = await db_repo.reserve_user_quota(
+            db,
+            user.id,
+            operation_key=f"lot:{source_id}",
+            amount=1,
+            ttl_seconds=300,
+            limit=free_limit,
+        )
         result = await orchestrator.analyze_lot(
             lot_create,
             user_id=user.id,
             is_pilot=is_pilot,
-            used_this_month=used_this_month,
+            used_this_month=used_this_month + 1,
             free_limit=free_limit,
         )
-    except Exception as e:
-        logger.exception(f"[analyze] orchestrator failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        await db_repo.confirm_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
+    except db_repo.QuotaLimitExceeded as exc:
+        logger.warning("[analyze] quota exceeded user=%s", user.id)
+        raise HTTPException(status_code=429, detail="QUOTA_EXCEEDED") from exc
+    except Exception:
+        logger.exception("[analyze] orchestrator failed")
+        if reservation:
+            await db_repo.release_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
+        raise HTTPException(status_code=500, detail="ANALYSIS_FAILED")
 
     # Сохраняем в историю
     try:
@@ -460,7 +719,7 @@ async def analyze_lot_url(
 
 @router.post("/analyze-upload")
 async def analyze_lot_upload(
-    request: Request,
+    client_id: str = Depends(require_client_id),
     db: AsyncSession = Depends(get_db),
     file: Optional[UploadFile] = None,
 ):
@@ -468,20 +727,27 @@ async def analyze_lot_upload(
 
     Используется Telegram-ботом и веб-интерфейсом когда нет URL лота.
     """
-    from app.services.orchestrator import analyze_uploaded_file
-    from fastapi import UploadFile as _UploadFile  # noqa: F811
-
     if file is None:
         # FastAPI может не подхватить file если поле названо иначе — пробуем
         # стандартный механизм multipart.
         raise HTTPException(status_code=400, detail="Файл не передан (поле file)")
 
-    # Получаем или создаём пользователя
-    cid = (
-        request.cookies.get("tendr_cid")
-        or request.headers.get("X-Client-Id")
-        or "anon"
-    )
+    payload = None
+    try:
+        payload = await read_upload_file_safely(file, max_bytes=get_settings().max_upload_bytes)
+        validate_upload_file(
+            filename=file.filename,
+            content_type=file.content_type,
+            data=payload,
+            settings=get_settings(),
+        )
+    except UploadValidationError as exc:
+        if exc.code == "FILE_TOO_LARGE":
+            raise HTTPException(status_code=413, detail="FILE_TOO_LARGE") from exc
+        raise HTTPException(status_code=422, detail=exc.safe_message) from exc
+
+    # Получаем или создаём пользователя только после успешной валидации файла
+    cid = client_id
     user = await db_repo.get_user_by_web_id(db, cid)
     if not user:
         user = await db_repo.get_or_create_user(db, web_client_id=cid)
@@ -491,16 +757,6 @@ async def analyze_lot_upload(
     free_limit = int(quota.get("monthly_limit") or quota.get("limit") or 3)
     used_this_month = int(quota.get("used_this_month") or quota.get("used") or 0)
 
-    # Сохраняем файл во временное место
-    import tempfile
-
-    payload = await file.read()
-    validate_upload_file(
-        filename=file.filename,
-        content_type=file.content_type,
-        data=payload,
-        settings=get_settings(),
-    )
     suffix_map = {
         "application/pdf": ".pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
@@ -509,25 +765,42 @@ async def analyze_lot_upload(
         "application/vnd.ms-excel": ".xls",
         "text/csv": ".csv",
     }
-    suffix = suffix_map.get(file.content_type or "", os.path.splitext(file.filename or "")[1].lower() or ".bin")
-    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    suffix = suffix_map.get((file.content_type or "").split(";", 1)[0].lower(), os.path.splitext(file.filename or "")[1].lower() or ".bin")
+    tmp_file = tempfile.NamedTemporaryFile(prefix="upload_", suffix=suffix, delete=False)
+    tmp_path = tmp_file.name
+    reservation = None
     try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(payload)
+        with tmp_file:
+            tmp_file.write(payload)
+        reservation = await db_repo.reserve_user_quota(
+            db,
+            user.id,
+            operation_key=f"upload:{file.filename or 'file'}",
+            amount=1,
+            ttl_seconds=300,
+            limit=free_limit,
+        )
         result = await analyze_uploaded_file(
             tmp_path,
             user_id=user.id,
             is_pilot=is_pilot,
-            used_this_month=used_this_month,
+            used_this_month=used_this_month + 1,
             free_limit=free_limit,
             session=db,
         )
-    except Exception as e:
-        logger.exception(f"[analyze-upload] failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        await db_repo.confirm_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
+    except db_repo.QuotaLimitExceeded as exc:
+        logger.warning("[analyze-upload] quota exceeded user=%s", user.id)
+        raise HTTPException(status_code=429, detail="QUOTA_EXCEEDED") from exc
+    except Exception:
+        logger.exception("[analyze-upload] failed")
+        if reservation:
+            await db_repo.release_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
+        raise HTTPException(status_code=500, detail="FILE_PROCESSING_FAILED")
     finally:
         try:
-            os.unlink(tmp_path)
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
         except OSError:
             pass
 
@@ -559,7 +832,7 @@ async def analyze_lot_upload(
 async def create_partnership(
     lot_id: int,
     req: PartnershipRequest,
-    request: Request,
+    client_id: str = Depends(require_client_id),
     db: AsyncSession = Depends(get_db),
 ) -> PartnershipResponse:
     """
@@ -576,9 +849,7 @@ async def create_partnership(
         raise HTTPException(status_code=404, detail="Lot not found")
 
     # Получаем или создаём пользователя
-    cid = request.cookies.get("tendr_cid") or request.headers.get("X-Client-Id")
-    if not cid or cid == "anon":
-        raise HTTPException(status_code=400, detail="Invalid client identifier")
+    cid = client_id
     user = await db_repo.get_user_by_web_id(db, cid)
     if not user:
         user = await db_repo.get_or_create_user(db, web_client_id=cid)

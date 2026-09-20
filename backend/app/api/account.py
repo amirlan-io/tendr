@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import hmac
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.client_id import validate_client_id
+from app.core.admin_auth import require_admin_key
+from app.core.client_id import require_client_id
 from app.db import get_db
 from app.db import repo as db_repo
 from app.db.models import Analysis, DiscoverySubscription, User
@@ -17,29 +17,8 @@ from app.db.models import Analysis, DiscoverySubscription, User
 router = APIRouter(prefix="/account", tags=["account"])
 
 
-def _cid(request: Request) -> str:
-    raw = request.cookies.get("tendr_cid") or request.headers.get("X-Client-Id")
-    if raw is None:
-        return ""
-    if not validate_client_id(raw):
-        return ""
-    return raw
-
-
-def require_admin_key(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")) -> None:
-    from app.core.config import get_settings
-
-    configured = (get_settings().admin_api_key or "").strip()
-    if not configured:
-        raise HTTPException(status_code=503, detail="Admin API is not configured")
-    if not x_admin_key or not hmac.compare_digest(x_admin_key, configured):
-        raise HTTPException(status_code=401, detail="Invalid admin key")
-
-
 async def _user(session: AsyncSession, request: Request):
-    cid = _cid(request)
-    if not cid:
-        raise HTTPException(status_code=400, detail="Invalid client identifier")
+    cid = await require_client_id(request)
     user = await db_repo.get_user_by_web_id(session, cid)
     if not user:
         user = await db_repo.get_or_create_user(session, web_client_id=cid)
