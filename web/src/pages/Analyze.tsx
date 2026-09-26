@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
 import { useT } from "../i18n";
-import { api, ApiError, getApiErrorStatus } from "../clientId";
+import { api, ApiError, downloadBlob, isQuotaExceededError } from "../clientId";
 import { pushHistory } from "../historyStore";
 
 type Requirement = {
@@ -92,10 +92,6 @@ function validateFileClientSide(f: File): string | null {
   return null;
 }
 
-function isQuotaMessage(msg: string): boolean {
-  return /лимит|исчерпан|quota|бесплатных проверок/i.test(msg);
-}
-
 export function AnalyzePage() {
   const t = useT();
   const [searchParams] = useSearchParams();
@@ -152,12 +148,12 @@ export function AnalyzePage() {
               });
             }
           } catch (e: unknown) {
+            // Квота — только по стабильному коду QUOTA_EXCEEDED.
             // Показываем только безопасное сообщение, без сырого Error/JSON backend.
-            const msg = e instanceof ApiError ? e.message : "Ошибка анализа. Попробуйте снова.";
-            if (isQuotaMessage(msg)) {
+            if (isQuotaExceededError(e)) {
               setQuota(true);
             } else {
-              setError(msg);
+              setError(e instanceof ApiError ? e.message : "Ошибка анализа. Попробуйте снова.");
             }
           } finally {
             setLoading(false);
@@ -231,13 +227,11 @@ export function AnalyzePage() {
       }
     } catch (e: unknown) {
       // Безопасные сообщения из ApiError; сырой backend-JSON пользователю не показываем.
-      const status = getApiErrorStatus(e);
-      const msg =
-        e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.";
-      if (status === 429 || isQuotaMessage(msg)) {
+      // Квота — только по стабильному коду QUOTA_EXCEEDED, не по тексту.
+      if (isQuotaExceededError(e)) {
         setQuota(true);
       } else {
-        setError(msg);
+        setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
       }
     } finally {
       setLoading(false);

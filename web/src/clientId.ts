@@ -1,20 +1,38 @@
 /**
- * Хелпер для client_id (cookie для backend'а + sessionStorage fallback).
- * Backend читает X-Client-Id из заголовка или cookie tendr_cid.
+ * Хелпер для client_id.
+ * Backend (require_client_id) читает cookie tendr_cid В ПЕРВУЮ ОЧЕРЕДЬ,
+ * затем заголовок X-Client-Id, и отклоняет всё, кроме строгого формата.
  * Важно: X-Client-Id не является авторизацией и должен быть безопасным случайным ID.
  */
 
+/** Стабильный код квоты, который возвращает backend (HTTP 429, detail=QUOTA_EXCEEDED). */
+export const QUOTA_EXCEEDED_CODE = "QUOTA_EXCEEDED";
+
 /**
- * Безопасная ошибка API: хранит HTTP status и безопасное сообщение.
- * Никогда не содержит stack trace, внутренние ответы сервера, ключи или заголовки.
+ * Контролируемая ошибка client_id (нет Web Crypto, нет браузера).
+ * Безопасна для показа: не содержит секретов.
+ */
+export class ClientIdError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ClientIdError";
+  }
+}
+
+/**
+ * Безопасная ошибка API: хранит HTTP status, стабильный код backend
+ * и безопасное сообщение. Никогда не содержит stack trace, сырой detail,
+ * внутренние ответы сервера, ключи или заголовки.
  */
 export class ApiError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -38,6 +56,32 @@ export function getSafeMessageForStatus(status: number): string {
   return "Произошла ошибка. Попробуйте снова.";
 }
 
+/**
+ * Стабильные machine-коды backend (поле detail в JSON-ответах ошибок).
+ * Сырой detail НИКОГДА не показывается пользователю: код используется
+ * только для поиска в этой карте, наружу идёт фиксированное сообщение.
+ */
+const ERROR_CODE_MESSAGES: Record<string, string> = {
+  QUOTA_EXCEEDED:
+    "Лимит бесплатных проверок исчерпан. Дождитесь следующего месяца или оформите подписку.",
+  FILE_TOO_LARGE:
+    "Файл слишком большой. Уменьшите размер файла и попробуйте снова.",
+  EMPTY_FILE: "Файл пустой. Выберите другой файл.",
+  INVALID_FILE:
+    "Неподдерживаемый или повреждённый файл. Проверьте формат и попробуйте другой файл.",
+  INVALID_DOWNLOAD_KIND: "Некорректный запрос. Проверьте введённые данные.",
+  ANALYSIS_FAILED: "Не удалось выполнить анализ. Попробуйте позже.",
+  FILE_PROCESSING_FAILED: "Не удалось обработать файл. Попробуйте позже.",
+  "Not found": "Данные не найдены.",
+  "Lot not found": "Данные не найдены.",
+  "Invalid client identifier": "Некорректный запрос. Проверьте введённые данные.",
+};
+
+/** true, если ошибка означает исчерпанную квоту (проверка по коду, не по тексту). */
+export function isQuotaExceededError(e: unknown): boolean {
+  return e instanceof ApiError && e.code === QUOTA_EXCEEDED_CODE;
+}
+
 const KEY = "tendr_cid";
 const COOKIE_NAME = "tendr_cid";
 const CLIENT_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -49,17 +93,58 @@ function isValidClientId(value: string | null | undefined): boolean {
   return CLIENT_ID_RE.test(candidate);
 }
 
-function generateId(): string {
-  const cryptoApi: Crypto | undefined = typeof crypto !== "undefined" ? crypto : undefined;
-  if (cryptoApi && "randomUUID" in cryptoApi && typeof cryptoApi.randomUUID === "function") {
-    return cryptoApi.randomUUID().replace(/-/g, "");
+function getCrypto(): Crypto {
+  const cryptoApi: unknown =
+    typeof crypto !== "undefined" ? crypto : undefined;
+  if (
+    typeof cryptoApi === "object" &&
+    cryptoApi !== null &&
+    (typeof (cryptoApi as Crypto).randomUUID === "function" ||
+      typeof (cryptoApi as Crypto).getRandomValues === "function")
+  ) {
+    return cryptoApi as Crypto;
   }
-  if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
+  throw new ClientIdError(
+    "Браузер не поддерживает безопасную генерацию ID. Обновите браузер и попробуйте снова.",
+  );
+}
+
+function generateId(): string {
+  // Только Web Crypto. Math.random() запрещён (слабый ID),
+  // бесконечные циклы запрещены: оба конструктора дают валидный формат.
+  const cryptoApi = getCrypto();
+  let id: string;
+  if (typeof cryptoApi.randomUUID === "function") {
+    id = cryptoApi.randomUUID().replace(/-/g, "");
+  } else {
     const bytes = new Uint8Array(16);
     cryptoApi.getRandomValues(bytes);
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    id = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   }
-  return "web_" + Math.random().toString(36).slice(2, 18);
+  if (!isValidClientId(id)) {
+    throw new ClientIdError(
+      "Не удалось создать идентификатор сессии. Обновите браузер и попробуйте снова.",
+    );
+  }
+  return id;
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  try {
+    const parts = document.cookie ? document.cookie.split(";") : [];
+    for (const part of parts) {
+      const eq = part.indexOf("=");
+      if (eq < 0) continue;
+      const k = part.slice(0, eq).trim();
+      if (k !== name) continue;
+      const v = decodeURIComponent(part.slice(eq + 1).trim());
+      return v || null;
+    }
+  } catch {
+    /* недоступно — игнорируем */
+  }
+  return null;
 }
 
 function setCookie(name: string, value: string, days: number = 365): void {
@@ -68,19 +153,48 @@ function setCookie(name: string, value: string, days: number = 365): void {
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
 }
 
-export function getOrCreateClientId(): string {
-  if (typeof window === "undefined") return "ssr";
-  const stored = window.sessionStorage.getItem(KEY);
-  let id: string;
-  if (isValidClientId(stored)) {
-    id = (stored as string).trim();
-  } else {
-    id = generateId();
-    while (!isValidClientId(id)) {
-      id = generateId();
-    }
-    window.sessionStorage.setItem(KEY, id);
+function readSession(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(KEY);
+  } catch {
+    return null;
   }
+}
+
+function writeSession(id: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(KEY, id);
+  } catch {
+    /* игнорируем */
+  }
+}
+
+export function getOrCreateClientId(): string {
+  // Вне браузера (SSR) валидного ID нет — кидаем контролируемую ошибку,
+  // а не возвращаем невалидный "ssr" в backend-запросы.
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    throw new ClientIdError("Идентификатор сессии недоступен вне браузера.");
+  }
+  // 1. Сначала валидный tendr_cid из cookie (как делает backend).
+  //    Cookie общий для вкладок → стабильность между вкладками.
+  const fromCookie = readCookie(COOKIE_NAME);
+  if (isValidClientId(fromCookie)) {
+    const id = (fromCookie as string).trim();
+    writeSession(id);
+    return id;
+  }
+  // 2. Валидный ID текущей вкладки — переиспользуем и синхронизируем в cookie.
+  const fromSession = readSession();
+  if (isValidClientId(fromSession)) {
+    const id = (fromSession as string).trim();
+    setCookie(COOKIE_NAME, id);
+    return id;
+  }
+  // 3. Генерируем новый (только Web Crypto) и сохраняем в оба места.
+  const id = generateId();
+  writeSession(id);
   setCookie(COOKIE_NAME, id);
   return id;
 }
@@ -105,30 +219,49 @@ export function getApiErrorStatus(e: unknown): number | undefined {
 
 export function toSafeApiMessage(e: unknown, fallback = "Произошла ошибка. Попробуйте снова."): string {
   if (e instanceof ApiError) return e.message;
+  if (e instanceof ClientIdError) return e.message;
   const status = getApiErrorStatus(e);
   if (status !== undefined) return getSafeMessageForStatus(status);
   return fallback;
+}
+
+/**
+ * Извлекает стабильный machine-код backend из тела ошибки.
+ * FastAPI отдаёт {"detail": "<CODE>"}; сырой detail наружу не идёт —
+ * код используется только для поиска в ERROR_CODE_MESSAGES.
+ */
+function extractErrorCode(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const o = body as Record<string, unknown>;
+  for (const field of ["detail", "code"]) {
+    const v = o[field];
+    if (typeof v === "string" && v.length > 0 && v.length <= 128) return v;
+  }
+  return undefined;
 }
 
 async function throwSafeApiError(resp: Response): Promise<never> {
   const status = resp.status;
   // Дожидаемся тела ответа, но НИКОГДА не показываем его пользователю:
   // внутренние detail/stack/ключи/заголовки не должны утекать в UI.
-  // Единственное исключение — сигнал исчерпанной квоты: его детектим
-  // по ключевым словам и маппим в фиксированное безопасное сообщение.
+  // Стабильный machine-код (QUOTA_EXCEEDED и др.) используется только
+  // для выбора фиксированного безопасного сообщения.
   let raw = "";
   try {
     raw = await resp.text();
   } catch {
     /* игнорируем — сообщение берём из безопасной карты */
   }
-  if (/лимит|исчерпан|quota|бесплатных заявок/i.test(raw.slice(0, 2000))) {
-    throw new ApiError(
-      status,
-      "Лимит бесплатных проверок исчерпан. Дождитесь следующего месяца или оформите подписку.",
-    );
+  let code: string | undefined;
+  try {
+    code = extractErrorCode(JSON.parse(raw));
+  } catch {
+    code = undefined;
   }
-  throw new ApiError(status, getSafeMessageForStatus(status));
+  if (code !== undefined && code in ERROR_CODE_MESSAGES) {
+    throw new ApiError(status, ERROR_CODE_MESSAGES[code], code);
+  }
+  throw new ApiError(status, getSafeMessageForStatus(status), code);
 }
 
 /**

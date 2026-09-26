@@ -12,8 +12,13 @@ import { NotFoundPage } from "./pages/NotFound";
 import { getOrCreateClientId } from "./clientId";
 import { applyTheme, getTheme } from "./theme";
 
-// Сразу создаём client_id при загрузке
-getOrCreateClientId();
+// Сразу создаём client_id при загрузке.
+// Контролируемая ошибка (нет Web Crypto) не должна ронять старт приложения.
+try {
+  getOrCreateClientId();
+} catch {
+  /* первый API-запрос вернёт понятную ошибку */
+}
 // Применяем тему до рендера, чтобы избежать flash
 applyTheme(getTheme());
 
