@@ -61,15 +61,18 @@ async def extract_text(file_path: str | Path) -> str:
                 logger.warning("Vision extraction failed: {}", e)
 
         return text
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to extract text from {}", p)
-        return f"[Ошибка чтения файла: {e}]"
+        return "[Ошибка чтения файла: формат не поддерживается или файл повреждён.]"
 
 
 def _read_pdf(p: Path) -> str:
     reader = PdfReader(str(p))
     parts: list[str] = []
-    for i, page in enumerate(reader.pages):
+    pages = reader.pages[:MAX_PDF_PAGES]
+    if len(reader.pages) > MAX_PDF_PAGES:
+        parts.append("[Текст обрезан: превышен лимит страниц PDF]")
+    for page in pages:
         try:
             text = page.extract_text() or ""
             parts.append(text)
@@ -186,17 +189,22 @@ async def _read_xlsx(p: Path) -> str:
     try:
         wb = load_workbook(str(p), data_only=True, read_only=True)
         parts: list[str] = []
+        cell_count = 0
         for sheet_name in wb.sheetnames:
             sheet = wb[sheet_name]
             parts.append(f"\n=== Лист: {sheet_name} ===")
-            for row in sheet.iter_rows(values_only=True):
+            for row in sheet.iter_rows(values_only=True, max_row=MAX_EXCEL_ROWS, max_col=MAX_EXCEL_COLUMNS):
                 cells = [str(c) if c is not None else "" for c in row]
                 if any(c for c in cells):
+                    cell_count += len(cells)
+                    if cell_count > MAX_EXCEL_CELLS:
+                        parts.append("[Таблица обрезана: превышен лимит ячеек]")
+                        return "\n".join(parts).strip()
                     parts.append(" | ".join(cells))
         return "\n".join(parts).strip()
-    except Exception as e:
+    except Exception:
         logger.exception("XLSX read failed for {}", p)
-        return f"[Ошибка чтения XLSX: {e}]"
+        return "[Ошибка чтения XLSX: формат не поддерживается или файл повреждён.]"
 
 
 async def _read_xls(p: Path) -> str:
@@ -209,17 +217,22 @@ async def _read_xls(p: Path) -> str:
     try:
         book = xlrd.open_workbook(str(p))
         parts: list[str] = []
+        cell_count = 0
         for sheet in book.sheets():
             parts.append(f"\n=== Лист: {sheet.name} ===")
-            for row_idx in range(sheet.nrows):
-                row = sheet.row_values(row_idx)
+            for row_idx in range(min(sheet.nrows, MAX_EXCEL_ROWS)):
+                row = sheet.row_values(row_idx)[:MAX_EXCEL_COLUMNS]
                 cells = [str(c) if c else "" for c in row]
                 if any(c for c in cells):
+                    cell_count += len(cells)
+                    if cell_count > MAX_EXCEL_CELLS:
+                        parts.append("[Таблица обрезана: превышен лимит ячеек]")
+                        return "\n".join(parts).strip()
                     parts.append(" | ".join(cells))
         return "\n".join(parts).strip()
-    except Exception as e:
+    except Exception:
         logger.exception("XLS read failed for {}", p)
-        return f"[Ошибка чтения XLS: {e}]"
+        return "[Ошибка чтения XLS: формат не поддерживается или файл повреждён.]"
 
 
 async def _read_csv(p: Path) -> str:

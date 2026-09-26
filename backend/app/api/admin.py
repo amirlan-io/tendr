@@ -2,29 +2,21 @@
 
 from __future__ import annotations
 
-import hmac
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.admin_auth import require_admin_key
 from app.core.config import get_settings
 from app.db import get_db
 from app.db.models import Analysis, User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-
-def require_admin_key(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")) -> None:
-    settings = get_settings()
-    configured = (settings.admin_api_key or "").strip()
-    if not configured:
-        raise HTTPException(status_code=503, detail="Admin API is not configured")
-    if not x_admin_key or not hmac.compare_digest(x_admin_key, configured):
-        raise HTTPException(status_code=401, detail="Invalid admin key")
 
 
 @router.get("/stats")
@@ -159,68 +151,68 @@ async def recent(
 
 @router.get("/token-check")
 async def token_check(_admin: None = Depends(require_admin_key)) -> dict:
-    """Проверить работоспособность токена goszakup.
-
-    Использует тестовый endpoint OWS API. Если токен рабочий — 200.
-    """
-    import httpx
+    """Minimal, safe Goszakup token validation using server-side configuration only."""
     settings = get_settings()
-    token = settings.goszakup_api_token
-    url = settings.goszakup_api_url.rstrip("/")
+    token = (settings.goszakup_api_token or "").strip()
+    base_url = (settings.goszakup_api_url or "").strip().rstrip("/")
+    if not base_url:
+        return {"status": "unavailable", "error_code": "GOSZAKUP_URL_MISSING"}
+    if not token:
+        return {"status": "configured", "error_code": "GOSZAKUP_CONFIG_MISSING"}
 
-    if not token or token == "mock-test-token-12345":
-        return {
-            "status": "no_token",
-            "message": "GOSZAKUP_API_TOKEN не настроен в .env. Получи токен и вставь его туда.",
-            "token_present": bool(token),
-        }
+    candidate = urlsplit(base_url)
+    if candidate.scheme not in {"http", "https"} or not candidate.netloc:
+        return {"status": "unavailable", "error_code": "GOSZAKUP_URL_INVALID"}
+    hostname = (candidate.hostname or "").lower()
+    if not hostname or hostname.endswith("goszakup.gov.kz") is False:
+        return {"status": "invalid", "error_code": "GOSZAKUP_HOST_UNTRUSTED"}
+    if hostname in {"localhost", "127.0.0.1"} or hostname.startswith("127."):
+        return {"status": "invalid", "error_code": "GOSZAKUP_HOST_UNTRUSTED"}
 
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-    test_url = f"{url}/v3/lots/17266377"
+    graphql_url = f"{candidate.scheme}://{candidate.netloc}{candidate.path.rstrip('/')}/graphql"
+    query = """
+    query TestToken($id: Int!) {
+      trd_buy(filters: { id: [$id] }, limit: 1) { id }
+    }
+    """
+    payload = {"query": query, "variables": {"id": 1}}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(test_url, headers=headers)
-    except Exception as e:
-        return {
-            "status": "network_error",
-            "message": f"Ошибка сети: {e}",
-            "token_present": True,
-        }
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(5.0, connect=5.0, read=5.0),
+            follow_redirects=False,
+            headers={"User-Agent": "TendrAdmin/1.0"},
+        ) as client:
+            resp = await client.post(graphql_url, headers=headers, json=payload, timeout=5.0)
+    except httpx.TimeoutException:
+        return {"status": "unavailable", "error_code": "GOSZAKUP_TIMEOUT"}
+    except httpx.RequestError:
+        return {"status": "unavailable", "error_code": "GOSZAKUP_UNAVAILABLE"}
 
-    if resp.status_code == 200:
-        data = resp.json()
-        return {
-            "status": "ok",
-            "message": "Токен рабочий! API возвращает 200 OK.",
-            "token_present": True,
-            "api_url": url,
-            "response_keys": list(data.keys())[:10],
-        }
+    if len(resp.content) > 64 * 1024:
+        return {"status": "unavailable", "error_code": "GOSZAKUP_RESPONSE_TOO_LARGE"}
+    if resp.status_code in {301, 302, 303, 307, 308}:
+        return {"status": "invalid", "error_code": "GOSZAKUP_REDIRECT"}
     if resp.status_code == 401:
-        return {
-            "status": "unauthorized",
-            "message": "Токен невалидный или просрочен.",
-            "token_present": True,
-            "response_status": 401,
-        }
-    if resp.status_code == 403:
-        return {
-            "status": "forbidden",
-            "message": "Токен валидный, но нет доступа к этому endpoint.",
-            "token_present": True,
-            "response_status": 403,
-        }
-    if resp.status_code == 404:
-        return {
-            "status": "not_found",
-            "message": "Токен рабочий, но лот 17266377 не найден.",
-            "token_present": True,
-            "response_status": 404,
-        }
-    return {
-        "status": "error",
-        "message": f"API вернул {resp.status_code}. {resp.text[:200]}",
-        "token_present": True,
-        "response_status": resp.status_code,
-    }
+        return {"status": "invalid", "error_code": "GOSZAKUP_INVALID"}
+    if resp.status_code in {403, 429}:
+        return {"status": "unavailable", "error_code": "GOSZAKUP_FORBIDDEN"}
+    if resp.status_code != 200:
+        return {"status": "unavailable", "error_code": "GOSZAKUP_UNAVAILABLE"}
+
+    try:
+        body = resp.json()
+    except ValueError:
+        return {"status": "invalid", "error_code": "GOSZAKUP_BAD_RESPONSE"}
+
+    if "errors" in body and body["errors"]:
+        return {"status": "invalid", "error_code": "GOSZAKUP_INVALID"}
+    if not isinstance(body, dict) or "data" not in body:
+        return {"status": "invalid", "error_code": "GOSZAKUP_BAD_RESPONSE"}
+
+    return {"status": "valid", "error_code": "GOSZAKUP_VALID"}
