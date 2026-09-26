@@ -10,7 +10,7 @@ import { B2GPage } from "./pages/B2G";
 import { LotsPage } from "./pages/Lots";
 import { NotFoundPage } from "./pages/NotFound";
 import { getOrCreateClientId } from "./clientId";
-import { applyTheme, getTheme } from "./theme";
+import { applyTheme } from "./theme";
 import { AuthProvider } from "./auth/AuthContext";
 import { AuthPage } from "./pages/Auth";
 import { AuthCallbackPage } from "./pages/AuthCallback";
@@ -23,7 +23,7 @@ try {
   /* первый API-запрос вернёт понятную ошибку */
 }
 // Применяем тему до рендера, чтобы избежать flash
-applyTheme(getTheme());
+applyTheme("dark");
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

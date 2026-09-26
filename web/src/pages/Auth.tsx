@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Layout } from "../Layout";
 import { useAuth } from "../auth/AuthContext";
 import { isSupabaseConfigured, supabase } from "../supabase";
@@ -26,7 +26,16 @@ function friendlyAuthError(message: string): string {
 export function AuthPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>("login");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedMode = searchParams.get("mode");
+  const mode: Mode = requestedMode === "register" || requestedMode === "reset" ? requestedMode : "login";
+  const setMode = (next: Mode) => {
+    setSearchParams(next === "login" ? {} : { mode: next });
+    setError("");
+    setNotice("");
+    setPassword("");
+    setShowPassword(false);
+  };
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);

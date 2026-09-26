@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
+import { Pricing } from "../components/Pricing";
 
 // ───── Анимация счётчика (count-up) ─────
 function useCountUp(target: number, duration = 1500, start = false) {
@@ -280,7 +281,7 @@ function HowItWorks() {
     },
   ];
   return (
-    <section className="max-w-6xl mx-auto px-6 py-20">
+    <section id="how-it-works" className="scroll-mt-32 max-w-6xl mx-auto px-6 py-20">
       <Reveal>
         <div className="text-center mb-12">
           <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
@@ -394,25 +395,25 @@ function Agents() {
   const agents = [
     {
       icon: "📋",
-      name: "Documenter",
+      name: "Анализ требований",
       role: "Извлекает требования",
       desc: "Читает ТЗ (включая PDF с чертежами) и составляет чек-лист требований с цитатами.",
     },
     {
       icon: "⚖️",
-      name: "Legal + RAG",
+      name: "Проверка рисков",
       role: "Проверяет по Закону РК",
-      desc: "Ищет нарушения в требованиях закупки. 190 чанков Закона РК «О госзакупках» в векторной БД.",
+      desc: "Помогает находить спорные требования и возможные нарушения со ссылками на нормы законодательства.",
     },
     {
       icon: "🔍",
-      name: "Product Search",
+      name: "Подбор товаров",
       role: "Находит товары по ТЗ",
       desc: "AI-поиск в Kaspi, Sulpak, OLX, Vernal, OMNI PARTS. Извлекает характеристики, сравнивает цены.",
     },
     {
       icon: "📝",
-      name: "B2G Agent",
+      name: "Подготовка документов",
       role: "Генерит ТЗ для заказчика",
       desc: "Помогает составить корректное ТЗ с прогнозом цены, без дискриминационных требований.",
     },
@@ -422,15 +423,14 @@ function Agents() {
       <Reveal>
         <div className="text-center mb-12">
           <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
-            Внутри
+            Возможности
           </div>
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-            4 AI-агента работают вместе
+            От требований — к следующему шагу
           </h2>
           <p className="text-[var(--text-muted)] max-w-2xl mx-auto">
-            Каждый агент — эксперт в своей области. LLM-failover между Mistral
-            Large и qwen3-6 (казахстанская модель) — без зависимости от одного
-            провайдера.
+            Разберитесь в условиях закупки, оцените риски и подготовьте документы
+            с помощью AI-ассистента.
           </p>
         </div>
       </Reveal>
@@ -746,7 +746,8 @@ export function HomePage() {
       <Hero />
       <ForWho />
       <HowItWorks />
-      <Agents />
+      <div id="features" className="scroll-mt-32"><Agents /></div>
+      <Pricing />
       <Changelog />
       <Roadmap />
       <FinalCTA />

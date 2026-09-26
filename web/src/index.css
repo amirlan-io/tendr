@@ -2,6 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+.site-shell {
+    position: relative;
+    isolation: isolate;
+}
+
+.lava-background {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    overflow: hidden;
+    contain: strict;
+    background:
+        radial-gradient(ellipse at 12% 28%, #0b263f 0%, transparent 48%),
+        radial-gradient(ellipse at 86% 72%, #103d2c 0%, transparent 44%),
+        radial-gradient(ellipse at 72% 12%, #39341a 0%, transparent 35%),
+        #05090d;
+}
+
+html.dark .lava-background {
+    display: block;
+}
+
+.lava-background__canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+}
+
+.lava-background__canvas[data-ready="true"] {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lava-background__canvas {
+        transition: none;
+    }
+}
+
+@media print {
+    .lava-background {
+        display: none !important;
+    }
+}
+
 @layer base {
     :root {
         --bg: #fafafa;

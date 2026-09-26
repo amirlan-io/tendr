@@ -1,16 +1,28 @@
-import { Link } from "react-router-dom";
-import { useLang, useT } from "./i18n";
-import { useTheme } from "./theme";
+import { useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useT } from "./i18n";
 import { useAuth } from "./auth/AuthContext";
+import { LavaBackground } from "./components/LavaBackground";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const t = useT();
-  const [lang, setLang] = useLang();
-  const [theme, setTheme] = useTheme();
   const { user, loading, signOut } = useAuth();
+  const { pathname, hash } = useLocation();
+
+  useEffect(() => {
+    if (pathname !== "/" || !hash) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(hash.slice(1))?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pathname, hash]);
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+    <div className="site-shell min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <LavaBackground />
       <header
         className="sticky top-0 z-50 border-b backdrop-blur-md"
         style={{
@@ -18,7 +30,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           borderColor: "var(--border)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-3 py-3 lg:h-20 lg:py-0">
           <Link to="/" className="flex items-center gap-2.5 group">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white text-sm transition-transform group-hover:scale-105"
@@ -35,40 +47,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          <nav className="flex items-center gap-1">
-            <NavLink to="/analyze">{t("home.nav.analyze")}</NavLink>
-            <NavLink to="/history">{t("home.nav.history")}</NavLink>
-            <NavLink to="/b2g">B2G</NavLink>
-            <NavLink to="/lots">📋 Лоты</NavLink>
-            <NavLink to="/admin">📊</NavLink>
-            <a
-              href="https://t.me/TendrBot"
-              target="_blank"
-              rel="noreferrer"
-              className="px-3 py-1.5 text-sm rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--accent-glow)] transition"
-            >
-              {t("home.nav.bot")}
-            </a>
-
-            <div className="w-px h-5 bg-[var(--border-strong)] mx-2" />
-
-            <div className="flex gap-0.5 p-0.5 rounded-md bg-[var(--border)]">
-              <LangBtn current={lang} target="ru" onClick={() => setLang("ru")}>
-                RU
-              </LangBtn>
-              <LangBtn current={lang} target="kk" onClick={() => setLang("kk")}>
-                KK
-              </LangBtn>
-            </div>
-
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-              className="ml-1 w-8 h-8 rounded-md flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--accent-glow)] transition"
-            >
-              {theme === "dark" ? "☀" : "☾"}
-            </button>
-
+          <nav aria-label="Основная навигация" className="row-start-2 col-span-2 flex items-center justify-center gap-1 lg:row-start-1 lg:col-start-2 lg:col-span-1">
+            {user ? (
+              <>
+                <NavLink to="/analyze">AI-ассистент</NavLink>
+                <NavLink to="/history">Мои закупки</NavLink>
+                <NavLink to="/b2g">Документы</NavLink>
+              </>
+            ) : (
+              <>
+                <NavLink to="/#how-it-works">Как работает</NavLink>
+                <NavLink to="/#features">Возможности</NavLink>
+                <NavLink to="/#pricing">Тарифы</NavLink>
+              </>
+            )}
+          </nav>
+          <div className="row-start-1 col-start-2 lg:col-start-3 flex items-center justify-end gap-1 sm:gap-2 min-h-10">
             {!loading &&
               (user ? (
                 <div className="ml-2 flex items-center gap-2">
@@ -80,27 +74,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </div>
                   <button
                     onClick={() => void signOut()}
-                    className="hidden rounded-lg px-3 py-2 text-sm text-[var(--text-muted)] transition hover:bg-[var(--accent-glow)] hover:text-[var(--text)] sm:block"
+                    className="rounded-lg px-3 py-2 text-sm text-[var(--text-muted)] transition hover:bg-[var(--accent-glow)] hover:text-[var(--text)]"
                   >
                     Выйти
                   </button>
                 </div>
               ) : (
+                <>
                 <Link
                   to="/login"
-                  className="ml-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400"
+                  className="rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-[var(--text-muted)] transition hover:text-white hover:bg-[var(--accent-glow)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
                 >
                   Войти
                 </Link>
+                <Link
+                  to="/login?mode=register"
+                  className="whitespace-nowrap rounded-lg bg-emerald-500 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-400"
+                >
+                  Начать бесплатно
+                </Link>
+                </>
               ))}
-          </nav>
+          </div>
         </div>
       </header>
 
-      <main>{children}</main>
+      <main className="relative">{children}</main>
 
       <footer
-        className="border-t mt-24"
+        className="relative border-t mt-24"
         style={{ borderColor: "var(--border)" }}
       >
         <div className="max-w-6xl mx-auto px-6 py-8 text-center text-xs text-[var(--text-subtle)]">
@@ -112,38 +114,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
+  const { pathname, hash } = useLocation();
+  const active = to === `${pathname}${hash}`;
   return (
     <Link
       to={to}
-      className="px-3 py-1.5 text-sm rounded-md text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--accent-glow)] transition"
+      aria-current={active ? (hash ? "location" : "page") : undefined}
+      className={`whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm rounded-lg hover:text-[var(--text)] hover:bg-[var(--accent-glow)] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 ${active ? "text-emerald-400 bg-emerald-500/10" : "text-[var(--text-muted)]"}`}
     >
       {children}
     </Link>
-  );
-}
-
-function LangBtn({
-  current,
-  target,
-  onClick,
-  children,
-}: {
-  current: string;
-  target: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  const active = current === target;
-  return (
-    <button
-      onClick={onClick}
-      className={`px-2.5 py-1 text-xs rounded font-medium transition ${
-        active
-          ? "bg-[var(--bg-elevated)] text-[var(--text)] shadow-sm"
-          : "text-[var(--text-muted)] hover:text-[var(--text)]"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
