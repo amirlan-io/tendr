@@ -12,7 +12,8 @@
  * 5. Смотрит recording или live_url
  */
 import { useEffect, useState } from "react";
-import { api } from "../clientId";
+import { api, ApiError } from "../clientId";
+import { getSafeHttpsUrl } from "../security/externalUrl";
 
 type Model = {
   id: string;
@@ -85,9 +86,11 @@ export function BrowserActionPanel({
   const [presetIdx, setPresetIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    api<{ models: Model[] }>("/api/browser/models").then((data) => {
-      setModels(data.models || []);
-    }).catch(() => {});
+    api<{ models: Model[] }>("/api/browser/models")
+      .then((r) => {
+        setModels(r.models || []);
+      })
+      .catch(() => {});
   }, []);
 
   const applyPreset = (idx: number) => {
@@ -112,7 +115,7 @@ export function BrowserActionPanel({
       .filter(Boolean);
 
     try {
-      const data = await api<TaskResult>("/api/browser/run", {
+      const r = await api<TaskResult>("/api/browser/run", {
         method: "POST",
         body: JSON.stringify({
           task,
@@ -124,10 +127,9 @@ export function BrowserActionPanel({
           proxy_country: "kz",
         }),
       });
-      setResult(data);
-    } catch (e: any) {
-      const detail = e?.response?.data?.detail || e?.message || "Ошибка";
-      setError(detail);
+      setResult(r);
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : "Ошибка. Попробуйте снова.");
     } finally {
       setSubmitting(false);
     }
@@ -158,8 +160,11 @@ export function BrowserActionPanel({
       </div>
 
       <div>
-        <label className="text-sm text-slate-500">Задача для агента</label>
+        <label className="text-sm text-slate-500" htmlFor="browser-task">
+          Задача для агента
+        </label>
         <textarea
+          id="browser-task"
           value={task}
           onChange={(e) => setTask(e.target.value)}
           placeholder="Опиши что должен сделать агент. Например: 'Зайди на kaspi.kz, найди ноутбук Lenovo IdeaPad, собери 5 лучших предложений с ценами.'"
@@ -239,66 +244,79 @@ export function BrowserActionPanel({
       </button>
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/30 border border-red-300 text-red-700 dark:text-red-300 p-3 rounded">
+        <div
+          role="alert"
+          className="bg-red-50 dark:bg-red-900/30 border border-red-300 text-red-700 dark:text-red-300 p-3 rounded"
+        >
           ❌ {error}
         </div>
       )}
 
-      {result && (
-        <div className="bg-green-50 dark:bg-green-900/30 border border-green-300 p-4 rounded space-y-2">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="font-mono text-slate-600">
-              session: {result.session_id.slice(0, 16)}...
-            </span>
-            <span className="px-2 py-0.5 bg-green-200 dark:bg-green-700 rounded text-xs">
-              {result.status}
-            </span>
-            <span>⏱ {result.duration_sec.toFixed(1)}s</span>
-            <span>💰 ${result.cost_usd.toFixed(4)}</span>
-            <span>📊 {result.step_count} шагов</span>
-          </div>
+      {result && <AgentResult result={result} />}
+    </div>
+  );
+}
 
-          {result.live_url && (
-            <div>
-              <p className="text-sm font-medium">👁 Открой live-браузер:</p>
-              <a
-                href={result.live_url}
-                target="_blank"
-                rel="noopener"
-                className="text-blue-600 hover:underline text-sm break-all"
-              >
-                {result.live_url}
-              </a>
-            </div>
-          )}
+function AgentResult({ result }: { result: TaskResult }) {
+  // live_url и recording_url приходят от backend-агента (домены заранее
+  // неизвестны), поэтому проверяем их общей https-проверкой:
+  // javascript:, data:, file:, http: и userinfo отклоняются.
+  const safeLiveUrl = getSafeHttpsUrl(result.live_url);
+  const safeRecordingUrl = getSafeHttpsUrl(result.recording_url);
 
-          {result.recording_url && (
-            <div>
-              <p className="text-sm font-medium">🎥 Видео записи:</p>
-              <a
-                href={result.recording_url}
-                target="_blank"
-                rel="noopener"
-                className="text-blue-600 hover:underline text-sm break-all"
-              >
-                {result.recording_url}
-              </a>
-              <p className="text-xs text-amber-600">
-                ⚠️ Ссылка живёт 1 час, скачай сейчас
-              </p>
-            </div>
-          )}
+  return (
+    <div className="bg-green-50 dark:bg-green-900/30 border border-green-300 p-4 rounded space-y-2">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <span className="font-mono text-slate-600">
+          session: {result.session_id.slice(0, 16)}...
+        </span>
+        <span className="px-2 py-0.5 bg-green-200 dark:bg-green-700 rounded text-xs">
+          {result.status}
+        </span>
+        <span>⏱ {result.duration_sec.toFixed(1)}s</span>
+        <span>💰 ${result.cost_usd.toFixed(4)}</span>
+        <span>📊 {result.step_count} шагов</span>
+      </div>
 
-          {result.output && (
-            <div>
-              <p className="text-sm font-medium">📤 Результат:</p>
-              <pre className="bg-slate-100 dark:bg-slate-900 p-3 rounded text-xs overflow-auto max-h-96">
-                {typeof result.output === "string"
-                  ? result.output
-                  : JSON.stringify(result.output, null, 2)}
-              </pre>
-            </div>
-          )}
+      {safeLiveUrl && (
+        <div>
+          <p className="text-sm font-medium">👁 Открой live-браузер:</p>
+          <a
+            href={safeLiveUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline text-sm break-all"
+          >
+            {safeLiveUrl}
+          </a>
+        </div>
+      )}
+
+      {safeRecordingUrl && (
+        <div>
+          <p className="text-sm font-medium">🎥 Видео записи:</p>
+          <a
+            href={safeRecordingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline text-sm break-all"
+          >
+            {safeRecordingUrl}
+          </a>
+          <p className="text-xs text-amber-600">
+            ⚠️ Ссылка живёт 1 час, скачай сейчас
+          </p>
+        </div>
+      )}
+
+      {result.output && (
+        <div>
+          <p className="text-sm font-medium">📤 Результат:</p>
+          <pre className="bg-slate-100 dark:bg-slate-900 p-3 rounded text-xs overflow-auto max-h-96">
+            {typeof result.output === "string"
+              ? result.output
+              : JSON.stringify(result.output, null, 2)}
+          </pre>
         </div>
       )}
     </div>

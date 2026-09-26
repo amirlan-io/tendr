@@ -2,57 +2,26 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
 import { useT } from "../i18n";
-import { api } from "../clientId";
-
-const HISTORY_KEY = "tendr_history";
-
-type LocalItem = {
-  lot_id: string;
-  title: string;
-  customer: string;
-  method: string;
-  overall_risk?: string;
-  n_requirements: number;
-  n_red_flags: number;
-  created_at: string;
-};
-
-type ServerItem = LocalItem;
-
-function loadLocal(): LocalItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(window.localStorage.getItem(HISTORY_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveLocal(items: LocalItem[]) {
-  window.localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 20)));
-}
+import {
+  clearHistory,
+  loadHistory,
+  type HistoryItem as LocalItem,
+} from "../historyStore";
 
 export function HistoryPage() {
   const t = useT();
   const [items, setItems] = useState<LocalItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
+  // Серверного endpoint /api/lots/history в backend нет, поэтому история
+  // честно ведётся только локально. Никаких «тихих» ошибок: запроса нет вовсе.
   useEffect(() => {
-    loadLocal();
-    api<{ items: ServerItem[] }>("/api/lots/history")
-      .then((r) => {
-        const merged = mergeWithLocal(r.items || []);
-        setItems(merged);
-        saveLocal(merged);
-      })
-      .catch(() => setItems(loadLocal()))
-      .finally(() => setLoading(false));
+    setItems(loadHistory());
   }, []);
 
   function clear() {
-    if (!confirm("?")) return;
+    if (!window.confirm("Очистить историю проверок в этом браузере?")) return;
+    clearHistory();
     setItems([]);
-    saveLocal([]);
   }
 
   return (
@@ -61,7 +30,7 @@ export function HistoryPage() {
         <Link to="/" className="text-sm text-[var(--text-muted)] hover:underline">
           {t("common.back")}
         </Link>
-        <div className="flex items-center justify-between mt-2 mb-6">
+        <div className="flex items-center justify-between mt-2 mb-4">
           <h1 className="text-2xl font-bold">{t("history.title")}</h1>
           {items.length > 0 && (
             <button
@@ -73,9 +42,13 @@ export function HistoryPage() {
           )}
         </div>
 
-        {loading ? (
-          <div className="text-[var(--text-muted)] text-sm">…</div>
-        ) : items.length === 0 ? (
+        <p className="text-xs text-[var(--text-muted)] mb-6">
+          История хранится только в этом браузере и содержит названия лотов и
+          заказчиков. На общем компьютере очистите её после работы — данные
+          останутся здесь и после закрытия вкладки.
+        </p>
+
+        {items.length === 0 ? (
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center text-slate-500">
             {t("history.empty")}
           </div>
@@ -89,29 +62,6 @@ export function HistoryPage() {
       </div>
     </Layout>
   );
-}
-
-function mergeWithLocal(server: ServerItem[]): LocalItem[] {
-  const local = loadLocal();
-  const seen = new Set<string>();
-  const merged: LocalItem[] = [];
-  // Серверные свежее (созданы на бэке, time идёт с UTC сервера)
-  for (const s of server) {
-    const key = s.lot_id + s.created_at;
-    if (!seen.has(key)) {
-      seen.add(key);
-      merged.push(s);
-    }
-  }
-  // Добавляем локальные, которых нет на сервере
-  for (const l of local) {
-    const key = l.lot_id + l.created_at;
-    if (!seen.has(key)) {
-      seen.add(key);
-      merged.push(l);
-    }
-  }
-  return merged.slice(0, 20);
 }
 
 function HistoryCard({ item }: { item: LocalItem }) {
@@ -131,7 +81,7 @@ function HistoryCard({ item }: { item: LocalItem }) {
           <div className="font-medium text-[var(--text)] truncate">
             {item.title}
           </div>
-          <div className="text-xs text-[var(--text-muted)] dark:text-slate-400 dark:text-slate-400 mt-0.5">
+          <div className="text-xs text-[var(--text-muted)] dark:text-slate-400 mt-0.5">
             {item.customer} · № {item.lot_id}
           </div>
           <div className="flex gap-3 mt-2 text-xs text-[var(--text-muted)] dark:text-slate-400">

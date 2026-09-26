@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
 import { useT } from "../i18n";
-import { api, downloadFile, getOrCreateClientId } from "../clientId";
+import { api, ApiError, downloadBlob, isQuotaExceededError } from "../clientId";
+import { pushHistory } from "../historyStore";
 
 type Requirement = {
   code: string;
@@ -69,38 +70,26 @@ type AnalysisResponse = {
   created_at?: string;
 };
 
-const HISTORY_KEY = "tendr_history";
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const ALLOWED_EXTS = [".pdf", ".docx", ".txt", ".csv", ".xls", ".xlsx"] as const;
 
-type HistoryItem = {
-  lot_id: string;
-  title: string;
-  customer: string;
-  method: string;
-  overall_risk?: string;
-  n_requirements: number;
-  n_red_flags: number;
-  url?: string;
-  created_at: string;
-};
+function getFileExt(name: string): string {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i).toLowerCase() : "";
+}
 
-function loadHistory(): HistoryItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(window.localStorage.getItem(HISTORY_KEY) || "[]");
-  } catch {
-    return [];
+function validateFileClientSide(f: File): string | null {
+  const ext = getFileExt(f.name);
+  if (!(ALLOWED_EXTS as readonly string[]).includes(ext)) {
+    return "Неподдерживаемый тип файла. Разрешены: PDF, DOCX, TXT, CSV, XLS, XLSX.";
   }
-}
-
-function saveHistory(items: HistoryItem[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 20)));
-}
-
-function pushHistory(item: HistoryItem) {
-  const items = loadHistory().filter((i) => i.lot_id !== item.lot_id);
-  items.unshift(item);
-  saveHistory(items);
+  if (f.size > MAX_FILE_BYTES) {
+    return "Файл слишком большой. Максимальный размер — 20 МБ. Уменьшите файл и попробуйте снова.";
+  }
+  if (f.size === 0) {
+    return "Файл пустой. Выберите другой файл.";
+  }
+  return null;
 }
 
 export function AnalyzePage() {
@@ -113,7 +102,11 @@ export function AnalyzePage() {
   const [error, setError] = useState<string | null>(null);
   const [quota, setQuota] = useState(false);
   const [autoTitle, setAutoTitle] = useState<string>("");
+  const [lastRequest, setLastRequest] = useState<
+    { kind: "url"; url: string } | { kind: "file"; name: string } | null
+  >(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const lastFileRef = useRef<File | null>(null);
 
   // Автозапуск анализа, если в URL есть ?lot_url=...
   // Срабатывает когда пользователь нажимает "🤖 AI-анализ" в каталоге лотов.
@@ -133,13 +126,11 @@ export function AnalyzePage() {
           setQuota(false);
           setLoading(true);
           try {
-            const cid = getOrCreateClientId();
             const resp = await api<AnalysisResponse>(
               "/api/lots/analyze",
               {
                 method: "POST",
                 body: JSON.stringify({ url: lotUrl }),
-                headers: { "X-Client-Id": cid },
               }
             );
             setResult(resp);
@@ -156,10 +147,14 @@ export function AnalyzePage() {
                 created_at: new Date().toISOString(),
               });
             }
-          } catch (e: any) {
-            setError(
-              e?.response?.data?.detail || e?.message || "Ошибка анализа"
-            );
+          } catch (e: unknown) {
+            // Квота — только по стабильному коду QUOTA_EXCEEDED.
+            // Показываем только безопасное сообщение, без сырого Error/JSON backend.
+            if (isQuotaExceededError(e)) {
+              setQuota(true);
+            } else {
+              setError(e instanceof ApiError ? e.message : "Ошибка анализа. Попробуйте снова.");
+            }
           } finally {
             setLoading(false);
           }
@@ -171,10 +166,28 @@ export function AnalyzePage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     setResult(null);
     setQuota(false);
+    // Клиентская валидация файла до отправки (backend-лимиты не меняем).
+    if (file) {
+      const fileProblem = validateFileClientSide(file);
+      if (fileProblem) {
+        if (file.size > MAX_FILE_BYTES) {
+          setError("Файл слишком большой. Максимальный размер — 20 МБ. Уменьшите файл и попробуйте снова.");
+        } else {
+          setError(fileProblem);
+        }
+        return;
+      }
+      lastFileRef.current = file;
+      setLastRequest({ kind: "file", name: file.name });
+    } else if (url.trim()) {
+      setLastRequest({ kind: "url", url: url.trim() });
+    }
     setLoading(true);
+    let ok = false;
     try {
       let resp: AnalysisResponse;
       if (file) {
@@ -196,6 +209,9 @@ export function AnalyzePage() {
       }
 
       setResult(resp);
+      setLastRequest(null);
+      lastFileRef.current = null;
+      ok = true;
 
       if (!resp.incomplete) {
         pushHistory({
@@ -209,21 +225,40 @@ export function AnalyzePage() {
           created_at: new Date().toISOString(),
         });
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (
-        msg.toLowerCase().includes("limit") ||
-        msg.toLowerCase().includes("лимит")
-      ) {
+    } catch (e: unknown) {
+      // Безопасные сообщения из ApiError; сырой backend-JSON пользователю не показываем.
+      // Квота — только по стабильному коду QUOTA_EXCEEDED, не по тексту.
+      if (isQuotaExceededError(e)) {
         setQuota(true);
       } else {
-        setError(msg);
+        setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
       }
     } finally {
       setLoading(false);
-      setFile(null);
-      if (fileInput.current) fileInput.current.value = "";
+      // Файл очищаем только при успехе — чтобы работала кнопка «повторить».
+      if (ok) {
+        setFile(null);
+        if (fileInput.current) fileInput.current.value = "";
+      }
     }
+  }
+
+  function retry() {
+    // Повтор последнего запроса без потери контекста.
+    if (loading) return;
+    if (lastRequest?.kind === "file" && lastFileRef.current) {
+      setFile(lastFileRef.current);
+    }
+    if (lastRequest?.kind === "url") {
+      setUrl(lastRequest.url);
+    }
+    setError(null);
+    setQuota(false);
+    // Даём state обновиться и повторяем submit.
+    setTimeout(() => {
+      const fake = { preventDefault: () => {} } as React.FormEvent;
+      void submit(fake);
+    }, 0);
   }
 
   function reset() {
@@ -232,6 +267,8 @@ export function AnalyzePage() {
     setQuota(false);
     setUrl("");
     setFile(null);
+    setLastRequest(null);
+    lastFileRef.current = null;
   }
 
   function downloadDocx(kind: "complaint" | "report") {
@@ -242,8 +279,15 @@ export function AnalyzePage() {
       kind === "complaint"
         ? `zhaloba_${lotId}_${stamp}.docx`
         : `otchet_${lotId}_${stamp}.docx`;
-    void downloadFile(`/api/lots/${lotId}/download?kind=${kind}`, filename)
-      .catch((e) => alert(String(e)));
+    setError(null);
+    void downloadBlob(`/api/lots/${lotId}/download?kind=${kind}`, filename).catch(
+      (e: unknown) =>
+        setError(
+          e instanceof ApiError
+            ? e.message
+            : "Не удалось скачать файл. Попробуйте позже.",
+        ),
+    );
   }
 
   return (
@@ -271,8 +315,12 @@ export function AnalyzePage() {
         )}
 
         {loading && (
-          <div className="mb-4 px-4 py-3 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-900/30 text-sm">
-            <div className="font-medium text-blue-700 dark:text-blue-300 mb-2">
+          <div
+            role="status"
+            aria-busy="true"
+            aria-label="Идёт AI-анализ"
+            className="mb-4 px-4 py-3 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-900/30 text-sm"
+          >  <div className="font-medium text-blue-700 dark:text-blue-300 mb-2">
               ⏳ Идёт AI-анализ (30-90 сек)...
             </div>
             <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
@@ -293,6 +341,7 @@ export function AnalyzePage() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder={t("analyze.placeholder")}
+              aria-label={t("analyze.title")}
               className="flex-1 px-4 py-2 border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text)] placeholder:text-[var(--text-subtle)] rounded-lg focus:outline-none focus:ring-2 focus:ring-brand"
               disabled={loading}
             />
@@ -311,7 +360,8 @@ export function AnalyzePage() {
             <input
               ref={fileInput}
               type="file"
-              accept=".pdf,.docx,.txt"
+              accept=".pdf,.docx,.txt,.csv,.xls,.xlsx"
+              aria-label={t("analyze.file.label")}
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-100 dark:file:bg-slate-700 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-200 dark:hover:file:bg-slate-600"
               disabled={loading}
@@ -335,11 +385,20 @@ export function AnalyzePage() {
             <div className="text-sm text-[var(--text-muted)]">
               {t("analyze.quota.text")}
             </div>
+            <button
+              type="button"
+              onClick={retry}
+              disabled={loading}
+              className="mt-2 px-4 py-1.5 rounded-lg text-sm font-medium border transition disabled:opacity-50"
+            >
+              ↻ Попробовать снова
+            </button>
           </div>
         )}
 
         {error && (
           <div
+            role="alert"
             className="px-4 py-3 rounded-lg border mb-4"
             style={{
               backgroundColor: "var(--bg-elevated)",
@@ -354,6 +413,14 @@ export function AnalyzePage() {
             <div className="text-sm text-[var(--text-muted)] whitespace-pre-wrap">
               {error}
             </div>
+            <button
+              type="button"
+              onClick={retry}
+              disabled={loading}
+              className="mt-2 px-4 py-1.5 rounded-lg text-sm font-medium border transition disabled:opacity-50"
+            >
+              ↻ Попробовать снова
+            </button>
           </div>
         )}
 
@@ -385,8 +452,8 @@ export function AnalyzePage() {
         {result && !result.incomplete && (
           <ResultView
             result={result}
-            onDownload={downloadDocx}
             onReset={reset}
+            onDownload={downloadDocx}
           />
         )}
       </div>
@@ -396,12 +463,12 @@ export function AnalyzePage() {
 
 function ResultView({
   result,
-  onDownload,
   onReset,
+  onDownload,
 }: {
   result: AnalysisResponse;
-  onDownload: (k: "complaint" | "report") => void;
   onReset: () => void;
+  onDownload: (kind: "complaint" | "report") => void;
 }) {
   const t = useT();
   const lot = result.lot;
@@ -732,31 +799,20 @@ function ResultView({
       )}
 
       <div className="flex gap-3 flex-wrap pt-2">
+        <button
+          onClick={() => onDownload("report")}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-white transition hover:bg-emerald-400"
+        >
+          <span>⬇</span> Скачать отчёт DOCX
+        </button>
         {hasComplaint && (
           <button
             onClick={() => onDownload("complaint")}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-white transition"
-            style={{
-              background: "#0e7c7b",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
-            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-strong)] px-5 py-2.5 font-medium transition hover:bg-[var(--accent-glow)]"
           >
-            <span>📥</span>
-            {t("analyze.complaint.download")}
+            <span>⬇</span> Скачать жалобу DOCX
           </button>
         )}
-        <button
-          onClick={() => onDownload("report")}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium border transition"
-          style={{
-            background: "var(--bg-elevated)",
-            borderColor: "var(--border-strong)",
-            color: "var(--text)",
-          }}
-        >
-          <span>📄</span>
-          {t("analyze.report.download")}
-        </button>
         <button
           onClick={onReset}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition"

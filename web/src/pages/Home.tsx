@@ -1,20 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
-import { useT } from "../i18n";
-import { api } from "../clientId";
-
-type Stats = {
-  users: { total: number; pilot: number };
-  analyses: {
-    total: number;
-    with_high_risk: number;
-    last_24h: number;
-    avg_requirements: number;
-  };
-  risk_distribution: Record<string, number>;
-  top_customers: { customer: string; count: number }[];
-};
 
 // ───── Анимация счётчика (count-up) ─────
 function useCountUp(target: number, duration = 1500, start = false) {
@@ -604,93 +590,6 @@ function Changelog() {
   );
 }
 
-// ───── Социальное доказательство (метрики) ─────
-function SocialProof({ stats }: { stats: Stats | null }) {
-  // Покажем реальные цифры из /admin/stats
-  const totalAnalyses = stats?.analyses.total ?? 0;
-  const totalUsers = stats?.users.total ?? 0;
-  const highRisk = stats?.analyses.with_high_risk ?? 0;
-
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-20">
-      <Reveal>
-        <div
-          className="rounded-3xl p-12 md:p-16 border relative overflow-hidden"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            borderColor: "var(--border)",
-          }}
-        >
-          <div
-            className="absolute inset-0 opacity-30"
-            style={{
-              background:
-                "radial-gradient(circle at 50% 50%, var(--accent-glow) 0%, transparent 70%)",
-            }}
-          />
-          <div className="relative">
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-3 text-center">
-              Что уже работает
-            </h2>
-            <p className="text-[var(--text-muted)] text-center max-w-2xl mx-auto mb-8">
-              Это не концепт, а рабочий продукт. Вот что мы сделали и сколько
-              раз уже использовали.
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Metric
-                value={totalAnalyses}
-                label="Лотов проанализировано"
-                color="var(--accent)"
-              />
-              <Metric
-                value={totalUsers}
-                label="Пользователей"
-                color="var(--text)"
-              />
-              <Metric
-                value={highRisk}
-                label="Нарушений найдено"
-                color="#f59e0b"
-              />
-              <Metric value={190} label="Чанков в RAG" color="#10b981" />
-            </div>
-          </div>
-        </div>
-      </Reveal>
-    </section>
-  );
-}
-
-function Metric({
-  value,
-  label,
-  color,
-}: {
-  value: number;
-  label: string;
-  color: string;
-}) {
-  return (
-    <div
-      className="rounded-xl p-4 text-center border"
-      style={{
-        backgroundColor: "var(--bg)",
-        borderColor: "var(--border)",
-      }}
-    >
-      <div
-        className="text-3xl font-bold tracking-tight tabular-nums mb-1"
-        style={{ color }}
-      >
-        {value}
-      </div>
-      <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
-        {label}
-      </div>
-    </div>
-  );
-}
-
 // ───── Roadmap ─────
 function Roadmap() {
   const items = [
@@ -838,20 +737,13 @@ function FinalCTA() {
 }
 
 // ───── Главная страница ─────
+// Публичная страница НЕ обращается к /api/admin/stats: у неё нет X-Admin-Key,
+// а после hardening admin endpoints вернут 401/403 и метрики показались бы нулями.
+// Блок живых метрик убран до появления публичного endpoint статистики.
 export function HomePage() {
-  const t = useT();
-  const [stats, setStats] = useState<Stats | null>(null);
-
-  useEffect(() => {
-    api<Stats>("/api/admin/stats")
-      .then(setStats)
-      .catch(() => setStats(null));
-  }, []);
-
   return (
     <Layout>
       <Hero />
-      <SocialProof stats={stats} />
       <ForWho />
       <HowItWorks />
       <Agents />

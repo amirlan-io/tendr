@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
 import { useT } from "../i18n";
-import { api, downloadFile } from "../clientId";
+import { api, ApiError, downloadBlob } from "../clientId";
+import { getSafeHttpsUrl } from "../security/externalUrl";
 
 type Workspace = {
   id: number;
@@ -121,7 +122,7 @@ export function B2GPage() {
       const r = await api<{ items: Workspace[] }>("/api/b2g/workspaces");
       setWorkspaces(r.items);
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
     }
   };
 
@@ -146,7 +147,7 @@ export function B2GPage() {
       await loadWorkspaces();
       setView("list");
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
     } finally {
       setLoading(false);
     }
@@ -163,7 +164,7 @@ export function B2GPage() {
       );
       setDrafts(r.items);
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
     }
   };
 
@@ -200,7 +201,7 @@ export function B2GPage() {
         if (last) openDraftVersion(selectedWs.id, last.version);
       }
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
     } finally {
       setLoading(false);
     }
@@ -219,7 +220,7 @@ export function B2GPage() {
       setSelectedDraft(r.tz_data);
       setView("view");
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
     }
   };
 
@@ -259,7 +260,7 @@ export function B2GPage() {
       });
       setProductSearch(r);
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
     } finally {
       setProductLoading(false);
       setVerifying(false);
@@ -267,14 +268,17 @@ export function B2GPage() {
     }
   };
 
-  // Скачать DOCX
+  // Скачать DOCX (endpoint существует в backend: /api/b2g/.../download).
+  // Единый helper downloadBlob: безопасные ошибки, отложенный revokeObjectURL.
   const downloadDocx = (version: number) => {
     if (!selectedWs) return;
-    void downloadFile(
+    setError(null);
+    downloadBlob(
       `/api/b2g/workspaces/${selectedWs.id}/drafts/${version}/download`,
       `tz_v${version}.docx`,
-    )
-      .catch((e) => alert(String(e)));
+    ).catch((e: unknown) =>
+      setError(e instanceof ApiError ? e.message : "Не удалось скачать файл. Попробуйте позже."),
+    );
   };
 
   // Главный рендер
@@ -306,6 +310,7 @@ export function B2GPage() {
 
         {error && (
           <div
+            role="alert"
             className="mb-4 p-3 rounded-lg text-sm"
             style={{
               backgroundColor: "var(--bg-elevated)",
@@ -374,6 +379,24 @@ export function B2GPage() {
                   (selectedDraft as unknown as { _id?: number })._id,
               );
               if (draftMatch) downloadDocx(draftMatch.version);
+            }}
+            onDownloadPdf={() => {
+              const draftMatch =
+                drafts.find(
+                  (d) =>
+                    (d as unknown as { _tz_id?: number })._tz_id ===
+                    (selectedDraft as unknown as { _id?: number })._id,
+                ) ??
+                drafts[0] ??
+                null;
+              const v = draftMatch?.version ?? 1;
+              setError(null);
+              downloadBlob(
+                `/api/b2g/workspaces/${selectedWs.id}/drafts/${v}/download-pdf`,
+                `tz_v${v}.pdf`,
+              ).catch((e: unknown) =>
+                setError(e instanceof ApiError ? e.message : "Не удалось скачать файл. Попробуйте позже."),
+              );
             }}
             onNewVersion={() => {
               setView("create");
@@ -773,6 +796,7 @@ function TzView({
   tz,
   version,
   onDownload,
+  onDownloadPdf,
   onNewVersion,
   onSearchProducts,
 }: {
@@ -780,6 +804,7 @@ function TzView({
   tz: TzData;
   version: number;
   onDownload: () => void;
+  onDownloadPdf: () => void;
   onNewVersion: () => void;
   onSearchProducts: () => void;
 }) {
@@ -849,13 +874,7 @@ function TzView({
               ⬇ DOCX
             </button>
             <button
-              onClick={() => {
-                void downloadFile(
-                  `/api/b2g/workspaces/${workspace.id}/drafts/${version}/download-pdf`,
-                  `tz_v${version}.pdf`,
-                )
-                  .catch((e) => alert(String(e)));
-              }}
+              onClick={onDownloadPdf}
               className="px-3 py-1.5 rounded-md text-sm border"
               style={{
                 borderColor: "var(--border-strong)",
@@ -1207,6 +1226,11 @@ function ProductCard({
   const hasBrowserPrice =
     product.browser_verified_price != null &&
     product.browser_verified_price !== product.price_kzt;
+  // Ссылки из поиска товаров — произвольные домены магазинов, поэтому
+  // проверяем их общей https-проверкой (без allowlist) + rel noopener noreferrer.
+  // javascript:, data:, file:, http: и userinfo отклоняются.
+  const safeProductUrl = getSafeHttpsUrl(product.url);
+  const safeRecordingUrl = getSafeHttpsUrl(product.browser_recording_url);
   const browserPriceLower =
     hasBrowserPrice &&
     (product.browser_verified_price ?? 0) < (product.price_kzt ?? Infinity);
@@ -1228,15 +1252,21 @@ function ProductCard({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
-            <a
-              href={product.url}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium hover:underline"
-              style={{ color: "var(--accent)" }}
-            >
-              {product.name}
-            </a>
+            {safeProductUrl ? (
+              <a
+                href={safeProductUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium hover:underline"
+                style={{ color: "var(--accent)" }}
+              >
+                {product.name}
+              </a>
+            ) : (
+              <span className="font-medium" style={{ color: "var(--accent)" }}>
+                {product.name}
+              </span>
+            )}
             <div className="text-right flex-shrink-0">
               {product.price_kzt && (
                 <div
@@ -1313,22 +1343,22 @@ function ProductCard({
             >
               Match: {product.match_score}/100
             </div>
-            {product.url && (
+            {safeProductUrl && (
               <a
-                href={product.url}
+                href={safeProductUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="text-xs hover:underline"
                 style={{ color: "var(--text-muted)" }}
               >
                 Открыть →
               </a>
             )}
-            {product.browser_recording_url && (
+            {safeRecordingUrl && (
               <a
-                href={product.browser_recording_url}
+                href={safeRecordingUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="text-xs hover:underline"
                 style={{ color: "var(--accent)" }}
                 title="Видео запись сессии ИИ-агента (1 час)"

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
-import { api, getOrCreateClientId } from "../clientId";
+import { api, ApiError, getOrCreateClientId } from "../clientId";
+import { getSafeExternalUrl } from "../security/externalUrl";
+import { escapeCsvCell } from "../security/csv";
 
 type Lot = {
   id: number;
@@ -69,7 +71,7 @@ function buildCacheKey(req: {
   query: string;
   region: string;
   category: string;
-  customer_bin: string;
+  customer_bin?: string;
   min_amount_kzt: number;
   max_amount_kzt: number;
   only_urgent: boolean;
@@ -179,10 +181,9 @@ export function LotsPage() {
       api<any>("/api/lots/stats/overview")
         .then(setStats)
         .catch(() => {});
-    } catch (e: any) {
-      setError(
-        e?.response?.data?.detail || e?.message || "Ошибка поиска"
-      );
+    } catch (e: unknown) {
+      // Только безопасное сообщение — без сырого JSON backend.
+      setError(e instanceof ApiError ? e.message : "Ошибка поиска. Попробуйте снова.");
     } finally {
       setLoading(false);
     }
@@ -208,10 +209,10 @@ export function LotsPage() {
       });
       setPartnershipContact("");
       setPartnershipMessage("");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setPartnershipStatus({
         type: "error",
-        text: e?.response?.data?.detail || "Ошибка отправки",
+        text: e instanceof ApiError ? e.message : "Ошибка отправки. Попробуйте снова.",
       });
     }
   };
@@ -228,9 +229,7 @@ export function LotsPage() {
       "source_url",
     ];
     const rows = result.lots.map((l) =>
-      headers
-        .map((h) => `"${((l as any)[h] || "").toString().replace(/"/g, '""')}"`)
-        .join(",")
+      headers.map((h) => escapeCsvCell((l as unknown as Record<string, unknown>)[h])).join(",")
     );
     const csv = [headers.join(","), ...rows].join("\n");
     const blob = new Blob(["\ufeff" + csv], {
@@ -240,8 +239,10 @@ export function LotsPage() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `lots_${Date.now()}.csv`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const clearCache = () => {
@@ -293,8 +294,9 @@ export function LotsPage() {
 
         {result?.is_mock && (
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 text-amber-700 dark:text-amber-200 p-3 rounded text-sm">
-            ⚠️ <b>Демо-режим.</b> Данные тестовые. Реальные лоты появятся когда
-            подключим OpenAPI токен goszakup.gov.kz.
+            ⚠️ <b>Демо-режим — показаны тестовые данные, а не реальные лоты.</b>{" "}
+            GOSZAKUP_API_TOKEN отсутствует на сервере. Реальные лоты появятся
+            после настройки токена goszakup.gov.kz.
           </div>
         )}
 
@@ -305,11 +307,13 @@ export function LotsPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="🔍 Ключевые слова: мебель, компьютер, лекарства…"
+              aria-label="Ключевые слова поиска"
               className="px-3 py-2 border rounded dark:bg-slate-700"
             />
             <select
               value={region}
               onChange={(e) => setRegion(e.target.value)}
+              aria-label="Регион"
               className="px-3 py-2 border rounded dark:bg-slate-700"
             >
               {REGIONS.map((r) => (
@@ -321,6 +325,7 @@ export function LotsPage() {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              aria-label="Категория"
               className="px-3 py-2 border rounded dark:bg-slate-700"
             >
               {CATEGORIES.map((c) => (
@@ -363,6 +368,7 @@ export function LotsPage() {
               onChange={(e) => setCustomerBin(e.target.value)}
               placeholder="🏛 БИН заказчика (12 цифр)"
               maxLength={12}
+              aria-label="БИН заказчика"
               className="px-3 py-2 border rounded dark:bg-slate-700 font-mono text-sm"
             />
             <div className="text-xs text-slate-500 flex items-center px-2">
@@ -380,6 +386,7 @@ export function LotsPage() {
               value={minAmount}
               onChange={(e) => setMinAmount(e.target.value)}
               placeholder="Мин. сумма (₸)"
+              aria-label="Минимальная сумма"
               className="px-3 py-2 border rounded dark:bg-slate-700"
             />
             <input
@@ -387,6 +394,7 @@ export function LotsPage() {
               value={maxAmount}
               onChange={(e) => setMaxAmount(e.target.value)}
               placeholder="Макс. сумма (₸)"
+              aria-label="Максимальная сумма"
               className="px-3 py-2 border rounded dark:bg-slate-700"
             />
             <button
@@ -420,7 +428,7 @@ export function LotsPage() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-300 text-red-700 p-3 rounded">
+          <div role="alert" className="bg-red-50 border border-red-300 text-red-700 p-3 rounded">
             ❌ {error}
           </div>
         )}
@@ -429,7 +437,11 @@ export function LotsPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-sm text-slate-500">
-                Найдено: <b>{result.total}</b> лотов
+                {result.is_mock ? (
+                  <>Найдено демо-записей: <b>{result.total}</b> (не реальные лоты)</>
+                ) : (
+                  <>Найдено: <b>{result.total}</b> лотов</>
+                )}
                 {fromCache && (
                   <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                     ⚡ из кеша
@@ -562,6 +574,9 @@ function LotCard({
   onPartnership: () => void;
 }) {
   const urgentColor = lot.is_urgent ? "border-red-500" : "border-slate-200";
+  // Безопасная внешняя ссылка: только https на доверенные домены.
+  // javascript:, data:, http:, поддоменные трюки и userinfo отклоняются.
+  const safeSourceUrl = getSafeExternalUrl(lot.source_url);
   return (
     <div
       className={
@@ -674,11 +689,11 @@ function LotCard({
       </div>
 
       <div className="mt-3 flex gap-2 flex-wrap">
-        {lot.source_url && (
+        {safeSourceUrl && (
           <a
-            href={lot.source_url}
+            href={safeSourceUrl}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="px-3 py-1.5 text-sm border rounded hover:bg-slate-50 dark:hover:bg-slate-700"
           >
             🔗 Источник
