@@ -1,3 +1,5 @@
+import { getAccessToken } from "./supabase";
+
 /**
  * Хелпер для client_id (cookie для backend'а + localStorage fallback).
  * Backend читает X-Client-Id из заголовка или cookie tendr_cid.
@@ -16,11 +18,11 @@ function isValidClientId(value: string | null | undefined): boolean {
 }
 
 function generateId(): string {
-  const cryptoApi = typeof crypto !== "undefined" ? crypto : undefined;
-  if (cryptoApi && "randomUUID" in cryptoApi) {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === "function") {
     return cryptoApi.randomUUID().replace(/-/g, "");
   }
-  if (cryptoApi && "getRandomValues" in cryptoApi) {
+  if (typeof cryptoApi?.getRandomValues === "function") {
     const bytes = new Uint8Array(16);
     cryptoApi.getRandomValues(bytes);
     return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -36,16 +38,46 @@ function setCookie(name: string, value: string, days: number = 365): void {
 
 export function getOrCreateClientId(): string {
   if (typeof window === "undefined") return "ssr";
-  let id = window.sessionStorage.getItem(KEY);
-  if (!isValidClientId(id)) {
-    id = generateId();
-    while (!isValidClientId(id)) {
-      id = generateId();
+  const stored = window.sessionStorage.getItem(KEY);
+  let resolvedId: string;
+  if (isValidClientId(stored)) {
+    resolvedId = stored as string;
+  } else {
+    resolvedId = generateId();
+    while (!isValidClientId(resolvedId)) {
+      resolvedId = generateId();
     }
-    window.sessionStorage.setItem(KEY, id);
+    window.sessionStorage.setItem(KEY, resolvedId);
   }
-  setCookie(COOKIE_NAME, id);
-  return id;
+  setCookie(COOKIE_NAME, resolvedId);
+  return resolvedId;
+}
+
+export async function getApiHeaders(
+  initial?: HeadersInit,
+): Promise<Headers> {
+  const headers = new Headers(initial);
+  headers.set("X-Client-Id", getOrCreateClientId());
+  const accessToken = await getAccessToken();
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  return headers;
+}
+
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const response = await fetch(path, { headers: await getApiHeaders() });
+  if (!response.ok) throw new Error("Не удалось скачать файл.");
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  try {
+    anchor.href = objectUrl;
+    anchor.download = filename.replace(/[/\\]/g, "_");
+    document.body.appendChild(anchor);
+    anchor.click();
+  } finally {
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  }
 }
 
 /**
@@ -55,9 +87,7 @@ export async function api<T = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const cid = getOrCreateClientId();
-  const headers = new Headers(init.headers || {});
-  headers.set("X-Client-Id", cid);
+  const headers = await getApiHeaders(init.headers);
   if (
     init.body &&
     !headers.has("Content-Type") &&
@@ -69,11 +99,10 @@ export async function api<T = unknown>(
   if (!resp.ok) {
     let detail = resp.statusText;
     try {
-      const j = await resp.json();
-      detail = j.detail || detail;
-    } catch {
-      detail = (await resp.text()) || detail;
-    }
+      const raw = await resp.text();
+      const parsed = raw ? (JSON.parse(raw) as { detail?: string }) : null;
+      detail = parsed?.detail || detail;
+    } catch {}
     throw new Error(detail);
   }
   const ct = resp.headers.get("Content-Type") || "";

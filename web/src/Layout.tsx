@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
 import { useLang, useT } from "./i18n";
 import { useTheme } from "./theme";
+import { useAuth } from "./auth/AuthContext";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const t = useT();
   const [lang, setLang] = useLang();
   const [theme, setTheme] = useTheme();
+  const { user, loading, signOut } = useAuth();
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
@@ -66,6 +68,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
             >
               {theme === "dark" ? "☀" : "☾"}
             </button>
+
+            {!loading &&
+              (user ? (
+                <div className="ml-2 flex items-center gap-2">
+                  <div
+                    title={user.email || "Аккаунт"}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-xs font-semibold text-emerald-500"
+                  >
+                    {(user.email?.[0] || "T").toUpperCase()}
+                  </div>
+                  <button
+                    onClick={() => void signOut()}
+                    className="hidden rounded-lg px-3 py-2 text-sm text-[var(--text-muted)] transition hover:bg-[var(--accent-glow)] hover:text-[var(--text)] sm:block"
+                  >
+                    Выйти
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  className="ml-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400"
+                >
+                  Войти
+                </Link>
+              ))}
           </nav>
         </div>
       </header>

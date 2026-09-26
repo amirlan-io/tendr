@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.admin_auth import require_admin_key
 from app.core.client_id import require_client_id
+from app.core.supabase_auth import SupabaseUser, require_supabase_user, supabase_client_id
 from app.db import get_db
 from app.db import repo as db_repo
 from app.db.models import Analysis, DiscoverySubscription, User
@@ -23,6 +24,29 @@ async def _user(session: AsyncSession, request: Request):
     if not user:
         user = await db_repo.get_or_create_user(session, web_client_id=cid)
     return user
+
+
+@router.get("/me")
+async def get_current_account(
+    auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Return the local account for a verified Supabase session."""
+    identity = supabase_client_id(auth_user)
+    user = await db_repo.get_or_create_user(session, web_client_id=identity)
+    if auth_user.email and user.email != auth_user.email:
+        user.email = auth_user.email
+        await session.flush()
+    quota = await db_repo.get_user_quota(session, user.id)
+    return {
+        "id": user.id,
+        "email": user.email,
+        "language": user.language,
+        "company_name": user.company_name,
+        "is_pilot": user.is_pilot,
+        "is_subscribed": user.is_subscribed,
+        "quota": quota,
+    }
 
 
 @router.get("/quota")

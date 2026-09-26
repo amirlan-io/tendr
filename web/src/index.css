@@ -42,6 +42,13 @@
     body {
         @apply bg-[var(--bg)] text-[var(--text)] min-h-screen;
     }
+    .auth-grid {
+        background-image:
+            linear-gradient(var(--border) 1px, transparent 1px),
+            linear-gradient(90deg, var(--border) 1px, transparent 1px);
+        background-size: 42px 42px;
+        mask-image: linear-gradient(to bottom, black, transparent 82%);
+    }
     /* Глобальный override для input/select/textarea в тёмной теме */
     html.dark
         input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),

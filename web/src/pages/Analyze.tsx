@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
 import { useT } from "../i18n";
-import { api, getOrCreateClientId } from "../clientId";
+import { api, downloadFile, getOrCreateClientId } from "../clientId";
 
 type Requirement = {
   code: string;
@@ -237,26 +237,12 @@ export function AnalyzePage() {
   function downloadDocx(kind: "complaint" | "report") {
     if (!result) return;
     const lotId = result.lot.lot_id;
-    // Используем обычный window.location — браузер сам привяжет cookie
-    const cid = getOrCreateClientId();
-    fetch(`/api/lots/${lotId}/download?kind=${kind}`, {
-      headers: { "X-Client-Id": cid },
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error("Download failed");
-        return r.blob();
-      })
-      .then((blob) => {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        const stamp = new Date().toISOString().slice(0, 10);
-        a.download =
-          kind === "complaint"
-            ? `zhaloba_${lotId}_${stamp}.docx`
-            : `otchet_${lotId}_${stamp}.docx`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      })
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filename =
+      kind === "complaint"
+        ? `zhaloba_${lotId}_${stamp}.docx`
+        : `otchet_${lotId}_${stamp}.docx`;
+    void downloadFile(`/api/lots/${lotId}/download?kind=${kind}`, filename)
       .catch((e) => alert(String(e)));
   }
 

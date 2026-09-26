@@ -10,6 +10,9 @@ import { B2GPage } from "./pages/B2G";
 import { LotsPage } from "./pages/Lots";
 import { getOrCreateClientId } from "./clientId";
 import { applyTheme, getTheme } from "./theme";
+import { AuthProvider } from "./auth/AuthContext";
+import { AuthPage } from "./pages/Auth";
+import { AuthCallbackPage } from "./pages/AuthCallback";
 
 // Сразу создаём client_id при загрузке
 getOrCreateClientId();
@@ -18,15 +21,19 @@ applyTheme(getTheme());
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/analyze" element={<AnalyzePage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route path="/b2g" element={<B2GPage />} />
-        <Route path="/lots" element={<LotsPage />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/analyze" element={<AnalyzePage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/b2g" element={<B2GPage />} />
+          <Route path="/lots" element={<LotsPage />} />
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   </React.StrictMode>,
 );

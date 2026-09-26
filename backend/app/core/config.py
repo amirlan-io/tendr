@@ -79,6 +79,12 @@ class Settings(BaseSettings):
     admin_api_key: str = ""
     admin_api_key_header: str = "X-Admin-Key"
 
+    # === Supabase Auth ===
+    # Publishable/anon key is intentionally used here. Never configure a
+    # service_role or secret key in the browser application.
+    supabase_url: str = ""
+    supabase_publishable_key: str = ""
+
     # === Security ===
     max_upload_bytes: int = 20 * 1024 * 1024
     allowed_hosts: str = "localhost,127.0.0.1,testserver"

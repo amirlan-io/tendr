@@ -85,8 +85,8 @@ export function BrowserActionPanel({
   const [presetIdx, setPresetIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    api.get("/api/browser/models").then((r) => {
-      setModels(r.data.models || []);
+    api<{ models: Model[] }>("/api/browser/models").then((data) => {
+      setModels(data.models || []);
     }).catch(() => {});
   }, []);
 
@@ -112,16 +112,19 @@ export function BrowserActionPanel({
       .filter(Boolean);
 
     try {
-      const r = await api.post("/api/browser/run", {
-        task,
-        model,
-        human_in_loop: humanInLoop,
-        allowed_domains: allowedDomains.length ? allowedDomains : null,
-        enable_recording: recording,
-        max_duration_min: 15,
-        proxy_country: "kz",
+      const data = await api<TaskResult>("/api/browser/run", {
+        method: "POST",
+        body: JSON.stringify({
+          task,
+          model,
+          human_in_loop: humanInLoop,
+          allowed_domains: allowedDomains.length ? allowedDomains : null,
+          enable_recording: recording,
+          max_duration_min: 15,
+          proxy_country: "kz",
+        }),
       });
-      setResult(r.data);
+      setResult(data);
     } catch (e: any) {
       const detail = e?.response?.data?.detail || e?.message || "Ошибка";
       setError(detail);

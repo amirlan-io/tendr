@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
 import { useT } from "../i18n";
-import { api, getOrCreateClientId } from "../clientId";
+import { api, downloadFile } from "../clientId";
 
 type Workspace = {
   id: number;
@@ -270,21 +270,10 @@ export function B2GPage() {
   // Скачать DOCX
   const downloadDocx = (version: number) => {
     if (!selectedWs) return;
-    const cid = getOrCreateClientId();
-    fetch(`/api/b2g/workspaces/${selectedWs.id}/drafts/${version}/download`, {
-      headers: { "X-Client-Id": cid },
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error("Download failed");
-        return r.blob();
-      })
-      .then((blob) => {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `tz_v${version}.docx`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      })
+    void downloadFile(
+      `/api/b2g/workspaces/${selectedWs.id}/drafts/${version}/download`,
+      `tz_v${version}.docx`,
+    )
       .catch((e) => alert(String(e)));
   };
 
@@ -861,22 +850,10 @@ function TzView({
             </button>
             <button
               onClick={() => {
-                const cid = getOrCreateClientId();
-                fetch(
+                void downloadFile(
                   `/api/b2g/workspaces/${workspace.id}/drafts/${version}/download-pdf`,
-                  { headers: { "X-Client-Id": cid } },
+                  `tz_v${version}.pdf`,
                 )
-                  .then((r) => {
-                    if (!r.ok) throw new Error("PDF download failed");
-                    return r.blob();
-                  })
-                  .then((blob) => {
-                    const a = document.createElement("a");
-                    a.href = URL.createObjectURL(blob);
-                    a.download = `tz_v${version}.pdf`;
-                    a.click();
-                    URL.revokeObjectURL(a.href);
-                  })
                   .catch((e) => alert(String(e)));
               }}
               className="px-3 py-1.5 rounded-md text-sm border"

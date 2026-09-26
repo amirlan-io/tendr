@@ -6,6 +6,8 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 
+from app.core.supabase_auth import get_optional_supabase_user, supabase_client_id
+
 CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 MIN_CLIENT_ID_LEN = 16
 MAX_CLIENT_ID_LEN = 128
@@ -29,11 +31,15 @@ def validate_client_id(value: Any) -> bool:
 
 
 async def require_client_id(request: Request) -> str:
-    """Resolve and validate the web client ID.
+    """Resolve an authenticated identity or a validated guest client ID.
 
-    This is not a full authorization mechanism. In production, a real server-side
-    session should be used instead of trusting the browser header/cookie alone.
+    A valid Supabase bearer token always wins over the browser-controlled client
+    ID. Requests without a bearer token keep the existing guest behavior.
     """
+    auth_user = await get_optional_supabase_user(request)
+    if auth_user is not None:
+        return supabase_client_id(auth_user)
+
     raw = request.cookies.get("tendr_cid") or request.headers.get("X-Client-Id")
     if not validate_client_id(raw):
         raise HTTPException(status_code=400, detail="Invalid client identifier")

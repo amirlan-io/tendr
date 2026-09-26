@@ -149,7 +149,7 @@ export function LotsPage() {
       query,
       region,
       category,
-      customer_bin: customerBin || undefined,
+      customer_bin: customerBin,
       min_amount_kzt: minAmount ? Number(minAmount) : 0,
       max_amount_kzt: maxAmount ? Number(maxAmount) : 0,
       only_urgent: onlyUrgent,
