@@ -292,20 +292,24 @@ export function AnalyzePage() {
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="page-container py-12 sm:py-16">
+        <div className="mx-auto max-w-5xl">
         <Link
           to="/"
-          className="text-sm text-[var(--text-muted)] hover:underline"
+          className="text-sm text-[var(--text-muted)] transition hover:text-[var(--text)]"
         >
           {t("common.back")}
         </Link>
-        <h1 className="text-2xl font-bold mt-2 mb-2">{t("analyze.title")}</h1>
-        <p className="text-[var(--text-muted)] mb-6">{t("analyze.help")}</p>
+        <div className="mt-8 max-w-2xl">
+          <p className="section-kicker">AI-анализ закупки</p>
+          <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Разберите лот перед участием</h1>
+          <p className="mt-5 text-lg leading-8 text-[var(--text-muted)]">Добавьте ссылку, ID лота или документацию. Tendr соберёт требования, риски и следующий шаг в одном отчёте.</p>
+        </div>
 
         {autoTitle && (
-          <div className="mb-4 px-4 py-3 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-900/30 text-sm">
-            <div className="font-medium text-blue-700 dark:text-blue-300 mb-1">
-              🤖 Автоматический анализ из каталога
+          <div className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] px-5 py-4 text-sm">
+            <div className="mb-1 font-medium text-emerald-300">
+              Лот выбран из каталога
             </div>
             <div className="text-[var(--text-muted)]">
               <b>{autoTitle}</b>
@@ -319,53 +323,60 @@ export function AnalyzePage() {
             role="status"
             aria-busy="true"
             aria-label="Идёт AI-анализ"
-            className="mb-4 px-4 py-3 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-900/30 text-sm"
-          >  <div className="font-medium text-blue-700 dark:text-blue-300 mb-2">
-              ⏳ Идёт AI-анализ (30-90 сек)...
+            className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] px-5 py-4 text-sm"
+          >  <div className="mb-3 font-medium text-emerald-300">
+              Анализируем документацию
             </div>
             <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
               <div
-                className="bg-blue-600 h-full animate-pulse"
+                className="h-full animate-pulse bg-emerald-400"
                 style={{ width: "60%" }}
               />
             </div>
-            <div className="text-xs text-slate-500 mt-1">
-              Documenter анализирует ТЗ + Legal проверяет соответствие Закону РК
+            <div className="mt-2 text-xs text-[var(--text-muted)]">
+              Собираем требования и проверяем возможные риски. Это может занять до полутора минут.
             </div>
           </div>
         )}
 
-        <form onSubmit={submit} className="space-y-3 mb-6">
-          <div className="flex gap-2">
+        <form onSubmit={submit} className="mt-10 rounded-[28px] border border-white/[0.09] bg-[#0c1215]/90 p-5 shadow-[0_24px_80px_-40px_rgba(0,0,0,.9)] sm:p-7">
+          <label htmlFor="lot-reference" className="mb-3 block text-sm font-medium">Ссылка или ID лота</label>
+          <div className="flex flex-col gap-3 sm:flex-row">
             <input
+              id="lot-reference"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder={t("analyze.placeholder")}
               aria-label={t("analyze.title")}
-              className="flex-1 px-4 py-2 border border-[var(--border-strong)] bg-[var(--bg-elevated)] text-[var(--text)] placeholder:text-[var(--text-subtle)] rounded-lg focus:outline-none focus:ring-2 focus:ring-brand"
+              className="min-h-14 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:border-emerald-400/50 focus:outline-none focus:ring-4 focus:ring-emerald-400/10"
               disabled={loading}
             />
             <button
               type="submit"
               disabled={loading || (!url.trim() && !file)}
-              className="bg-[var(--accent)] text-white px-6 py-2.5 rounded-lg font-medium hover:bg-brand-dark transition disabled:opacity-50"
+              className="button-primary min-w-40 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {loading ? t("analyze.submitting") : t("analyze.submit")}
             </button>
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-slate-500 dark:text-slate-400">
-              {t("analyze.file.label")}
-            </span>
+          <div className="my-5 flex items-center gap-4 text-xs uppercase tracking-[0.14em] text-[var(--text-subtle)]"><span className="h-px flex-1 bg-white/[0.07]" /><span>или загрузите документацию</span><span className="h-px flex-1 bg-white/[0.07]" /></div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               ref={fileInput}
               type="file"
               accept=".pdf,.docx,.txt,.csv,.xls,.xlsx"
               aria-label={t("analyze.file.label")}
               onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-100 dark:file:bg-slate-700 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-200 dark:hover:file:bg-slate-600"
+              className="sr-only"
               disabled={loading}
             />
+            <button type="button" onClick={() => fileInput.current?.click()} disabled={loading} className="button-secondary min-w-44">Выбрать файл</button>
+            {file ? (
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-4 py-3 text-sm">
+                <div className="min-w-0"><p className="truncate font-medium text-emerald-100">{file.name}</p><p className="mt-0.5 text-xs text-[var(--text-muted)]">{(file.size / 1024 / 1024).toFixed(2)} МБ</p></div>
+                <button type="button" aria-label="Убрать выбранный файл" onClick={() => { setFile(null); if (fileInput.current) fileInput.current.value = ""; }} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-lg text-[var(--text-muted)] hover:bg-white/10 hover:text-white">×</button>
+              </div>
+            ) : <p className="text-sm text-[var(--text-muted)]">PDF, DOCX, TXT, CSV или Excel · до 20 МБ</p>}
           </div>
         </form>
 
@@ -456,6 +467,7 @@ export function AnalyzePage() {
             onDownload={downloadDocx}
           />
         )}
+        </div>
       </div>
     </Layout>
   );

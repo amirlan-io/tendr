@@ -284,15 +284,15 @@ export function B2GPage() {
   // Главный рендер
   return (
     <Layout>
-      <div className="max-w-5xl mx-auto px-6 py-12">
-        <div className="flex items-center justify-between mb-6">
+      <div className="page-container py-12 sm:py-16">
+        <div className="mx-auto max-w-5xl">
+        <div className="mb-10 flex items-end justify-between gap-6">
           <div>
-            <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-1">
-              B2G
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Помощь заказчикам
+            <div className="section-kicker">Подготовка документов</div>
+            <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">
+              Технические задания
             </h1>
+            <p className="mt-4 max-w-2xl leading-7 text-[var(--text-muted)]">Организуйте закупки по проектам, создавайте версии ТЗ и храните рабочие документы в одном месте.</p>
           </div>
           {view !== "list" && (
             <button
@@ -424,6 +424,7 @@ export function B2GPage() {
             }}
           />
         )}
+        </div>
       </div>
     </Layout>
   );
@@ -464,21 +465,20 @@ function WorkspaceList({
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Мои workspace'ы</h2>
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <div><h2 className="text-xl font-semibold">Мои проекты</h2><p className="mt-1 text-sm text-[var(--text-muted)]">Отдельный проект для каждой закупки или организации.</p></div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="px-3 py-1.5 rounded-md text-sm text-white"
-          style={{ backgroundColor: "var(--accent)" }}
+          className={showForm ? "button-secondary" : "button-primary"}
         >
-          {showForm ? "Отмена" : "+ Новый"}
+          {showForm ? "Отмена" : "Новый проект"}
         </button>
       </div>
 
       {showForm && (
         <form
           onSubmit={submit}
-          className="rounded-lg border p-4 mb-6 space-y-3"
+          className="mb-6 space-y-3 rounded-3xl border p-6"
           style={{
             backgroundColor: "var(--bg-elevated)",
             borderColor: "var(--border)",
@@ -526,13 +526,15 @@ function WorkspaceList({
 
       {workspaces.length === 0 ? (
         <div
-          className="rounded-lg border p-8 text-center text-[var(--text-muted)]"
+          className="rounded-[28px] border border-dashed p-10 text-center"
           style={{
             backgroundColor: "var(--bg-elevated)",
             borderColor: "var(--border)",
           }}
         >
-          Нет workspace'ов. Создайте первый, чтобы начать.
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300">01</div>
+          <h3 className="mt-5 text-lg font-semibold text-[var(--text)]">Создайте первый проект</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--text-muted)]">Укажите организацию и регион, а затем добавьте описание закупки для подготовки технического задания.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

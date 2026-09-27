@@ -24,16 +24,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="site-shell min-h-screen bg-[var(--bg)] text-[var(--text)]">
       <LavaBackground />
       <header
-        className="sticky top-0 z-50 border-b backdrop-blur-md"
+        className="sticky top-0 z-50 border-b backdrop-blur-xl"
         style={{
-          backgroundColor: "color-mix(in srgb, var(--bg) 80%, transparent)",
+          backgroundColor: "rgba(5, 9, 13, 0.82)",
           borderColor: "var(--border)",
         }}
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-[1fr_auto] lg:grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-3 py-3 lg:h-20 lg:py-0">
+        <div className="page-container grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-3 py-3 lg:h-[72px] lg:grid-cols-[1fr_auto_1fr] lg:py-0">
           <Link to="/" className="flex items-center gap-2.5 group">
             <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white text-sm transition-transform group-hover:scale-105"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold text-white transition-transform group-hover:scale-105"
               style={{
                 background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                 boxShadow:
@@ -47,9 +47,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          <nav aria-label="Основная навигация" className="row-start-2 col-span-2 flex items-center justify-center gap-1 lg:row-start-1 lg:col-start-2 lg:col-span-1">
+          <nav aria-label="Основная навигация" className="row-start-2 col-span-2 hidden items-center justify-center gap-1 sm:flex lg:row-start-1 lg:col-start-2 lg:col-span-1">
             {user ? (
               <>
+                <NavLink to="/dashboard">Обзор</NavLink>
                 <NavLink to="/analyze">AI-ассистент</NavLink>
                 <NavLink to="/history">Мои закупки</NavLink>
                 <NavLink to="/b2g">Документы</NavLink>
@@ -102,11 +103,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <main className="relative">{children}</main>
 
       <footer
-        className="relative border-t mt-24"
+        className="relative border-t"
         style={{ borderColor: "var(--border)" }}
       >
-        <div className="max-w-6xl mx-auto px-6 py-8 text-center text-xs text-[var(--text-subtle)]">
-          {t("common.powered_by")} · 2026
+        <div className="page-container flex flex-col items-center justify-between gap-4 py-8 text-xs text-[var(--text-subtle)] sm:flex-row">
+          <span>© 2026 Tendr. AI-ассистент для закупок.</span>
+          <span>{t("common.powered_by")}</span>
         </div>
       </footer>
     </div>

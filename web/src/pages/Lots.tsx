@@ -255,11 +255,12 @@ export function LotsPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="page-container space-y-8 py-12 sm:py-16">
         <div>
-          <h1 className="text-3xl font-bold mb-2">📋 Лоты (тендеры)</h1>
-          <p className="text-slate-500">
-            Каталог закупок с zakup.gov.kz, ets-tender.kz и 40+ площадок РК
+          <p className="section-kicker">Каталог закупок</p>
+          <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Найдите подходящий лот</h1>
+          <p className="mt-4 max-w-2xl text-lg leading-8 text-[var(--text-muted)]">
+            Настройте критерии поиска и сравните актуальные закупки по региону, категории, сроку и бюджету.
           </p>
         </div>
 
@@ -300,21 +301,21 @@ export function LotsPage() {
           </div>
         )}
 
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-5 rounded-[28px] border border-white/[0.09] bg-[#0c1215]/90 p-5 shadow-[0_24px_80px_-40px_rgba(0,0,0,.9)] sm:p-7">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="🔍 Ключевые слова: мебель, компьютер, лекарства…"
+              placeholder="Ключевые слова: мебель, компьютеры, лекарства…"
               aria-label="Ключевые слова поиска"
-              className="px-3 py-2 border rounded dark:bg-slate-700"
+              className="min-h-12 rounded-xl border border-white/10 bg-black/20 px-4 focus:border-emerald-400/50 focus:outline-none focus:ring-4 focus:ring-emerald-400/10"
             />
             <select
               value={region}
               onChange={(e) => setRegion(e.target.value)}
               aria-label="Регион"
-              className="px-3 py-2 border rounded dark:bg-slate-700"
+              className="min-h-12 rounded-xl border border-white/10 bg-black/20 px-4"
             >
               {REGIONS.map((r) => (
                 <option key={r} value={r}>
@@ -326,7 +327,7 @@ export function LotsPage() {
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               aria-label="Категория"
-              className="px-3 py-2 border rounded dark:bg-slate-700"
+              className="min-h-12 rounded-xl border border-white/10 bg-black/20 px-4"
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
@@ -336,18 +337,18 @@ export function LotsPage() {
                 </option>
               ))}
             </select>
-            <label className="flex items-center gap-2 px-3 py-2 border rounded dark:bg-slate-700 cursor-pointer">
+            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4">
               <input
                 type="checkbox"
                 checked={onlyUrgent}
                 onChange={(e) => setOnlyUrgent(e.target.checked)}
               />
               <span className="text-sm">
-                🔥 Только срочные (&lt; 3 дней)
+                Только срочные — менее 3 дней
               </span>
             </label>
             <label
-              className="flex items-center gap-2 px-3 py-2 border rounded dark:bg-slate-700 cursor-pointer"
+              className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4"
               title="Запустить AI-анализ (Documenter+Legal) для топ-3 лотов. Занимает 1-2 минуты."
             >
               <input
@@ -356,20 +357,20 @@ export function LotsPage() {
                 onChange={(e) => setWithAi(e.target.checked)}
               />
               <span className="text-sm">
-                🤖 AI-анализ (медленно)
+                Добавить предварительный AI-анализ
               </span>
             </label>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <input
               type="text"
               value={customerBin}
               onChange={(e) => setCustomerBin(e.target.value)}
-              placeholder="🏛 БИН заказчика (12 цифр)"
+              placeholder="БИН заказчика — 12 цифр"
               maxLength={12}
               aria-label="БИН заказчика"
-              className="px-3 py-2 border rounded dark:bg-slate-700 font-mono text-sm"
+              className="min-h-12 rounded-xl border border-white/10 bg-black/20 px-4 font-mono text-sm"
             />
             <div className="text-xs text-slate-500 flex items-center px-2">
               Например:{" "}
@@ -380,14 +381,14 @@ export function LotsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <input
               type="number"
               value={minAmount}
               onChange={(e) => setMinAmount(e.target.value)}
               placeholder="Мин. сумма (₸)"
               aria-label="Минимальная сумма"
-              className="px-3 py-2 border rounded dark:bg-slate-700"
+              className="min-h-12 rounded-xl border border-white/10 bg-black/20 px-4"
             />
             <input
               type="number"
@@ -395,21 +396,20 @@ export function LotsPage() {
               onChange={(e) => setMaxAmount(e.target.value)}
               placeholder="Макс. сумма (₸)"
               aria-label="Максимальная сумма"
-              className="px-3 py-2 border rounded dark:bg-slate-700"
+              className="min-h-12 rounded-xl border border-white/10 bg-black/20 px-4"
             />
             <button
               onClick={search}
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded font-medium"
+              className="button-primary disabled:opacity-40"
             >
-              {loading ? "⏳ Идёт поиск..." : "🔍 Найти"}
+              {loading ? "Идёт поиск..." : "Найти лоты"}
             </button>
           </div>
 
           {!result && !error && (
-            <div className="text-xs text-slate-500 -mt-1">
-              💡 Введите хотя бы один фильтр (например БИН заказчика) и
-              нажмите «Найти». Результаты кешируются на 5 минут.
+            <div className="text-xs leading-5 text-[var(--text-muted)]">
+              Введите хотя бы один критерий — например, ключевое слово или БИН заказчика. Результаты сохраняются на 5 минут.
             </div>
           )}
 

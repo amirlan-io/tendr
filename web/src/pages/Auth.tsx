@@ -20,6 +20,9 @@ function friendlyAuthError(message: string): string {
   if (normalized.includes("rate limit")) {
     return "Слишком много попыток. Попробуйте немного позже.";
   }
+  if (normalized.includes("provider is not enabled") || normalized.includes("unsupported provider")) {
+    return "Вход через Google ещё не включён в настройках Supabase.";
+  }
   return "Не удалось выполнить вход. Проверьте данные и попробуйте снова.";
 }
 
@@ -40,10 +43,11 @@ export function AuthPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  if (!loading && user) return <Navigate to="/" replace />;
+  if (!loading && user) return <Navigate to="/dashboard" replace />;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -71,7 +75,7 @@ export function AuthPage() {
           password,
         });
         if (authError) throw authError;
-        navigate("/", { replace: true });
+        navigate("/dashboard", { replace: true });
       } else if (mode === "register") {
         const { data, error: authError } = await supabase.auth.signUp({
           email: email.trim(),
@@ -82,7 +86,7 @@ export function AuthPage() {
         });
         if (authError) throw authError;
         if (data.session) {
-          navigate("/", { replace: true });
+          navigate("/dashboard", { replace: true });
         } else {
           setNotice("Мы отправили письмо. Откройте его и подтвердите регистрацию.");
         }
@@ -99,6 +103,30 @@ export function AuthPage() {
       setError(friendlyAuthError(message));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const continueWithGoogle = async () => {
+    setError("");
+    setNotice("");
+    if (!supabase) {
+      setError("Supabase ещё не подключён. Добавьте настройки в web/.env.");
+      return;
+    }
+
+    setOauthBusy(true);
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          prompt: "select_account",
+        },
+      },
+    });
+    if (authError) {
+      setError(friendlyAuthError(authError.message));
+      setOauthBusy(false);
     }
   };
 
@@ -180,6 +208,25 @@ export function AuthPage() {
               </div>
             )}
 
+            {mode !== "reset" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void continueWithGoogle()}
+                  disabled={busy || oauthBusy || !isSupabaseConfigured}
+                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-[var(--border-strong)] bg-[var(--bg)] px-4 py-3 font-medium transition hover:border-emerald-500/35 hover:bg-emerald-500/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <GoogleIcon />
+                  {oauthBusy ? "Открываем Google…" : "Продолжить с Google"}
+                </button>
+                <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-[.12em] text-[var(--text-subtle)]">
+                  <span className="h-px flex-1 bg-[var(--border)]" />
+                  или по почте
+                  <span className="h-px flex-1 bg-[var(--border)]" />
+                </div>
+              </>
+            )}
+
             <form onSubmit={submit} className="space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium">Электронная почта</span>
@@ -221,7 +268,7 @@ export function AuthPage() {
 
               <button
                 type="submit"
-                disabled={busy || !isSupabaseConfigured}
+                disabled={busy || oauthBusy || !isSupabaseConfigured}
                 className="mt-2 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-3 font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
               >
                 {busy
@@ -254,5 +301,16 @@ export function AuthPage() {
         </div>
       </section>
     </Layout>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2.1H12v4h5.4a4.6 4.6 0 0 1-2 3v2.6h3.3c1.9-1.8 2.9-4.4 2.9-7.5Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.3l-3.3-2.6c-.9.6-2.1 1-3.4 1a5.9 5.9 0 0 1-5.6-4.1H3v2.7A10.1 10.1 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.4 14a6 6 0 0 1 0-3.9V7.4H3a10.1 10.1 0 0 0 0 9.3L6.4 14Z" />
+      <path fill="#EA4335" d="M12 6a5.5 5.5 0 0 1 3.9 1.5l2.9-2.8A9.7 9.7 0 0 0 12 2a10.1 10.1 0 0 0-9 5.4l3.4 2.7A5.9 5.9 0 0 1 12 6Z" />
+    </svg>
   );
 }

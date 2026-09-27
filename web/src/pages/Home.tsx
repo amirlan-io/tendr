@@ -1,756 +1,252 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
 import { Pricing } from "../components/Pricing";
 
-// ───── Анимация счётчика (count-up) ─────
-function useCountUp(target: number, duration = 1500, start = false) {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (!start || target === 0) return;
-    const startTime = Date.now();
-    const id = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.floor(target * eased));
-      if (progress >= 1) clearInterval(id);
-    }, 16);
-    return () => clearInterval(id);
-  }, [target, duration, start]);
-  return value;
+type ProcessIconName = "document" | "search" | "shield" | "calendar";
+
+const processStages: Array<{ icon: ProcessIconName; title: string; value: string; label: string }> = [
+  { icon: "document", title: "Чтение документации", value: "PDF · DOCX · XLSX", label: "Файлы и ссылка на лот" },
+  { icon: "search", title: "Извлечение требований", value: "14", label: "Требований найдено" },
+  { icon: "shield", title: "Проверка рисков", value: "3", label: "Пункта требуют внимания" },
+  { icon: "calendar", title: "Формирование плана", value: "4 дня", label: "Ориентир на подготовку" },
+];
+
+const processComparison = {
+  without: [
+    "Вручную читать документацию и приложения",
+    "Собирать требования в заметках и таблицах",
+    "Отдельно сверять сроки и список документов",
+    "Рисковать пропустить важное условие",
+    "Самостоятельно собирать план подготовки",
+  ],
+  withTendr: [
+    "Краткое резюме закупки на одном экране",
+    "Требования, собранные в понятный чек-лист",
+    "Риски и спорные условия выделены отдельно",
+    "Список документов и контрольные сроки",
+    "Последовательный план следующих действий",
+  ],
+};
+
+function Arrow() {
+  return <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">↗</span>;
 }
 
-function Counter({
-  value,
-  label,
-  color,
-}: {
-  value: number;
-  label: string;
-  color: string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [started, setStarted] = useState(false);
-  const display = useCountUp(value, 1500, started);
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) setStarted(true);
-      },
-      { threshold: 0.3 },
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
+function ProcessIcon({ name }: { name: ProcessIconName }) {
+  if (name === "document") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.75h6.8L18 8v12.25H7z" /><path d="M13.5 4v4.5H18M9.5 12h6M9.5 15.5h6" /></svg>;
+  }
+  if (name === "search") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.75" /><path d="m15 15 4.25 4.25" /></svg>;
+  }
+  if (name === "shield") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 19 6v5.25c0 4.3-2.75 7.45-7 9.25-4.25-1.8-7-4.95-7-9.25V6z" /><path d="m9 12 2 2 4-4" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="14" rx="2" /><path d="M8 3.5V8M16 3.5V8M4 10h16M8 14h2M14 14h2" /></svg>;
+}
+
+function ComparisonBoard() {
   return (
-    <div ref={ref} className="text-center">
-      <div
-        className="text-4xl md:text-5xl font-bold tracking-tightest mb-1 tabular-nums"
-        style={{ color }}
-      >
-        {display}
-      </div>
-      <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider">
-        {label}
-      </div>
+    <div className="comparison-board">
+      <article className="comparison-card comparison-manual">
+        <div className="comparison-title"><span aria-hidden="true">×</span><div><small>Обычный процесс</small><h3>Без Tendr</h3></div></div>
+        <ul>{processComparison.without.map((item) => <li key={item}><i aria-hidden="true" />{item}</li>)}</ul>
+      </article>
+      <article className="comparison-card comparison-tendr">
+        <div className="comparison-title"><span aria-hidden="true">✓</span><div><small>Структурированный результат</small><h3>С Tendr</h3></div></div>
+        <ul>{processComparison.withTendr.map((item) => <li key={item}><i aria-hidden="true">✓</i>{item}</li>)}</ul>
+        <div className="comparison-mark" aria-hidden="true">↯</div>
+      </article>
+      <div className="comparison-note"><span>Важно</span><p>Tendr помогает анализировать информацию. Окончательное решение и отправка заявки остаются за пользователем.</p></div>
     </div>
   );
 }
 
-// ───── Reveal on scroll ─────
-function useReveal() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) setShown(true);
-      },
-      { threshold: 0.1 },
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
-  return { ref, shown };
-}
-
-function Reveal({
-  children,
-  delay = 0,
-  className = "",
-}: {
-  children: React.ReactNode;
-  delay?: number;
-  className?: string;
-}) {
-  const { ref, shown } = useReveal();
-  return (
-    <div
-      ref={ref}
-      className={className}
-      style={{
-        opacity: shown ? 1 : 0,
-        transform: shown ? "translateY(0)" : "translateY(30px)",
-        transition: `opacity 0.8s ease-out ${delay}ms, transform 0.8s ease-out ${delay}ms`,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-// ───── Floating particles ─────
-function FloatingDots() {
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="absolute rounded-full opacity-20"
-          style={{
-            width: `${20 + (i % 3) * 16}px`,
-            height: `${20 + (i % 3) * 16}px`,
-            top: `${10 + i * 14}%`,
-            left: `${(i * 17) % 90}%`,
-            backgroundColor: "var(--accent)",
-            animation: `float-${i % 3} ${8 + i}s ease-in-out infinite`,
-          }}
-        />
-      ))}
-      <style>{`
-        @keyframes float-0 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(20px, -30px); } }
-        @keyframes float-1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-30px, 20px); } }
-        @keyframes float-2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(15px, 25px); } }
-      `}</style>
-    </div>
-  );
-}
-
-// ───── Hero с проблемой → решением ─────
 function Hero() {
   return (
-    <section className="relative overflow-hidden">
-      <FloatingDots />
-      <div
-        className="absolute inset-0 opacity-30 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(circle at 50% 0%, var(--accent-glow) 0%, transparent 60%)",
-        }}
-      />
-      <div className="max-w-6xl mx-auto px-6 pt-20 pb-24 relative">
-        <Reveal>
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs text-[var(--text-muted)] mb-6"
-            style={{ borderColor: "var(--border-strong)" }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{ background: "var(--accent)" }}
-            />
-            Грант «Тәуелсіздік ұрпақтары» 2026 · Пилот в Алматы
+    <section className="signal-hero">
+      <div className="page-container relative">
+        <div className="signal-copy">
+          <div className="signal-badge"><span />Для ИП, поставщиков и тендерных специалистов</div>
+          <h1>AI-помощник для участия<br />в <em>госзакупках Казахстана</em></h1>
+          <p>Tendr помогает понять условия тендера до подачи заявки: находит требования и риски, собирает список документов и подсказывает, что делать дальше.</p>
+          <div className="signal-actions">
+            <Link to="/login?mode=register" className="button-primary group">Начать бесплатно <Arrow /></Link>
+            <a href="#how-it-works" className="signal-text-link">Как это работает <span>↓</span></a>
           </div>
-        </Reveal>
-
-        <Reveal delay={100}>
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tightest leading-[1.02] mb-6 max-w-4xl">
-            Госзакупки без{" "}
-            <span
-              className="bg-clip-text text-transparent"
-              style={{
-                backgroundImage:
-                  "linear-gradient(135deg, #10b981 0%, #34d399 50%, #6ee7b7 100%)",
-              }}
-            >
-              головной боли
-            </span>
-            <br />
-            <span className="text-[var(--text-muted)]">за 30 секунд.</span>
-          </h1>
-        </Reveal>
-
-        <Reveal delay={200}>
-          <p className="text-lg md:text-xl text-[var(--text-muted)] mb-10 max-w-2xl leading-relaxed">
-            AI-ассистент для МСБ Казахстана. Анализирует техническое задание
-            лота, проверяет соответствие Закону, находит нарушения, генерит
-            черновик жалобы и заявку — за{" "}
-            <span className="text-[var(--text)] font-semibold">
-              30 секунд вместо 5 часов
-            </span>
-            .
-          </p>
-        </Reveal>
-
-        <Reveal delay={300}>
-          <div className="flex gap-3 flex-wrap mb-12">
-            <Link
-              to="/analyze"
-              className="group inline-flex items-center gap-2 px-6 py-3.5 rounded-lg font-medium text-white transition"
-              style={{
-                background: "var(--accent)",
-                boxShadow:
-                  "0 0 0 1px rgba(16, 185, 129, 0.4), 0 8px 24px -6px rgba(16, 185, 129, 0.5)",
-              }}
-            >
-              Попробовать бесплатно
-              <span className="transition-transform group-hover:translate-x-1">
-                →
-              </span>
-            </Link>
-            <Link
-              to="/b2g"
-              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg font-medium border transition"
-              style={{
-                background: "var(--bg-elevated)",
-                borderColor: "var(--border-strong)",
-                color: "var(--text)",
-              }}
-            >
-              <span>📋</span>
-              Помощь заказчикам
-            </Link>
-            <a
-              href="https://t.me/TendrBot"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg font-medium border transition"
-              style={{
-                background: "var(--bg-elevated)",
-                borderColor: "var(--border-strong)",
-                color: "var(--text)",
-              }}
-            >
-              <span>✈️</span>
-              Telegram-бот
-            </a>
-          </div>
-        </Reveal>
-
-        <Reveal delay={400}>
-          <div
-            className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-2xl overflow-hidden border"
-            style={{
-              borderColor: "var(--border)",
-              background: "var(--border)",
-            }}
-          >
-            <div className="p-6" style={{ background: "var(--bg-elevated)" }}>
-              <Counter
-                value={30}
-                label="Секунд на анализ"
-                color="var(--accent)"
-              />
-            </div>
-            <div className="p-6" style={{ background: "var(--bg-elevated)" }}>
-              <Counter value={4} label="AI-агента" color="var(--text)" />
-            </div>
-            <div className="p-6" style={{ background: "var(--bg-elevated)" }}>
-              <Counter value={190} label="Чанков в RAG" color="#f59e0b" />
-            </div>
-            <div className="p-6" style={{ background: "var(--bg-elevated)" }}>
-              <Counter value={3} label="Бесплатно в месяц" color="#10b981" />
-            </div>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-// ───── 3-шаговый процесс ─────
-function HowItWorks() {
-  const steps = [
-    {
-      step: "01",
-      icon: "🔗",
-      title: "Введите ID или пришлите файл",
-      text: "Скопируйте ID лота с goszakup.gov.kz или отправьте PDF/DOCX/Excel с ТЗ. Работает даже без токена.",
-    },
-    {
-      step: "02",
-      icon: "🤖",
-      title: "4 AI-агента работают параллельно",
-      text: "Documenter извлекает требования. Legal проверяет Закон РК (190 чанков RAG). Vision анализирует чертежи. B2G генерит ТЗ.",
-    },
-    {
-      step: "03",
-      icon: "📥",
-      title: "Получите готовые документы",
-      text: "Чек-лист требований, черновик жалобы в Счётный комитет со ссылками на статьи, заявка на участие — в DOCX за 1 секунду.",
-    },
-  ];
-  return (
-    <section id="how-it-works" className="scroll-mt-32 max-w-6xl mx-auto px-6 py-20">
-      <Reveal>
-        <div className="text-center mb-12">
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
-            Как это работает
-          </div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-            Три шага от лота до готовой заявки
-          </h2>
+          <div className="hero-outcomes"><span>Проверка лота</span><span>Разбор документов</span><span>План действий</span></div>
         </div>
-      </Reveal>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {steps.map((s, i) => (
-          <Reveal key={s.step} delay={i * 100}>
-            <div
-              className="rounded-2xl border p-6 h-full"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                borderColor: "var(--border)",
-              }}
-            >
-              <div className="flex items-baseline gap-3 mb-3">
-                <div className="text-3xl" style={{ color: "var(--accent)" }}>
-                  {s.icon}
-                </div>
-                <div className="text-xs text-[var(--text-subtle)] font-mono">
-                  ШАГ {s.step}
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold mb-2 tracking-tight">
-                {s.title}
-              </h3>
-              <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-                {s.text}
-              </p>
-            </div>
-          </Reveal>
-        ))}
       </div>
     </section>
   );
 }
 
-// ───── Для кого (3 сегмента) ─────
-function ForWho() {
-  const segments = [
-    {
-      icon: "🏢",
-      title: "Поставщикам МСБ",
-      text: "Хотите участвовать в госзакупках, но нет юриста за 300К тг/мес? Получите анализ лота, проверку закона и черновик жалобы за 30 секунд.",
-      cta: { to: "/analyze", label: "Проанализировать лот" },
-    },
-    {
-      icon: "📋",
-      title: "Заказчикам",
-      text: "Нужно составить ТЗ для закупки, но нет юриста? Получите готовое техзадание с проверкой закона, прогнозом цены и DOCX/PDF экспортом.",
-      cta: { to: "/b2g", label: "Сгенерировать ТЗ" },
-    },
-    {
-      icon: "👔",
-      title: "Тендерным специалистам",
-      text: "Ведёте 10+ заявок в месяц? Автоматизируйте рутину: извлечение требований, проверка нарушений, генерация документов. Экономьте часы каждую неделю.",
-      cta: { to: "/analyze", label: "Ускорить работу" },
-    },
-  ];
+function Process() {
+  const [activeStage, setActiveStage] = useState(0);
+  const [isProcessVisible, setProcessVisible] = useState(false);
+  const processRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const stageTimers: number[] = [];
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setProcessVisible(true);
+        setActiveStage(0);
+        for (let index = 1; index < processStages.length; index += 1) {
+          stageTimers.push(window.setTimeout(() => setActiveStage(index), index * 2500));
+        }
+        observer.disconnect();
+      }
+    }, { threshold: 0.35 });
+
+    const section = processRef.current;
+    if (section) observer.observe(section);
+
+    return () => {
+      stageTimers.forEach((timer) => window.clearTimeout(timer));
+      observer.disconnect();
+    };
+  }, []);
+
   return (
-    <section className="max-w-6xl mx-auto px-6 py-20">
-      <Reveal>
-        <div className="text-center mb-12">
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
-            Для кого
+    <section ref={processRef} id="how-it-works" className={`section-block process-reveal scroll-mt-28 ${isProcessVisible ? "is-visible" : ""}`}>
+      <div className="process-heading"><span>01 / КАК РАБОТАЕТ</span><h2>Как работает <b>Tendr AI</b></h2><p>Добавьте ссылку на закупку или загрузите документацию — Tendr последовательно разберёт её и соберёт рабочую картину.</p></div>
+      <div className="process-console">
+        <div className="process-example-label">Пример результата</div>
+        <div className="process-flow">
+          <div className="process-track" aria-hidden="true">
+            <i />
+            <b />
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-            Помогаем всем сторонам рынка
-          </h2>
-        </div>
-      </Reveal>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {segments.map((s, i) => (
-          <Reveal key={s.title} delay={i * 100}>
-            <Link
-              to={s.cta.to}
-              className="block rounded-2xl border p-6 h-full transition hover:border-[var(--accent)]"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                borderColor: "var(--border)",
-              }}
+          {processStages.map((stage, index) => (
+            <article
+              key={stage.title}
+              className={index === activeStage ? "is-active" : index < activeStage ? "is-complete" : ""}
+              style={{ "--stage-index": index } as CSSProperties}
             >
-              <div className="text-3xl mb-3">{s.icon}</div>
-              <h3 className="text-lg font-semibold mb-2 tracking-tight">
-                {s.title}
-              </h3>
-              <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-3">
-                {s.text}
-              </p>
-              <div
-                className="text-sm font-medium"
-                style={{ color: "var(--accent)" }}
-              >
-                {s.cta.label} →
-              </div>
-            </Link>
-          </Reveal>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ───── 4 AI-агента (что внутри) ─────
-function Agents() {
-  const agents = [
-    {
-      icon: "📋",
-      name: "Анализ требований",
-      role: "Извлекает требования",
-      desc: "Читает ТЗ (включая PDF с чертежами) и составляет чек-лист требований с цитатами.",
-    },
-    {
-      icon: "⚖️",
-      name: "Проверка рисков",
-      role: "Проверяет по Закону РК",
-      desc: "Помогает находить спорные требования и возможные нарушения со ссылками на нормы законодательства.",
-    },
-    {
-      icon: "🔍",
-      name: "Подбор товаров",
-      role: "Находит товары по ТЗ",
-      desc: "AI-поиск в Kaspi, Sulpak, OLX, Vernal, OMNI PARTS. Извлекает характеристики, сравнивает цены.",
-    },
-    {
-      icon: "📝",
-      name: "Подготовка документов",
-      role: "Генерит ТЗ для заказчика",
-      desc: "Помогает составить корректное ТЗ с прогнозом цены, без дискриминационных требований.",
-    },
-  ];
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-20">
-      <Reveal>
-        <div className="text-center mb-12">
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
-            Возможности
-          </div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-            От требований — к следующему шагу
-          </h2>
-          <p className="text-[var(--text-muted)] max-w-2xl mx-auto">
-            Разберитесь в условиях закупки, оцените риски и подготовьте документы
-            с помощью AI-ассистента.
-          </p>
+              <div className="process-icon"><ProcessIcon name={stage.icon} /></div>
+              <span className="process-status">{index < activeStage ? "Готово" : index === activeStage ? (activeStage === processStages.length - 1 ? "Завершено" : "В работе") : `0${index + 1}`}</span>
+              <h3>{stage.title}</h3>
+            </article>
+          ))}
         </div>
-      </Reveal>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {agents.map((a, i) => (
-          <Reveal key={a.name} delay={i * 100}>
-            <div
-              className="rounded-2xl border p-5"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                borderColor: "var(--border)",
-              }}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="text-2xl">{a.icon}</div>
-                <div>
-                  <div className="font-semibold">{a.name}</div>
-                  <div
-                    className="text-xs uppercase tracking-wider"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    {a.role}
-                  </div>
-                </div>
-              </div>
-              <p className="text-sm text-[var(--text-muted)]">{a.desc}</p>
+        <div className="process-metrics">
+          {processStages.map((stage, index) => (
+            <div key={stage.label} className={index <= activeStage ? "is-revealed" : ""}>
+              <strong>{stage.value}</strong><span>{stage.label}</span>
             </div>
-          </Reveal>
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-// ───── Что нового (changelog) ─────
-function Changelog() {
+function Showcase() {
+  return <section id="product" className="section-block scroll-mt-28">
+    <div className="result-heading"><span>РЕЗУЛЬТАТ АНАЛИЗА</span><h2>Не длинный ответ AI,<br />а понятная рабочая картина</h2><p>После анализа вы видите, подходит ли закупка, какие условия нужно выполнить и что подготовить для участия.</p></div>
+    <div className="mt-12"><ComparisonBoard /></div>
+  </section>;
+}
+
+function Features() {
+  return (
+    <section id="features" className="section-block scroll-mt-28">
+      <div className="editorial-heading"><div><span>02 / ВОЗМОЖНОСТИ</span><h2>Видеть больше.<br />Решать быстрее.</h2></div><p>Не набор AI-функций, а последовательный процесс, который помогает принять решение об участии.</p></div>
+      <div className="bento-grid">
+        <article className="bento-card bento-analysis">
+          <div className="bento-copy">
+            <div className="bento-label">АНАЛИЗ ДОКУМЕНТАЦИИ</div>
+            <h3>Документ превращается<br />в понятный чек-лист</h3>
+            <p>Tendr проходит по закупочной документации и собирает обязательные условия в одну структуру.</p>
+          </div>
+          <div className="analysis-visual" aria-hidden="true">
+            <div className="document-shadow document-shadow-one" />
+            <div className="document-shadow document-shadow-two" />
+            <div className="document-sheet-live">
+              <div className="document-file"><i>PDF</i><span>Техническая спецификация</span><b>24 стр.</b></div>
+              <div className="document-preview-title"><span>Обязательные требования</span><em>12 дней</em><b>3 из 14</b></div>
+              <div className="document-checklist">
+                <div><i>01</i><span>Опыт аналогичных поставок</span><b>✓</b></div>
+                <div><i>02</i><span>Гарантия от 12 месяцев</span><b>✓</b></div>
+                <div><i>03</i><span>Поставка до 20 дней</span><b>!</b></div>
+              </div>
+              <div className="document-progress"><div><i /></div><span>Документ анализируется</span><b>72%</b></div>
+              <div className="document-scanner" />
+            </div>
+          </div>
+        </article>
+        <article className="bento-card bento-risk-live">
+          <div className="bento-label">ПРОВЕРКА РИСКОВ</div>
+          <div className="risk-intelligence" aria-hidden="true">
+            <div className="risk-intelligence-head">
+              <div className="risk-count"><strong>03</strong><span>пункта<br />требуют внимания</span></div>
+              <div className="risk-level"><small>Общий уровень риска</small><b><i />Средний</b></div>
+            </div>
+            <div className="risk-findings">
+              <div className="risk-finding risk-high">
+                <i>!</i><div><span>Срок поставки</span><small>Всего 5 рабочих дней</small></div><b>Высокий</b>
+              </div>
+              <div className="risk-finding risk-medium">
+                <i>!</i><div><span>Условия договора</span><small>Неустойка 0,5% за каждый день</small></div><b>Средний</b>
+              </div>
+              <div className="risk-finding risk-review">
+                <i>?</i><div><span>Подтверждающий документ</span><small>Нужно проверить наличие оригинала</small></div><b>Проверить</b>
+              </div>
+            </div>
+            <div className="risk-scan-line" />
+            <div className="risk-intelligence-foot"><span><i /> Анализ завершён</span><b>Пример результата</b></div>
+          </div>
+          <h3>Риски видны до подачи</h3>
+          <p>Спорные пункты и ограничения отделены от обычного текста.</p>
+        </article>
+        <article className="bento-card bento-search-live">
+          <div className="bento-label">УМНЫЙ ПОИСК</div>
+          <h3>Подходящие лоты<br />приходят в один поток</h3>
+          <p>Регион, категория, бюджет и срок уже собраны в карточке закупки.</p>
+          <div className="lot-stream" aria-hidden="true">
+            <div className="lot-search-bar"><i /><span>Офисная мебель</span><b>3 результата</b></div>
+            <div className="lot-row lot-row-active"><span>Астана</span><strong>Офисные кресла</strong><b>18,4 млн ₸</b></div>
+            <div className="lot-row"><span>Алматы</span><strong>Мебель для школ</strong><b>9,7 млн ₸</b></div>
+            <div className="lot-row"><span>Караганда</span><strong>Комплект столов</strong><b>6,2 млн ₸</b></div>
+          </div>
+        </article>
+        <article className="bento-card bento-workflow-live">
+          <div className="bento-copy">
+            <div className="bento-label">ЕДИНЫЙ РАБОЧИЙ ПРОЦЕСС</div>
+            <h3>От найденного лота<br />до готовности к подаче</h3>
+            <p>Анализы, документы и следующие действия остаются связаны в одном проекте.</p>
+          </div>
+          <div className="workflow-map" aria-hidden="true">
+            <div className="workflow-map-head"><span>Готовность проекта</span><b>3 из 4 этапов</b></div>
+            <div className="workflow-route"><i /></div>
+            <div className="workflow-step step-one"><b>01</b><span>Лот найден</span><small>готово</small></div>
+            <div className="workflow-step step-two"><b>02</b><span>Условия проверены</span><small>готово</small></div>
+            <div className="workflow-step step-three"><b>03</b><span>Документы собраны</span><small>в работе</small></div>
+            <div className="workflow-step step-four"><b>04</b><span>Подача заявки</span><small>следующий шаг</small></div>
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function Audience() {
   const items = [
-    {
-      date: "Июль 2026",
-      tag: "NEW",
-      tagColor: "#10b981",
-      title: "PDF с vision-анализом",
-      text: "AI видит чертежи и фото в PDF-приложениях к ТЗ. Извлекает размеры, материалы, особенности конструкции.",
-      link: null,
-    },
-    {
-      date: "Июль 2026",
-      tag: "NEW",
-      tagColor: "#10b981",
-      title: "AI-поиск товаров (Tavily)",
-      text: "Находит реальные товары на Kaspi, Sulpak, OLX по характеристикам из ТЗ. match_score 50-95%.",
-      link: { to: "/analyze", label: "Попробовать →" },
-    },
-    {
-      date: "Июль 2026",
-      tag: "NEW",
-      tagColor: "#10b981",
-      title: "B2G-агент — помощь заказчикам",
-      text: "Workspace, версии ТЗ, multi-user, экспорт в DOCX/PDF. Заказчик получает готовое техзадание за минуту.",
-      link: { to: "/b2g", label: "Попробовать →" },
-    },
-    {
-      date: "Июль 2026",
-      tag: "NEW",
-      tagColor: "#10b981",
-      title: "Генератор заявки (DOCX)",
-      text: "Готовая заявка на участие в лоте за 1 секунду вместо 2-3 часов ручной работы.",
-      link: null,
-    },
-    {
-      date: "Июль 2026",
-      tag: "NEW",
-      tagColor: "#10b981",
-      title: "Калькулятор цены + маржа",
-      text: "Считает min/optimal/aggressive цену. Сравнивает с рынком. Рекомендует конкурентную стратегию.",
-      link: null,
-    },
-    {
-      date: "Июнь 2026",
-      tag: "CORE",
-      tagColor: "#3b82f6",
-      title: "Documenter + Legal + RAG по Закону РК",
-      text: "Основа продукта: 2 AI-агента, RAG-индекс по 190 чанкам Закона о госзакупках, failover Mistral → qwen3-6.",
-      link: null,
-    },
+    ["Поставщики", "Быстрее оценивать закупки и готовиться к участию."],
+    ["Тендерные специалисты", "Сократить ручную проверку и вести больше заявок."],
+    ["Заказчики", "Структурировать закупку и готовить технические задания."],
   ];
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-20">
-      <Reveal>
-        <div className="text-center mb-12">
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs text-[var(--text-muted)] mb-4"
-            style={{ borderColor: "var(--border-strong)" }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{ background: "#10b981" }}
-            />
-            Активно развивается
-          </div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-            Что нового
-          </h2>
-          <p className="text-[var(--text-muted)] max-w-2xl mx-auto">
-            Самые свежие обновления Tendr
-          </p>
-        </div>
-      </Reveal>
-      <div className="space-y-3 max-w-3xl mx-auto">
-        {items.map((item, i) => (
-          <Reveal key={item.title} delay={i * 50}>
-            <div
-              className="rounded-xl border p-4"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                borderColor: "var(--border)",
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <div
-                  className="px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap"
-                  style={{
-                    backgroundColor: `${item.tagColor}20`,
-                    color: item.tagColor,
-                  }}
-                >
-                  {item.tag}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-semibold">{item.title}</h3>
-                    <div className="text-xs text-[var(--text-subtle)] whitespace-nowrap">
-                      {item.date}
-                    </div>
-                  </div>
-                  <p className="text-sm text-[var(--text-muted)] mt-1">
-                    {item.text}
-                  </p>
-                  {item.link && (
-                    <div className="mt-2">
-                      <Link
-                        to={item.link.to}
-                        className="text-sm font-medium"
-                        style={{ color: "var(--accent)" }}
-                      >
-                        {item.link.label}
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Reveal>
-        ))}
-      </div>
-    </section>
-  );
+  return <section className="section-block"><div className="audience-v2"><div className="audience-intro"><span>03 / ДЛЯ КОГО</span><h2>Один продукт.<br />Три рабочих сценария.</h2></div><div className="audience-list">{items.map(([title, text], index) => <div key={title}><b>0{index + 1}</b><h3>{title}</h3><p>{text}</p><Link to={index === 2 ? "/b2g" : "/analyze"}>Открыть <Arrow /></Link></div>)}</div></div></section>;
 }
 
-// ───── Roadmap ─────
-function Roadmap() {
-  const items = [
-    {
-      quarter: "Q2 2026",
-      title: "MVP",
-      status: "done",
-      desc: "Documenter, Legal, RAG, B2G, поиск товаров",
-    },
-    {
-      quarter: "Q3 2026",
-      title: "Pilot + Токен goszakup",
-      status: "current",
-      desc: "5 SMB, реальные метрики, парсер по API",
-    },
-    {
-      quarter: "Q4 2026",
-      title: "Kaspi Pay + Mobile",
-      status: "planned",
-      desc: "Подписки, Telegram Mini App, PWA",
-    },
-    {
-      quarter: "2027",
-      title: "B2G + ЕАЭС",
-      status: "planned",
-      desc: "Помощь заказчикам + экспорт в РФ/РБ",
-    },
-  ];
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-20">
-      <Reveal>
-        <div className="text-center mb-12">
-          <div className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">
-            Roadmap
-          </div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-            Куда мы идём
-          </h2>
-        </div>
-      </Reveal>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        {items.map((item, i) => (
-          <Reveal key={item.title} delay={i * 100}>
-            <div
-              className="rounded-xl border p-4"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                borderColor:
-                  item.status === "current" ? "var(--accent)" : "var(--border)",
-                borderWidth: item.status === "current" ? "2px" : "1px",
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-mono text-[var(--text-muted)]">
-                  {item.quarter}
-                </div>
-                <div
-                  className="text-xs px-2 py-0.5 rounded"
-                  style={{
-                    backgroundColor:
-                      item.status === "done"
-                        ? "rgba(16, 185, 129, 0.15)"
-                        : item.status === "current"
-                          ? "rgba(245, 158, 11, 0.15)"
-                          : "var(--border)",
-                    color:
-                      item.status === "done"
-                        ? "#10b981"
-                        : item.status === "current"
-                          ? "#f59e0b"
-                          : "var(--text-muted)",
-                  }}
-                >
-                  {item.status === "done"
-                    ? "✓ готово"
-                    : item.status === "current"
-                      ? "→ в работе"
-                      : "планируется"}
-                </div>
-              </div>
-              <div className="font-semibold mb-1">{item.title}</div>
-              <div className="text-xs text-[var(--text-muted)]">
-                {item.desc}
-              </div>
-            </div>
-          </Reveal>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ───── CTA в конце ─────
 function FinalCTA() {
-  return (
-    <section className="max-w-6xl mx-auto px-6 py-20">
-      <Reveal>
-        <div
-          className="rounded-3xl p-12 md:p-16 border text-center relative overflow-hidden"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            borderColor: "var(--border)",
-          }}
-        >
-          <div
-            className="absolute inset-0 opacity-30"
-            style={{
-              background:
-                "radial-gradient(circle at 50% 50%, var(--accent-glow) 0%, transparent 70%)",
-            }}
-          />
-          <div className="relative">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-3">
-              Попробуйте Tendr
-            </h2>
-            <p className="text-[var(--text-muted)] mb-8 max-w-xl mx-auto">
-              Введите ID любого лота с goszakup.gov.kz — за 30 секунд получите
-              полный анализ. Или пришлите файл с ТЗ в Telegram-бот.
-            </p>
-            <div className="flex gap-3 justify-center flex-wrap">
-              <Link
-                to="/analyze"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg font-medium text-white"
-                style={{ background: "var(--accent)" }}
-              >
-                Начать бесплатно →
-              </Link>
-              <Link
-                to="/b2g"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg font-medium border"
-                style={{
-                  background: "var(--bg)",
-                  borderColor: "var(--border-strong)",
-                  color: "var(--text)",
-                }}
-              >
-                Генерировать ТЗ
-              </Link>
-            </div>
-          </div>
-        </div>
-      </Reveal>
-    </section>
-  );
+  return <section className="page-container pb-24 pt-8 sm:pb-32"><div className="final-signal"><span>ГОТОВЫ ПОПРОБОВАТЬ?</span><h2>Начните с одной<br />реальной закупки.</h2><p>Создание аккаунта займёт меньше минуты. Банковская карта не нужна.</p><Link to="/login?mode=register" className="button-primary group">Создать аккаунт <Arrow /></Link></div></section>;
 }
 
-// ───── Главная страница ─────
-// Публичная страница НЕ обращается к /api/admin/stats: у неё нет X-Admin-Key,
-// а после hardening admin endpoints вернут 401/403 и метрики показались бы нулями.
-// Блок живых метрик убран до появления публичного endpoint статистики.
 export function HomePage() {
-  return (
-    <Layout>
-      <Hero />
-      <ForWho />
-      <HowItWorks />
-      <div id="features" className="scroll-mt-32"><Agents /></div>
-      <Pricing />
-      <Changelog />
-      <Roadmap />
-      <FinalCTA />
-    </Layout>
-  );
+  return <Layout><Hero /><Process /><Showcase /><Features /><Audience /><Pricing /><FinalCTA /></Layout>;
 }

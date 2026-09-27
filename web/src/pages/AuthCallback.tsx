@@ -14,16 +14,57 @@ export function AuthCallbackPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!supabase) return;
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setIsRecovery(true);
+    if (!supabase) {
+      setError("Авторизация Supabase не настроена.");
+      return;
+    }
+
+    let active = true;
+    let failureTimeout: number | undefined;
+    const callbackParams = new URLSearchParams(
+      `${window.location.search.replace(/^\?/, "")}&${window.location.hash.replace(/^#/, "")}`,
+    );
+    const callbackError = callbackParams.get("error_description");
+
+    if (callbackError) {
+      setError("Google не подтвердил вход. Вернитесь и попробуйте ещё раз.");
+      return;
+    }
+
+    const finishSignIn = () => {
+      if (!isRecovery) navigate("/dashboard", { replace: true });
+    };
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecovery(true);
+        return;
+      }
+      if (session) finishSignIn();
     });
-    const timeout = isRecovery
-      ? undefined
-      : window.setTimeout(() => navigate("/", { replace: true }), 1200);
+
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (!active || isRecovery) return;
+      if (sessionError) {
+        setError("Не удалось завершить вход. Вернитесь и попробуйте ещё раз.");
+        return;
+      }
+      if (data.session) {
+        finishSignIn();
+        return;
+      }
+      failureTimeout = window.setTimeout(() => {
+        if (active) {
+          setError("Сессия не была создана. Проверьте настройки Google в Supabase и повторите вход.");
+        }
+      }, 5000);
+    });
+
     return () => {
-      if (timeout) window.clearTimeout(timeout);
-      data.subscription.unsubscribe();
+      active = false;
+      if (failureTimeout) window.clearTimeout(failureTimeout);
+      authListener.subscription.unsubscribe();
     };
   }, [isRecovery, navigate]);
 
@@ -49,7 +90,7 @@ export function AuthCallbackPage() {
       setError("Не удалось изменить пароль. Запросите новую ссылку.");
       return;
     }
-    navigate("/", { replace: true });
+    navigate("/dashboard", { replace: true });
   };
 
   if (isRecovery) {
@@ -106,9 +147,26 @@ export function AuthCallbackPage() {
     <Layout>
       <div className="mx-auto flex min-h-[60vh] max-w-xl items-center justify-center px-6 text-center">
         <div>
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-emerald-500/25 border-t-emerald-500" />
-          <h1 className="mt-5 text-2xl font-semibold">Подтверждаем вход</h1>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">Сейчас вы вернётесь в Tendr.</p>
+          {error ? (
+            <>
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10 text-xl text-red-400">!</div>
+              <h1 className="mt-5 text-2xl font-semibold">Не удалось войти</h1>
+              <p role="alert" className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{error}</p>
+              <button
+                type="button"
+                onClick={() => navigate("/login", { replace: true })}
+                className="mt-6 rounded-xl bg-emerald-500 px-5 py-3 font-semibold text-white transition hover:bg-emerald-400"
+              >
+                Вернуться ко входу
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-emerald-500/25 border-t-emerald-500" />
+              <h1 className="mt-5 text-2xl font-semibold">Подтверждаем вход</h1>
+              <p className="mt-2 text-sm text-[var(--text-muted)]">Сейчас вы перейдёте в кабинет Tendr.</p>
+            </>
+          )}
         </div>
       </div>
     </Layout>

@@ -14,6 +14,8 @@ import { applyTheme } from "./theme";
 import { AuthProvider } from "./auth/AuthContext";
 import { AuthPage } from "./pages/Auth";
 import { AuthCallbackPage } from "./pages/AuthCallback";
+import { DashboardPage } from "./pages/Dashboard";
+import { RequireAuth } from "./auth/RequireAuth";
 
 // Сразу создаём client_id при загрузке.
 // Контролируемая ошибка (нет Web Crypto) не должна ронять старт приложения.
@@ -38,6 +40,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/lots" element={<LotsPage />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
