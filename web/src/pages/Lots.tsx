@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
+import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { api, ApiError, getOrCreateClientId } from "../clientId";
 import { getSafeExternalUrl } from "../security/externalUrl";
 import { escapeCsvCell } from "../security/csv";
+import { isLotSaved, removeSavedLot, saveLot } from "../dashboard/dashboard.data";
 
 type Lot = {
   id: number;
@@ -114,7 +116,7 @@ const REGIONS = [
 
 const CATEGORIES = ["", "товар", "работа", "услуга"];
 
-export function LotsPage() {
+export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [result, setResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -254,7 +256,7 @@ export function LotsPage() {
   };
 
   return (
-    <Layout>
+    <LayoutOrEmbed embedded={embedded}>
       <div className="page-container space-y-8 py-12 sm:py-16">
         <div>
           <p className="section-kicker">Каталог закупок</p>
@@ -462,6 +464,7 @@ export function LotsPage() {
                 key={lot.id}
                 lot={lot}
                 onPartnership={() => setPartnershipLot(lot)}
+                analyzeBase={embedded ? "/dashboard" : ""}
               />
             ))}
           </div>
@@ -562,21 +565,43 @@ export function LotsPage() {
           </div>
         )}
       </div>
-    </Layout>
+    </LayoutOrEmbed>
   );
 }
 
 function LotCard({
   lot,
   onPartnership,
+  analyzeBase,
 }: {
   lot: Lot;
   onPartnership: () => void;
+  analyzeBase: string;
 }) {
   const urgentColor = lot.is_urgent ? "border-red-500" : "border-slate-200";
   // Безопасная внешняя ссылка: только https на доверенные домены.
   // javascript:, data:, http:, поддоменные трюки и userinfo отклоняются.
   const safeSourceUrl = getSafeExternalUrl(lot.source_url);
+  const [saved, setSaved] = useState(() => isLotSaved(lot.id));
+
+  const toggleSaved = () => {
+    if (saved) {
+      removeSavedLot(lot.id);
+      setSaved(false);
+    } else {
+      saveLot({
+        id: lot.id,
+        title: lot.title,
+        organizer: lot.organizer,
+        amountKzt: lot.amount_kzt ?? null,
+        region: lot.region,
+        deadlineDate: lot.deadline_date ?? null,
+        sourceUrl: safeSourceUrl,
+        savedAt: new Date().toISOString(),
+      });
+      setSaved(true);
+    }
+  };
   return (
     <div
       className={
@@ -700,7 +725,7 @@ function LotCard({
           </a>
         )}
         <Link
-          to={`/analyze?lot_url=${encodeURIComponent(
+          to={`${analyzeBase}/analyze?lot_url=${encodeURIComponent(
             lot.source_url || ""
           )}&lot_title=${encodeURIComponent(lot.title)}`}
           className="px-3 py-1.5 text-sm border rounded hover:bg-slate-50 dark:hover:bg-slate-700"
@@ -712,6 +737,15 @@ function LotCard({
           className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded"
         >
           🤝 Стать партнёром
+        </button>
+        <button
+          type="button"
+          onClick={toggleSaved}
+          aria-pressed={saved}
+          aria-label={saved ? `Убрать «${lot.title}» из сохранённых` : `Сохранить «${lot.title}» в кабинет`}
+          className="px-3 py-1.5 text-sm border rounded hover:bg-slate-50 dark:hover:bg-slate-700"
+        >
+          {saved ? "★ Сохранён" : "☆ Сохранить"}
         </button>
       </div>
     </div>

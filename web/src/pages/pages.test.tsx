@@ -26,39 +26,69 @@ afterEach(() => {
   cleanup();
 });
 
-describe("HistoryPage: только локальная история, без серверного endpoint", () => {
-  it("рендерит записи из localStorage и не ходит в /api/lots/history", async () => {
-    const fetchMock = vi.fn(async () => {
-      throw new Error("must not be called");
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    window.localStorage.setItem(
-      getHistoryStorageKey(),
-      JSON.stringify([
-        {
-          lot_id: "123",
-          title: "Поставка мебели",
-          customer: "Акимат",
-          method: "конкурс",
-          n_requirements: 5,
-          n_red_flags: 1,
-          created_at: new Date().toISOString(),
-        },
-      ]),
+describe("HistoryPage: серверная история + честный offline fallback", () => {
+  const serverItem = {
+    lot_id: "777",
+    title: "Поставка мебели",
+    customer: "Акимат",
+    method: "конкурс",
+    overall_risk: "medium",
+    n_requirements: 5,
+    n_red_flags: 1,
+    created_at: new Date().toISOString(),
+  };
+
+  function mockHistory(ok: boolean, status = 200) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        ok
+          ? new Response(
+              JSON.stringify({ items: [serverItem], total: 1, limit: 20, offset: 0 }),
+              { status, headers: { "Content-Type": "application/json" } },
+            )
+          : new Response(JSON.stringify({ detail: "ANALYSIS_FAILED" }), {
+              status,
+              headers: { "Content-Type": "application/json" },
+            }),
+      ),
     );
+  }
+
+  it("успешно загружает серверную историю", async () => {
+    mockHistory(true);
     renderWithRouter(<HistoryPage />);
     expect(await screen.findByText("Поставка мебели")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByText(/всего записей: 1/i)).toBeInTheDocument();
   });
 
-  it("показывает пустое состояние без запроса к серверу", async () => {
-    const fetchMock = vi.fn(async () => new Response("[]", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+  it("пустой результат показывает пустое состояние", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ items: [], total: 0, limit: 20, offset: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
     renderWithRouter(<HistoryPage />);
-    await waitFor(() => {
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-    expect(screen.getByText(/пока нет ни одной проверки/i)).toBeInTheDocument();
+    expect(await screen.findByText(/пока нет ни одной проверки/i)).toBeInTheDocument();
+  });
+
+  it("ошибка сервера показывает безопасное сообщение и локальную копию", async () => {
+    mockHistory(false, 500);
+    window.localStorage.setItem(
+      getHistoryStorageKey(),
+      JSON.stringify([{ ...serverItem, title: "Локальная копия" }]),
+    );
+    renderWithRouter(<HistoryPage />);
+    // Безопасное сообщение без сырого detail.
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText("ANALYSIS_FAILED")).not.toBeInTheDocument();
+    // Локальная копия явно обозначена как offline.
+    expect(await screen.findByText("Локальная копия")).toBeInTheDocument();
+    expect(screen.getAllByText(/локальная копия/i).length).toBeGreaterThan(1);
   });
 });
 

@@ -14,8 +14,12 @@ import { applyTheme } from "./theme";
 import { AuthProvider } from "./auth/AuthContext";
 import { AuthPage } from "./pages/Auth";
 import { AuthCallbackPage } from "./pages/AuthCallback";
-import { DashboardPage } from "./pages/Dashboard";
 import { RequireAuth } from "./auth/RequireAuth";
+import { DashboardLayout } from "./dashboard/DashboardLayout";
+import { OverviewPage } from "./dashboard/pages/Overview";
+import { BillingPage } from "./dashboard/pages/Billing";
+import { SettingsPage } from "./dashboard/pages/Settings";
+import { DocumentsPage } from "./dashboard/pages/Documents";
 
 // Сразу создаём client_id при загрузке.
 // Контролируемая ошибка (нет Web Crypto) не должна ронять старт приложения.
@@ -33,6 +37,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          {/* Standalone-маршруты сохранены: существующие ссылки не ломаются. */}
           <Route path="/analyze" element={<AnalyzePage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/admin" element={<AdminPage />} />
@@ -40,7 +45,24 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/lots" element={<LotsPage />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
+          {/* Личный кабинет: все маршруты внутри DashboardLayout под RequireAuth. */}
+          <Route
+            path="/dashboard"
+            element={
+              <RequireAuth>
+                <DashboardLayout />
+              </RequireAuth>
+            }
+          >
+            <Route index element={<OverviewPage />} />
+            <Route path="analyze" element={<AnalyzePage embedded />} />
+            <Route path="lots" element={<LotsPage embedded />} />
+            <Route path="history" element={<HistoryPage embedded />} />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="b2g" element={<B2GPage embedded />} />
+            <Route path="billing" element={<BillingPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>

@@ -3,7 +3,10 @@ import {
   adminApi,
   api,
   ApiError,
+  ClientIdError,
+  getOrCreateClientId,
   getSafeMessageForStatus,
+  isQuotaExceededError,
 } from "./clientId";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -130,6 +133,114 @@ describe("adminApi: заголовок только для /api/admin/*", () => 
       expect.unreachable();
     } catch (e) {
       expect((e as ApiError).status).toBe(403);
+    }
+  });
+});
+
+describe("getOrCreateClientId: cookie-first и Web Crypto", () => {
+  const VALID = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+
+  beforeEach(() => {
+    document.cookie.split(";").forEach((c) => {
+      const name = c.split("=")[0].trim();
+      if (name) document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+    });
+  });
+
+  it("сначала использует валидный tendr_cid из cookie", () => {
+    document.cookie = `tendr_cid=${VALID}; path=/`;
+    window.sessionStorage.setItem("tendr_cid", "f".repeat(32));
+    expect(getOrCreateClientId()).toBe(VALID);
+  });
+
+  it("игнорирует невалидный cookie и генерирует новый", () => {
+    document.cookie = "tendr_cid=anon; path=/";
+    const id = getOrCreateClientId();
+    expect(id).not.toBe("anon");
+    expect(id).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+  });
+
+  it("стабилен между вкладками: пустой sessionStorage + cookie даёт тот же ID", () => {
+    document.cookie = `tendr_cid=${VALID}; path=/`;
+    window.sessionStorage.clear();
+    expect(getOrCreateClientId()).toBe(VALID);
+    expect(getOrCreateClientId()).toBe(VALID);
+  });
+
+  it("без Web Crypto бросает контролируемую ошибку, без Math.random и зависаний", () => {
+    const randomSpy = vi.spyOn(Math, "random");
+    vi.stubGlobal("crypto", undefined);
+    expect(() => getOrCreateClientId()).toThrowError(ClientIdError);
+    expect(randomSpy).not.toHaveBeenCalled();
+    randomSpy.mockRestore();
+  });
+
+  it("не возвращает невалидный 'ssr' в backend-запросы", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const calls = fetchMock.mock.calls as unknown as Array<[unknown, RequestInit?]>;
+    await api("/api/lots/search", { method: "POST", body: "{}" });
+    const headers = calls[0]?.[1]?.headers as Headers;
+    const sent = headers.get("X-Client-Id");
+    expect(sent).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+    expect(sent).not.toBe("ssr");
+    expect(sent).not.toBe("anon");
+  });
+});
+
+describe("ApiError: стабильные коды backend вместо сырого detail", () => {
+  it("QUOTA_EXCEEDED определяется по коду и несёт code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(429, { detail: "QUOTA_EXCEEDED" })),
+    );
+    try {
+      await api("/api/lots/analyze", { method: "POST", body: "{}" });
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect((e as ApiError).code).toBe("QUOTA_EXCEEDED");
+      expect(isQuotaExceededError(e)).toBe(true);
+      expect((e as ApiError).message).toMatch(/лимит/i);
+    }
+  });
+
+  it("сырой detail никогда не показывается пользователю", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(500, { detail: "super secret traceback line 42" })),
+    );
+    try {
+      await api("/api/lots/analyze", { method: "POST", body: "{}" });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as ApiError).message).not.toContain("secret");
+      expect((e as ApiError).message).not.toContain("traceback");
+    }
+  });
+
+  it("FILE_TOO_LARGE и INVALID_FILE маппятся по коду", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(413, { detail: "FILE_TOO_LARGE" })),
+    );
+    try {
+      await api("/api/lots/analyze-upload", { method: "POST", body: new FormData() });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as ApiError).code).toBe("FILE_TOO_LARGE");
+      expect((e as ApiError).message).toMatch(/слишком большой/i);
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(422, { detail: "INVALID_FILE" })),
+    );
+    try {
+      await api("/api/lots/analyze-upload", { method: "POST", body: new FormData() });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as ApiError).code).toBe("INVALID_FILE");
+      expect((e as ApiError).message).toMatch(/повреждён/i);
     }
   });
 });

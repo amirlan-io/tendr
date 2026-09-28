@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
+import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { useT } from "../i18n";
 import { api, ApiError, downloadBlob, isQuotaExceededError } from "../clientId";
 import { pushHistory } from "../historyStore";
+import { trackDocumentDownload } from "../dashboard/dashboard.data";
 
 type Requirement = {
   code: string;
@@ -92,7 +94,7 @@ function validateFileClientSide(f: File): string | null {
   return null;
 }
 
-export function AnalyzePage() {
+export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useT();
   const [searchParams] = useSearchParams();
   const [url, setUrl] = useState("");
@@ -274,24 +276,41 @@ export function AnalyzePage() {
   function downloadDocx(kind: "complaint" | "report") {
     if (!result) return;
     const lotId = result.lot.lot_id;
+    // Backend принимает только числовой lot_id (path-параметр int):
+    // для файловых анализов ("raw"/"manual") скачивание недоступно.
+    if (!/^\d+$/.test(lotId.trim())) {
+      setError("Скачивание недоступно для этого анализа: нет числового ID лота.");
+      return;
+    }
     const stamp = new Date().toISOString().slice(0, 10);
     const filename =
       kind === "complaint"
         ? `zhaloba_${lotId}_${stamp}.docx`
         : `otchet_${lotId}_${stamp}.docx`;
     setError(null);
-    void downloadBlob(`/api/lots/${lotId}/download?kind=${kind}`, filename).catch(
-      (e: unknown) =>
+    void downloadBlob(`/api/lots/${lotId}/download?kind=${kind}`, filename)
+      .then(() => {
+        // Фиксируем только реально скачанный файл.
+        trackDocumentDownload({
+          id: `${kind}-${lotId}-${stamp}`,
+          kind,
+          filename,
+          lotId,
+          lotTitle: result.lot.title,
+          createdAt: new Date().toISOString(),
+        });
+      })
+      .catch((e: unknown) =>
         setError(
           e instanceof ApiError
             ? e.message
             : "Не удалось скачать файл. Попробуйте позже.",
         ),
-    );
+      );
   }
 
   return (
-    <Layout>
+    <LayoutOrEmbed embedded={embedded}>
       <div className="page-container py-12 sm:py-16">
         <div className="mx-auto max-w-5xl">
         <Link
@@ -469,7 +488,7 @@ export function AnalyzePage() {
         )}
         </div>
       </div>
-    </Layout>
+    </LayoutOrEmbed>
   );
 }
 

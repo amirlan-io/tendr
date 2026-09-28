@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
+import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { useT } from "../i18n";
 import { api, ApiError, downloadBlob } from "../clientId";
+import { trackDocumentDownload } from "../dashboard/dashboard.data";
 import { getSafeHttpsUrl } from "../security/externalUrl";
 
 type Workspace = {
@@ -98,7 +100,7 @@ const COMPLIANCE_LABELS: Record<string, string> = {
   violation: "Есть нарушения",
 };
 
-export function B2GPage() {
+export function B2GPage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useT();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWs, setSelectedWs] = useState<Workspace | null>(null);
@@ -273,17 +275,29 @@ export function B2GPage() {
   const downloadDocx = (version: number) => {
     if (!selectedWs) return;
     setError(null);
+    const filename = `tz_v${version}.docx`;
     downloadBlob(
       `/api/b2g/workspaces/${selectedWs.id}/drafts/${version}/download`,
-      `tz_v${version}.docx`,
-    ).catch((e: unknown) =>
-      setError(e instanceof ApiError ? e.message : "Не удалось скачать файл. Попробуйте позже."),
-    );
+      filename,
+    )
+      .then(() => {
+        trackDocumentDownload({
+          id: `b2g-docx-${selectedWs.id}-v${version}`,
+          kind: "report",
+          filename,
+          lotId: `b2g-${selectedWs.id}`,
+          lotTitle: selectedWs.name,
+          createdAt: new Date().toISOString(),
+        });
+      })
+      .catch((e: unknown) =>
+        setError(e instanceof ApiError ? e.message : "Не удалось скачать файл. Попробуйте позже."),
+      );
   };
 
   // Главный рендер
   return (
-    <Layout>
+    <LayoutOrEmbed embedded={embedded}>
       <div className="page-container py-12 sm:py-16">
         <div className="mx-auto max-w-5xl">
         <div className="mb-10 flex items-end justify-between gap-6">
@@ -391,12 +405,24 @@ export function B2GPage() {
                 null;
               const v = draftMatch?.version ?? 1;
               setError(null);
+              const filename = `tz_v${v}.pdf`;
               downloadBlob(
                 `/api/b2g/workspaces/${selectedWs.id}/drafts/${v}/download-pdf`,
-                `tz_v${v}.pdf`,
-              ).catch((e: unknown) =>
-                setError(e instanceof ApiError ? e.message : "Не удалось скачать файл. Попробуйте позже."),
-              );
+                filename,
+              )
+                .then(() => {
+                  trackDocumentDownload({
+                    id: `b2g-pdf-${selectedWs.id}-v${v}`,
+                    kind: "report",
+                    filename,
+                    lotId: `b2g-${selectedWs.id}`,
+                    lotTitle: selectedWs.name,
+                    createdAt: new Date().toISOString(),
+                  });
+                })
+                .catch((e: unknown) =>
+                  setError(e instanceof ApiError ? e.message : "Не удалось скачать файл. Попробуйте позже."),
+                );
             }}
             onNewVersion={() => {
               setView("create");
@@ -426,7 +452,7 @@ export function B2GPage() {
         )}
         </div>
       </div>
-    </Layout>
+    </LayoutOrEmbed>
   );
 }
 
