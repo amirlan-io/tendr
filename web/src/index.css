@@ -61,6 +61,14 @@ html.dark .lava-background {
         --text-subtle: #a1a1aa;
         --accent: #10b981;
         --accent-glow: rgba(16, 185, 129, 0.08);
+        /* shadcn-токены для компонентов из components/ui. */
+        --background: 255 255 255;
+        --foreground: 9 9 11;
+        --card: 255 255 255;
+        --border-token: 228 228 231;
+        --primary: 16 185 129;
+        --primary-foreground: 255 255 255;
+        --muted-foreground: 113 113 122;
     }
     html.dark {
         --bg: #09090b;
@@ -72,6 +80,15 @@ html.dark .lava-background {
         --text-subtle: #71717a;
         --accent: #10b981;
         --accent-glow: rgba(16, 185, 129, 0.12);
+        /* shadcn-токены для компонентов из components/ui (RGB-триплеты,
+           прозрачность задаётся классами вида /50). */
+        --background: 6 11 14;
+        --foreground: 243 246 245;
+        --card: 10 17 21;
+        --border-token: 30 41 47;
+        --primary: 52 211 153;
+        --primary-foreground: 3 16 11;
+        --muted-foreground: 161 175 185;
     }
     html {
         background-color: var(--bg);

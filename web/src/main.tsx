@@ -9,6 +9,7 @@ import { AdminPage } from "./pages/Admin";
 import { B2GPage } from "./pages/B2G";
 import { LotsPage } from "./pages/Lots";
 import { NotFoundPage } from "./pages/NotFound";
+import { UiPreviewPage } from "./pages/UiPreview";
 import { getOrCreateClientId } from "./clientId";
 import { applyTheme } from "./theme";
 import { AuthProvider } from "./auth/AuthContext";
@@ -45,6 +46,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/lots" element={<LotsPage />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          {/* Песочница shadcn-компонентов для ручной проверки. */}
+          <Route path="/ui-preview" element={<UiPreviewPage />} />
           {/* Личный кабинет: все маршруты внутри DashboardLayout под RequireAuth. */}
           <Route
             path="/dashboard"
