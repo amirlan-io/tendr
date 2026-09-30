@@ -13,7 +13,7 @@ export function DeadlineList({ items }: { items: DeadlineItem[] }) {
   return (
     <section
       aria-label="Ближайшие дедлайны"
-      className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0a1115]/90"
+      className="overflow-hidden rounded-xl border border-white/[0.075] bg-[#121213]/90"
     >
       <div className="border-b border-white/[0.07] px-5 py-5 sm:px-6">
         <p className="text-sm font-medium text-white">Ближайшие дедлайны</p>

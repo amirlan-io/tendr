@@ -67,7 +67,7 @@ export function SettingsPage() {
 
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-emerald-400">
+      <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-white/35">
         Аккаунт
       </p>
       <h1 className="mt-3 text-3xl font-medium tracking-[-.045em] text-white">
@@ -77,7 +77,7 @@ export function SettingsPage() {
       <div className="mt-8 grid items-start gap-4 xl:grid-cols-[1.2fr_.8fr]">
         <section
           aria-label="Профиль"
-          className="rounded-[24px] border border-white/[0.08] bg-[#0a1115]/90 p-6"
+          className="rounded-xl border border-white/[0.075] bg-[#121213]/90 p-6"
         >
           <div className="flex items-center gap-4">
             <span
@@ -197,7 +197,7 @@ export function SettingsPage() {
 
         <section
           aria-label="Безопасность"
-          className="rounded-[24px] border border-white/[0.08] bg-[#0a1115]/90 p-6"
+          className="rounded-xl border border-white/[0.075] bg-[#121213]/90 p-6"
         >
           <h2 className="text-base font-medium text-white">Безопасность</h2>
           <dl className="mt-4 space-y-3 text-[13px]">

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
@@ -126,6 +126,17 @@ describe("Sidebar", () => {
     await waitFor(() => {
       expect(document.querySelector("aside")?.className).toContain("-translate-x-full");
     });
+  });
+
+  it("Ctrl+K открывает поиск и переводит в найденный раздел", async () => {
+    authAs(authedUser);
+    renderApp("/dashboard");
+    await screen.findByText(/Здравствуйте/);
+    await userEvent.keyboard("{Control>}k{/Control}");
+    const dialog = screen.getByRole("dialog", { name: "Поиск по кабинету" });
+    await userEvent.type(within(dialog).getByPlaceholderText("Найти раздел или действие..."), "тариф");
+    await userEvent.click(within(dialog).getByRole("link", { name: /Тариф и лимиты/ }));
+    expect(await screen.findByLabelText("Тариф Plus")).toBeInTheDocument();
   });
 });
 

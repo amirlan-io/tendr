@@ -13,7 +13,7 @@ const COLORS: Record<NonNullable<Props["accent"]>, string> = {
 
 export function StatCard({ label, value, note, accent = "emerald" }: Props) {
   return (
-    <article className="relative overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#0a1115]/90 p-5 transition hover:border-white/[0.14]">
+    <article className="relative overflow-hidden rounded-xl border border-white/[0.075] bg-[#121213]/90 p-5 transition hover:border-white/[0.14] hover:bg-[#151516]">
       <div
         aria-hidden
         className={`pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r ${COLORS[accent]} to-transparent opacity-25`}

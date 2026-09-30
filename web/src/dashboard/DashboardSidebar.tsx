@@ -1,6 +1,8 @@
+import { ChevronRight, Search } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { DASHBOARD_NAV } from "./dashboard.data";
 import { DashboardIcon } from "./DashboardIcon";
+import type { NavItem } from "./dashboard.types";
 
 type Props = {
   email: string | null;
@@ -10,8 +12,62 @@ type Props = {
   collapsed: boolean;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  onOpenSearch: () => void;
   onSignOut: () => void;
 };
+
+const PRIMARY_NAV = DASHBOARD_NAV.slice(0, 3);
+const WORKSPACE_NAV = DASHBOARD_NAV.slice(3, 6);
+const BILLING_NAV = DASHBOARD_NAV.slice(6, 7);
+const SETTINGS_ITEM = DASHBOARD_NAV.find((item) => item.to === "/dashboard/settings");
+
+function NavigationGroup({
+  label,
+  items,
+  collapsed,
+  onNavigate,
+}: {
+  label?: string;
+  items: NavItem[];
+  collapsed: boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="space-y-0.5">
+      {label && (
+        <p
+          className={`mb-1.5 px-2.5 text-[10px] font-medium uppercase tracking-[.12em] text-white/25 ${
+            collapsed ? "lg:hidden" : ""
+          }`}
+        >
+          {label}
+        </p>
+      )}
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.to === "/dashboard"}
+          aria-label={collapsed ? item.label : undefined}
+          onClick={onNavigate}
+          title={collapsed ? item.label : undefined}
+          className={({ isActive }) =>
+            `group flex min-h-10 items-center gap-2.5 rounded-[7px] px-2.5 text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60 ${
+              isActive
+                ? "bg-white/[0.09] font-medium text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.035)]"
+                : "text-white/48 hover:bg-white/[0.045] hover:text-white/85"
+            } ${collapsed ? "lg:justify-center lg:px-2" : ""}`
+          }
+        >
+          <span className="shrink-0 text-white/45 transition-colors group-hover:text-white/75">
+            <DashboardIcon name={item.icon} />
+          </span>
+          <span className={`truncate ${collapsed ? "lg:hidden" : ""}`}>{item.label}</span>
+        </NavLink>
+      ))}
+    </div>
+  );
+}
 
 export function DashboardSidebar({
   email,
@@ -21,6 +77,7 @@ export function DashboardSidebar({
   collapsed,
   mobileOpen,
   onCloseMobile,
+  onOpenSearch,
   onSignOut,
 }: Props) {
   return (
@@ -28,102 +85,96 @@ export function DashboardSidebar({
       {mobileOpen && (
         <button
           aria-label="Закрыть меню"
-          className="fixed inset-0 z-40 bg-black/65 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
           onClick={onCloseMobile}
         />
       )}
+
       <aside
         aria-label="Навигация кабинета"
-        className={`fixed inset-y-0 left-0 z-50 flex border-r border-white/[0.075] bg-[#080e12]/95 backdrop-blur-2xl transition-all duration-300 ${
-          collapsed ? "w-[84px]" : "w-[268px]"
+        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] border-r border-white/[0.065] bg-[#111112] transition-[width,transform] duration-300 ${
+          collapsed ? "lg:w-[72px]" : "lg:w-[248px]"
         } ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
         <div className="flex min-w-0 flex-1 flex-col p-3">
-          <div
-            className={`flex h-14 items-center ${collapsed ? "justify-center" : "justify-between px-2"}`}
+          <Link
+            to="/dashboard"
+            onClick={onCloseMobile}
+            className={`group flex min-h-12 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-white/[0.035] ${
+              collapsed ? "lg:justify-center lg:px-1" : ""
+            }`}
           >
-            <Link to="/dashboard" className="flex min-w-0 items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-sm font-bold text-[#03100b]">
-                T
-              </span>
-              {!collapsed && (
-                <span className="truncate text-[17px] font-semibold tracking-[-.03em] text-white">
-                  Tendr
-                </span>
-              )}
-            </Link>
-            {!collapsed && (
-              <button
-                aria-label="Закрыть меню"
-                onClick={onCloseMobile}
-                className="rounded-lg p-2 text-white/35 hover:bg-white/[0.05] hover:text-white lg:hidden"
-              >
-                <DashboardIcon name="close" />
-              </button>
-            )}
-          </div>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[#f2f2f2] text-xs font-bold text-[#111112] shadow-[0_1px_0_rgba(255,255,255,.16)]">
+              T
+            </span>
+            <span className={`min-w-0 flex-1 ${collapsed ? "lg:hidden" : ""}`}>
+              <span className="block truncate text-[13px] font-semibold text-white/90">Tendr</span>
+              <span className="mt-0.5 block truncate text-[10px] text-white/32">{tariffLabel}</span>
+            </span>
+            <ChevronRight
+              aria-hidden
+              className={`h-3.5 w-3.5 shrink-0 text-white/20 transition-transform group-hover:translate-x-0.5 group-hover:text-white/45 ${
+                collapsed ? "lg:hidden" : ""
+              }`}
+              strokeWidth={1.6}
+            />
+          </Link>
 
-          <div
-            className={`mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.025] ${collapsed ? "p-2" : "p-3"}`}
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            className={`mt-4 flex min-h-10 w-full items-center gap-2.5 rounded-[7px] px-2.5 text-[13px] text-white/48 transition-colors hover:bg-white/[0.045] hover:text-white/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60 ${
+              collapsed ? "lg:justify-center lg:px-2" : ""
+            }`}
+            title={collapsed ? "Поиск" : undefined}
           >
-            <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
-              <span
-                aria-hidden
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/[0.08] text-xs font-semibold text-emerald-300"
-              >
-                {initials}
-              </span>
-              {!collapsed && (
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-white">{displayName}</p>
-                  <p className="truncate text-[11px] text-white/35">{email ?? ""}</p>
-                  <p className="mt-1 text-[10px] uppercase tracking-[.12em] text-white/30">
-                    {tariffLabel}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+            <Search aria-hidden className="h-[17px] w-[17px] shrink-0" strokeWidth={1.55} />
+            <span className={`flex-1 text-left ${collapsed ? "lg:hidden" : ""}`}>Поиск</span>
+            <kbd
+              className={`rounded border border-white/[0.07] bg-black/25 px-1.5 py-0.5 font-mono text-[9px] text-white/25 ${
+                collapsed ? "lg:hidden" : ""
+              }`}
+            >
+              Ctrl K
+            </kbd>
+          </button>
 
-          <nav className="mt-6 flex-1 space-y-1" aria-label="Разделы кабинета">
-            {!collapsed && (
-              <p className="mb-3 px-3 text-[9px] font-semibold uppercase tracking-[.18em] text-white/25">
-                Рабочее пространство
-              </p>
-            )}
-            {DASHBOARD_NAV.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/dashboard"}
-                onClick={onCloseMobile}
-                className={({ isActive }) =>
-                  `group flex min-h-11 items-center rounded-xl border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 ${
-                    collapsed ? "justify-center px-2" : "gap-3 px-3"
-                  } ${
-                    isActive
-                      ? "border-emerald-400/15 bg-emerald-400/[0.08] text-emerald-200"
-                      : "border-transparent text-white/48 hover:border-white/[0.06] hover:bg-white/[0.035] hover:text-white/85"
-                  }`
-                }
-                title={collapsed ? item.label : undefined}
-              >
-                <DashboardIcon name={item.icon} />
-                {!collapsed && <span className="text-[13px] font-medium">{item.label}</span>}
-              </NavLink>
-            ))}
+          <nav className="mt-2 flex-1 space-y-5 overflow-y-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Разделы кабинета">
+            <NavigationGroup items={PRIMARY_NAV} collapsed={collapsed} onNavigate={onCloseMobile} />
+            <NavigationGroup label="Работа" items={WORKSPACE_NAV} collapsed={collapsed} onNavigate={onCloseMobile} />
+            <NavigationGroup label="Управление" items={BILLING_NAV} collapsed={collapsed} onNavigate={onCloseMobile} />
           </nav>
 
-          <div className="space-y-1 border-t border-white/[0.07] pt-3">
-            <button
-              onClick={onSignOut}
-              className={`flex min-h-11 w-full items-center rounded-xl border border-transparent text-white/40 transition hover:border-red-400/10 hover:bg-red-400/[0.05] hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400 ${
-                collapsed ? "justify-center px-2" : "gap-3 px-3"
+          <div className="border-t border-white/[0.06] pt-3">
+            <Link
+              to="/dashboard/settings"
+              onClick={onCloseMobile}
+              className={`mb-2 flex items-center gap-2.5 rounded-[7px] px-2 py-2 transition-colors hover:bg-white/[0.045] ${
+                collapsed ? "lg:justify-center" : ""
               }`}
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.045] text-[10px] font-semibold text-white/75">
+                {initials}
+              </span>
+              <span className={`min-w-0 flex-1 ${collapsed ? "lg:hidden" : ""}`}>
+                <span className="block truncate text-[11px] font-medium text-white/75">{displayName}</span>
+                <span className="mt-0.5 block truncate text-[10px] text-white/28">{email ?? ""}</span>
+              </span>
+            </Link>
+
+            {SETTINGS_ITEM && (
+              <NavigationGroup items={[SETTINGS_ITEM]} collapsed={collapsed} onNavigate={onCloseMobile} />
+            )}
+            <button
+              type="button"
+              onClick={onSignOut}
               title={collapsed ? "Выйти" : undefined}
+              className={`mt-0.5 flex min-h-10 w-full items-center gap-2.5 rounded-[7px] px-2.5 text-[13px] text-white/38 transition-colors hover:bg-white/[0.045] hover:text-white/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60 ${
+                collapsed ? "lg:justify-center lg:px-2" : ""
+              }`}
             >
               <DashboardIcon name="logout" />
-              {!collapsed && <span className="text-[13px] font-medium">Выйти</span>}
+              <span className={collapsed ? "lg:hidden" : ""}>Выйти</span>
             </button>
           </div>
         </div>

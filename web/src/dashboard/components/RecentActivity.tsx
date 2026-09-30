@@ -12,7 +12,7 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
   return (
     <section
       aria-label="Последние активности"
-      className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0a1115]/90"
+      className="overflow-hidden rounded-xl border border-white/[0.075] bg-[#121213]/90"
     >
       <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-5 sm:px-6">
         <div>

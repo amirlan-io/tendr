@@ -8,10 +8,10 @@ function TariffCard({ tariff, current }: { tariff: Tariff; current: boolean }) {
   return (
     <article
       aria-label={`Тариф ${tariff.name}`}
-      className={`relative flex flex-col rounded-[24px] border p-6 transition hover:border-white/[0.16] ${
+      className={`relative flex flex-col rounded-xl border p-6 transition hover:border-white/[0.16] ${
         current
-          ? "border-emerald-400/25 bg-emerald-400/[0.05]"
-          : "border-white/[0.08] bg-[#0a1115]/90"
+          ? "border-emerald-400/25 bg-[#121413]/90 shadow-[inset_0_1px_0_rgba(52,211,153,.18)]"
+          : "border-white/[0.075] bg-[#121213]/90"
       }`}
     >
       {current && (
@@ -51,7 +51,7 @@ export function BillingPage() {
 
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-emerald-400">
+      <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-white/35">
         Оплата
       </p>
       <h1 className="mt-3 text-3xl font-medium tracking-[-.045em] text-white">
@@ -76,7 +76,7 @@ export function BillingPage() {
         )}
         <section
           aria-label="Использование лимита"
-          className="rounded-[24px] border border-white/[0.08] bg-[#0a1115]/90 p-6"
+          className="rounded-xl border border-white/[0.075] bg-[#121213]/90 p-6"
         >
           <h2 className="text-base font-medium text-white">Как считаются лимиты</h2>
           <dl className="mt-4 space-y-3 text-[13px]">

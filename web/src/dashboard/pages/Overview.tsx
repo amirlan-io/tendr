@@ -93,7 +93,7 @@ export function OverviewPage() {
     <div>
       <div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-emerald-400">
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-white/35">
             Рабочий стол
           </p>
           <h1 className="mt-3 text-3xl font-medium tracking-[-.045em] text-white sm:text-[42px]">

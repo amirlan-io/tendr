@@ -48,7 +48,7 @@ export function DocumentsPage() {
 
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-emerald-400">
+      <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-white/35">
         Файлы
       </p>
       <h1 className="mt-3 text-3xl font-medium tracking-[-.045em] text-white">Документы</h1>
@@ -63,7 +63,7 @@ export function DocumentsPage() {
         </p>
       )}
 
-      <section aria-label="Скачанные документы" className="mt-8 overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0a1115]/90">
+      <section aria-label="Скачанные документы" className="mt-8 overflow-hidden rounded-xl border border-white/[0.075] bg-[#121213]/90">
         <div className="border-b border-white/[0.07] px-5 py-5 sm:px-6">
           <p className="text-sm font-medium text-white">Подготовленные документы</p>
           <p className="mt-1 text-xs text-white/30">Файлы, которые вы уже скачали</p>
@@ -102,7 +102,7 @@ export function DocumentsPage() {
         )}
       </section>
 
-      <section aria-label="Доступно для скачивания" className="mt-4 overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0a1115]/90">
+      <section aria-label="Доступно для скачивания" className="mt-4 overflow-hidden rounded-xl border border-white/[0.075] bg-[#121213]/90">
         <div className="border-b border-white/[0.07] px-5 py-5 sm:px-6">
           <p className="text-sm font-medium text-white">Доступно из анализов</p>
           <p className="mt-1 text-xs text-white/30">Отчёты формируются сервером по данным анализа</p>

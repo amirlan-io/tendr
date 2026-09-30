@@ -15,13 +15,13 @@ export function UsageCard({ tariffName, limit, used, remaining, renewsAt }: Prop
   return (
     <section
       aria-label="Текущий тариф"
-      className="relative overflow-hidden rounded-[24px] border border-emerald-400/15 bg-emerald-400/[0.045] p-6"
+      className="relative overflow-hidden rounded-xl border border-white/[0.075] bg-[#121213]/90 p-6"
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-emerald-400/10 blur-3xl"
+        className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-white/[0.035] blur-3xl"
       />
-      <p className="relative text-[9px] font-semibold uppercase tracking-[.16em] text-emerald-300">
+      <p className="relative text-[9px] font-semibold uppercase tracking-[.16em] text-white/38">
         Текущий тариф
       </p>
       <div className="relative mt-4 flex items-start justify-between gap-3">
@@ -43,7 +43,7 @@ export function UsageCard({ tariffName, limit, used, remaining, renewsAt }: Prop
         </div>
         <Link
           to="/dashboard/billing"
-          className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-emerald-300 hover:text-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
+          className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-white/45 hover:bg-white/[0.045] hover:text-white/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60"
         >
           Тарифы
         </Link>

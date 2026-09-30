@@ -468,6 +468,10 @@ html.dark .lava-background {
     .final-signal h2 { @apply mt-5 text-4xl font-medium leading-[1.02] tracking-[-.05em] sm:text-6xl; }
     .final-signal p { @apply mx-auto mt-5 max-w-lg text-sm leading-7 text-[var(--text-muted)]; }
     .final-signal a { @apply mt-8; }
+
+    /* Кабинет использует строгую чёрно-графитовую оболочку; цвет остаётся только у статусов. */
+    .dashboard-shell .button-primary { @apply bg-white text-[#111112] shadow-none hover:bg-white/90 focus-visible:outline-white; }
+    .dashboard-shell .button-secondary { @apply border-white/[0.08] bg-white/[0.035] shadow-none hover:border-white/[0.14] hover:bg-white/[0.06] focus-visible:outline-white; }
 }
 
 @media (max-width: 639px) {

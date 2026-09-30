@@ -1,11 +1,12 @@
+import { Menu, PanelLeftClose, PanelLeftOpen, Plus, Search } from "lucide-react";
 import { Link } from "react-router-dom";
-import { DashboardIcon } from "./DashboardIcon";
 
 type Props = {
   title: string;
   breadcrumb: string[];
   initials: string;
   onOpenMobile: () => void;
+  onOpenSearch: () => void;
   onToggleCollapse: () => void;
   collapsed: boolean;
 };
@@ -15,31 +16,36 @@ export function DashboardHeader({
   breadcrumb,
   initials,
   onOpenMobile,
+  onOpenSearch,
   onToggleCollapse,
   collapsed,
 }: Props) {
   return (
-    <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-white/[0.07] bg-[#060b0e]/80 px-4 backdrop-blur-xl sm:px-7">
+    <header className="sticky top-0 z-30 flex h-[58px] items-center justify-between border-b border-white/[0.065] bg-[#111112]/95 px-4 backdrop-blur-xl sm:px-5">
       <div className="flex min-w-0 items-center gap-3">
         <button
           aria-label="Открыть меню"
           onClick={onOpenMobile}
-          className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-2.5 text-white/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 lg:hidden"
+          className="rounded-[7px] p-2 text-white/45 transition-colors hover:bg-white/[0.055] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60 lg:hidden"
         >
-          <DashboardIcon name="menu" />
+          <Menu aria-hidden className="h-[17px] w-[17px]" strokeWidth={1.6} />
         </button>
         <button
           aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"}
           onClick={onToggleCollapse}
-          className="hidden rounded-xl border border-white/[0.08] bg-white/[0.025] p-2.5 text-white/45 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 lg:block"
+          className="hidden rounded-[7px] p-2 text-white/35 transition-colors hover:bg-white/[0.055] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60 lg:block"
         >
-          <DashboardIcon name="menu" />
+          {collapsed ? (
+            <PanelLeftOpen aria-hidden className="h-[17px] w-[17px]" strokeWidth={1.55} />
+          ) : (
+            <PanelLeftClose aria-hidden className="h-[17px] w-[17px]" strokeWidth={1.55} />
+          )}
         </button>
-        <nav aria-label="Хлебные крошки" className="hidden min-w-0 items-center gap-2 text-xs sm:flex">
+        <nav aria-label="Хлебные крошки" className="hidden min-w-0 items-center gap-2 text-[12px] sm:flex">
           {breadcrumb.map((crumb, i) => (
             <span key={crumb} className="flex shrink-0 items-center gap-2">
               {i > 0 && <span className="text-white/15">/</span>}
-              <span className={i === breadcrumb.length - 1 ? "font-medium text-white/75" : "text-white/30"}>
+              <span className={i === breadcrumb.length - 1 ? "font-medium text-white/85" : "text-white/30"}>
                 {crumb}
               </span>
             </span>
@@ -47,20 +53,31 @@ export function DashboardHeader({
         </nav>
         <h1 className="truncate text-sm font-semibold text-white sm:hidden">{title}</h1>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Открыть поиск"
+          onClick={onOpenSearch}
+          className="hidden h-9 w-[clamp(160px,22vw,260px)] items-center gap-2 rounded-[7px] border border-white/[0.045] bg-white/[0.035] px-3 text-left text-[11px] text-white/25 transition-colors hover:border-white/[0.09] hover:bg-white/[0.055] hover:text-white/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60 md:flex"
+        >
+          <Search aria-hidden className="h-3.5 w-3.5" strokeWidth={1.6} />
+          <span className="flex-1">Найти раздел</span>
+          <kbd className="font-mono text-[9px] text-white/18">Ctrl K</kbd>
+        </button>
         <Link
           to="/dashboard/analyze"
-          className="hidden items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-semibold text-[#03110b] transition hover:bg-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 sm:inline-flex"
+          className="hidden h-9 items-center gap-2 rounded-[7px] bg-white px-3.5 text-[11px] font-semibold text-[#111112] transition hover:bg-white/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:inline-flex"
         >
-          <DashboardIcon name="plus" />
+          <Plus aria-hidden className="h-3.5 w-3.5" strokeWidth={1.8} />
           Новый анализ
         </Link>
-        <div
+        <Link
+          to="/dashboard/settings"
           aria-label="Профиль пользователя"
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/[0.07] text-xs font-semibold text-emerald-300"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.11] bg-white/[0.055] text-[10px] font-semibold text-white/75 transition-colors hover:bg-white/[0.09] hover:text-white"
         >
           {initials}
-        </div>
+        </Link>
       </div>
     </header>
   );
