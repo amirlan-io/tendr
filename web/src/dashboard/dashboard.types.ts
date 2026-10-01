@@ -77,5 +77,6 @@ export type NavItem = {
     | "docs"
     | "briefcase"
     | "billing"
+    | "suppliers"
     | "settings";
 };

@@ -34,6 +34,7 @@ dependencies = [
     "loguru>=0.7",
     # Утилиты
     "python-dotenv>=1.0",
+    "tzdata>=2024.1",           # IANA timezone database for Windows
 ]
 
 [project.optional-dependencies]

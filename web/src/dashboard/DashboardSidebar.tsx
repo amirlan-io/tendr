@@ -16,10 +16,23 @@ type Props = {
   onSignOut: () => void;
 };
 
-const PRIMARY_NAV = DASHBOARD_NAV.slice(0, 3);
-const WORKSPACE_NAV = DASHBOARD_NAV.slice(3, 6);
-const BILLING_NAV = DASHBOARD_NAV.slice(6, 7);
-const SETTINGS_ITEM = DASHBOARD_NAV.find((item) => item.to === "/dashboard/settings");
+// Группы заданы маршрутами, а не индексами: добавление нового пункта
+// в DASHBOARD_NAV не должно молча сдвигать остальные разделы.
+const NAV_BY_ROUTE = new Map(DASHBOARD_NAV.map((item) => [item.to, item]));
+
+function navByRoute(...routes: string[]): NavItem[] {
+  return routes.map((route) => NAV_BY_ROUTE.get(route)).filter((item): item is NavItem => Boolean(item));
+}
+
+const PRIMARY_NAV = navByRoute("/dashboard", "/dashboard/analyze", "/dashboard/lots");
+const WORKSPACE_NAV = navByRoute(
+  "/dashboard/suppliers",
+  "/dashboard/history",
+  "/dashboard/documents",
+  "/dashboard/b2g",
+);
+const BILLING_NAV = navByRoute("/dashboard/billing");
+const SETTINGS_ITEM = NAV_BY_ROUTE.get("/dashboard/settings");
 
 function NavigationGroup({
   label,

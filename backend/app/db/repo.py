@@ -5,10 +5,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 import uuid
 
+from loguru import logger
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -445,12 +446,18 @@ async def push_history(
             - overall_risk (str, опционально)
             - n_requirements (int, опционально)
             - n_red_flags (int, опционально)
+            - result_json (dict, опционально) — полный результат анализа;
+              без него запись содержит только метаданные и не годится
+              для генерации документов и подбора поставщиков
 
     Returns:
         Созданная Analysis или None, если не удалось сохранить.
     """
     try:
         lot_id = str(entry.get("lot_id") or "unknown")
+        # Полный результат анализа. Без него result_json остаётся заглушкой
+        # без требований ТЗ, и от него зависят /download и агент поставщиков.
+        full_result = _json_safe(entry.get("result_json"))
         # Не создаём дубли — просто обновим существующую запись если она есть
         existing = await get_analysis_by_lot(session, user_id, lot_id)
         if existing:
@@ -471,6 +478,8 @@ async def push_history(
                     existing.n_red_flags = int(entry["n_red_flags"])
                 except (TypeError, ValueError):
                     pass
+            if isinstance(full_result, dict) and full_result:
+                existing.result_json = full_result
             await session.flush()
             return existing
 
@@ -479,20 +488,47 @@ async def push_history(
             lot_id=lot_id,
             source_url=entry.get("url"),
             title=(entry.get("title") or "")[:500],
-            customer="",
-            method="other",
-            result_json=entry,
+            customer=str((full_result or {}).get("lot", {}).get("customer") or "")[:500],
+            method=str((full_result or {}).get("lot", {}).get("method") or "other"),
+            budget_kzt=(full_result or {}).get("lot", {}).get("budget_kzt"),
+            result_json=full_result if isinstance(full_result, dict) and full_result else entry,
             n_requirements=int(entry.get("n_requirements") or 0),
             n_red_flags=int(entry.get("n_red_flags") or 0),
             overall_risk=str(entry.get("overall_risk") or "needs_review"),
-            incomplete=False,
+            incomplete=bool((full_result or {}).get("incomplete", False)),
         )
         session.add(analysis)
         await session.flush()
         return analysis
-    except Exception:
+    except Exception as exc:
         # Не падать при ошибке логирования — это вспомогательная операция.
+        # Но молчать нельзя: именно из-за молчания терялись результаты
+        # анализа, и скачивание документов отдавало 404.
+        logger.warning("history push failed for lot {}: {}", lot_id, exc)
         return None
+
+
+def _json_safe(value: Any) -> dict[str, Any] | None:
+    """Привести структуру к JSON-совместимому виду.
+
+    В полном результате анализа есть datetime/date, которые JSONB не
+    принимает («Object of type datetime is not JSON serializable»).
+    """
+    if not isinstance(value, dict):
+        return None
+
+    def _convert(item: Any) -> Any:
+        if isinstance(item, datetime):
+            return item.isoformat()
+        if isinstance(item, date):
+            return item.isoformat()
+        if isinstance(item, dict):
+            return {str(k): _convert(v) for k, v in item.items()}
+        if isinstance(item, (list, tuple)):
+            return [_convert(v) for v in item]
+        return item
+
+    return {str(k): _convert(v) for k, v in value.items()}
 
 
 async def record_payment(

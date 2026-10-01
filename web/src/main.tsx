@@ -21,6 +21,7 @@ import { OverviewPage } from "./dashboard/pages/Overview";
 import { BillingPage } from "./dashboard/pages/Billing";
 import { SettingsPage } from "./dashboard/pages/Settings";
 import { DocumentsPage } from "./dashboard/pages/Documents";
+import { SuppliersPage } from "./dashboard/pages/Suppliers";
 
 // Сразу создаём client_id при загрузке.
 // Контролируемая ошибка (нет Web Crypto) не должна ронять старт приложения.
@@ -62,6 +63,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="lots" element={<LotsPage embedded />} />
             <Route path="history" element={<HistoryPage embedded />} />
             <Route path="documents" element={<DocumentsPage />} />
+                        <Route path="suppliers" element={<SuppliersPage />} />
             <Route path="b2g" element={<B2GPage embedded />} />
             <Route path="billing" element={<BillingPage />} />
             <Route path="settings" element={<SettingsPage />} />
