@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 def _normalize_csv(value: str) -> list[str]:
@@ -26,7 +30,9 @@ def _normalize_csv(value: str) -> list[str]:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Не зависит от cwd: ключ Goszakup загружается и при запуске из корня,
+        # и при запуске непосредственно из backend/.
+        env_file=str(_BACKEND_ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -136,6 +142,26 @@ class Settings(BaseSettings):
             if parts.path not in {"", "/"} or parts.query or parts.fragment:
                 raise ValueError("Allowed frontend origins must not include path, query or fragment")
         return ",".join(origins)
+
+    @field_validator("goszakup_api_url")
+    @classmethod
+    def validate_goszakup_api_url(cls, value: str) -> str:
+        """Не позволяет передать секретный API-токен на посторонний хост."""
+        normalized = value.strip().rstrip("/")
+        parts = urlsplit(normalized)
+        if (
+            parts.scheme != "https"
+            or parts.hostname != "ows.goszakup.gov.kz"
+            or parts.username
+            or parts.password
+            or parts.port not in {None, 443}
+            or parts.query
+            or parts.fragment
+        ):
+            raise ValueError("Goszakup API URL must use the official HTTPS host")
+        if not parts.path.startswith(("/v2", "/v3")):
+            raise ValueError("Goszakup API URL must point to a supported API version")
+        return normalized
 
     @model_validator(mode="after")
     def validate_runtime_security(self) -> "Settings":
