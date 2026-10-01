@@ -7,9 +7,8 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 _BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
@@ -102,6 +101,13 @@ class Settings(BaseSettings):
 
     # === Browser Use (облачный браузерный агент) ===
     browser_use_api_key: str = ""
+    # V4 (рекомендованный API). Значения по умолчанию — из документации.
+    browser_use_base_url: str = "https://api.browser-use.com/api/v4"
+    browser_use_model: str = "gpt-5.6-luna"
+    # Потолок стоимости одного запуска агента в USD. Клиент дополнительно
+    # ограничивает значение жёстким пределом, поэтому опечатка в .env
+    # не превратится в неограниченный счёт.
+    browser_use_max_cost_usd: float = 1.0
 
     # === Freemium ===
     free_tier_applications_per_month: int = 3
@@ -164,7 +170,7 @@ class Settings(BaseSettings):
         return normalized
 
     @model_validator(mode="after")
-    def validate_runtime_security(self) -> "Settings":
+    def validate_runtime_security(self) -> Settings:
         if self.app_env == "prod":
             hosts = self.allowed_hosts_list
             origins = self.allowed_frontend_origins_list
