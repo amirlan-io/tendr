@@ -163,8 +163,12 @@ describe("LotsPage: честный mock/demo-режим", () => {
     await userEvent.click(screen.getByRole("button", { name: /найти лоты/i }));
 
     await waitFor(() => expect(searchBody).not.toBeNull());
-    expect(searchBody?.min_amount_kzt).toBe(0);
-    expect(searchBody?.max_amount_kzt).toBe(1_000_000_000);
+    // Присваивание происходит внутри колбэка fetch, поэтому TypeScript
+    // не видит его и сужает переменную до null. Обёртка-функция снимает
+    // это сужение, сохраняя проверку на undefined на момент использования.
+    const capturedBody = (): Record<string, unknown> | null => searchBody;
+    expect(capturedBody()?.min_amount_kzt).toBe(0);
+    expect(capturedBody()?.max_amount_kzt).toBe(1_000_000_000);
   });
 });
 
