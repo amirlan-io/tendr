@@ -266,7 +266,10 @@ async def search_lots(
     # Реальный токен — не mock-заглушка
     is_mock = not api_token or api_token.startswith("mock")
 
-    aggregator = LotAggregator(api_token=api_token)
+    aggregator = LotAggregator(
+        api_token=api_token,
+        api_url=settings.goszakup_api_url,
+    )
     parsed_lots = await aggregator.get_lots(
         query=req.query,
         region=req.region,
@@ -279,6 +282,12 @@ async def search_lots(
         only_with_amount=req.only_with_amount,
         use_graphql=req.use_graphql,
         limit=req.limit,
+    )
+
+    # Если официальный API недоступен и parser перешёл на demo fallback,
+    # нельзя маркировать эти записи как реальные только из-за наличия токена.
+    is_mock = is_mock or any(
+        str(lot.source_id).startswith("demo-") for lot in parsed_lots
     )
 
 

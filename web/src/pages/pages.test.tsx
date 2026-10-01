@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { HistoryPage } from "./History";
@@ -134,6 +134,37 @@ describe("LotsPage: честный mock/demo-режим", () => {
       expect(screen.getByText(/найдено:/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/демо-режим/i)).not.toBeInTheDocument();
+  });
+
+  it("в dashboard автоматически загружает актуальные лоты", async () => {
+    mockSearch(false);
+    renderWithRouter(<LotsPage embedded />);
+    expect(await screen.findByText(/найдено:/i)).toBeInTheDocument();
+    expect(screen.queryByText(/демо-режим/i)).not.toBeInTheDocument();
+  });
+
+  it("передаёт выбранный histogram-диапазон в поиск в тенге", async () => {
+    let searchBody: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        searchBody = JSON.parse(String(init?.body || "{}"));
+        return new Response(
+          JSON.stringify({ lots: [], total: 0, source: "zakup.gov.kz", is_mock: false }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    renderWithRouter(<LotsPage />);
+    fireEvent.change(screen.getByLabelText("Максимальная сумма лота"), {
+      target: { value: "1000000000" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: /найти лоты/i }));
+
+    await waitFor(() => expect(searchBody).not.toBeNull());
+    expect(searchBody?.min_amount_kzt).toBe(0);
+    expect(searchBody?.max_amount_kzt).toBe(1_000_000_000);
   });
 });
 
