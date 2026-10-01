@@ -523,6 +523,8 @@ class SupplierAgent(Agent):
             candidate.is_middleman = candidate.domain in MIDDLEMAN_DOMAINS
             candidate.warnings = build_warnings(candidate, requirements)
 
+        return costs
+
     # ── Оркестрация ──────────────────────────────────────────────────
     async def run(
         self,

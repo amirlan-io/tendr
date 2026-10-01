@@ -213,6 +213,18 @@ class OutreachAgent(Agent):
         self.tools = agent_toolset()
         self.forbidden_tools = FORBIDDEN_AGENT_TOOLS
 
+    async def run(self, kind: str = "email", **kwargs) -> dict[str, Any]:
+        """Точка входа агента (контракт Agent.run).
+
+        kind: ``email`` — черновик письма, ``call`` — план звонка.
+        Остальные аргументы передаются в соответствующий метод без изменений.
+        """
+        if kind == "call":
+            plan = await self.draft_call_plan(**kwargs)
+            return {"call_plan": plan}
+        draft = await self.draft_email(**kwargs)
+        return {"email": draft}
+
     async def draft_email(
         self,
         *,

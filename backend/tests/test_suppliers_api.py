@@ -332,6 +332,105 @@ def test_supplier_agent_is_instantiable() -> None:
     assert Requirement(code="1", title="Фильтр").is_mandatory is False
 
 
+@pytest.mark.asyncio
+async def test_outreach_agent_is_instantiable() -> None:
+    """Та же проверка для OutreachAgent: он тоже наследует Agent."""
+    from app.agents.outreach_agent import CompanyContacts, OutreachAgent
+
+    agent = OutreachAgent()
+    agent._chat_json = _fake_email_chat  # type: ignore[method-assign]
+
+    # run() маршрутизирует в нужный метод и не отправляет ничего.
+    out = await agent.run(
+        kind="email",
+        supplier_name="ТОО Тест",
+        lot_title="Вал карданный",
+        requirements=["Вал карданный"],
+        contacts=CompanyContacts(company_name="ТОО Проверка"),
+    )
+    assert "email" in out
+    assert out["email"]["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_outreach_agent_run_call_plan() -> None:
+    from app.agents.outreach_agent import CompanyContacts, OutreachAgent
+
+    agent = OutreachAgent()
+    agent._chat_json = _fake_call_chat  # type: ignore[method-assign]
+    out = await agent.run(
+        kind="call",
+        supplier_name="ТОО Тест",
+        lot_title="Вал карданный",
+        requirements=["Вал карданный"],
+        contacts=CompanyContacts(company_name="ТОО Проверка"),
+    )
+    assert "call_plan" in out
+    plan = out["call_plan"]
+    # Красные линии дополняются запретом на обязательства (F6).
+    assert any("Не соглашаться на цену" in line for line in plan["red_lines"])
+    # AI представляется и называет компанию.
+    assert "Проверка" in plan["introduction"]
+
+
+async def _fake_email_chat(*_args, **_kwargs):
+    return {
+        "email": {
+            "subject": "Запрос по закупке",
+            "body": "Здравствуйте! Интересует поставка. Цена и наличие?",
+        }
+    }
+
+
+async def _fake_call_chat(*_args, **_kwargs):
+    return {
+        "call_plan": {
+            "goal": "Уточнить цену и наличие",
+            "questions": ["Какова цена за единицу?"],
+            "red_lines": [],
+            "exit_script": "Спасибо, перезвоним.",
+            "introduction": "",
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_match_requirements_returns_costs() -> None:
+    """Функция обязана возвращать Costs, а не None.
+
+    Без return в конце поиск падал на реальном прогоне:
+    «'NoneType' object has no attribute 'llm_usd'».
+    """
+    from app.agents.supplier_agent import Costs, Requirement, SupplierCandidate, SupplierAgent
+
+    agent = SupplierAgent()
+    agent._chat_json = _fake_chat  # type: ignore[method-assign]
+    candidate = SupplierCandidate(
+        supplier="ТОО Тест", domain="test.kz", title="Вал карданный", url="https://test.kz/x"
+    )
+    costs = await agent.match_requirements(
+        [candidate], [Requirement(code="1", title="Вал карданный", is_mandatory=True)]
+    )
+    assert isinstance(costs, Costs)
+    assert costs.llm_usd > 0
+    # Пункт, о котором LLM не сказал, честно помечен как «нет данных».
+    assert candidate.requirement_matches[0]["status"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_match_requirements_empty_shortcut() -> None:
+    from app.agents.supplier_agent import Costs, SupplierCandidate, SupplierAgent
+
+    agent = SupplierAgent()
+    candidate = SupplierCandidate(supplier="X", domain="x.kz", title="T")
+    costs = await agent.match_requirements([candidate], [])
+    assert isinstance(costs, Costs)
+
+
+async def _fake_chat(*_args, **_kwargs):
+    return {"requirement_matches": []}
+
+
 def test_requirements_parser_skips_empty_results() -> None:
     from app.api.suppliers import _requirements_from_analysis
 
