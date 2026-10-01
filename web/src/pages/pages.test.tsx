@@ -163,8 +163,43 @@ describe("LotsPage: честный mock/demo-режим", () => {
     await userEvent.click(screen.getByRole("button", { name: /найти лоты/i }));
 
     await waitFor(() => expect(searchBody).not.toBeNull());
-    expect(searchBody?.min_amount_kzt).toBe(0);
-    expect(searchBody?.max_amount_kzt).toBe(1_000_000_000);
+    expect(searchBody).toEqual(
+      expect.objectContaining({
+        min_amount_kzt: 0,
+        max_amount_kzt: 1_000_000_000,
+      }),
+    );
+  });
+
+  it("по умолчанию запрашивает только актуальные лоты и умеет открыть архив", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body || "{}")));
+        return new Response(
+          JSON.stringify({
+            lots: [],
+            total: 0,
+            source: "zakup.gov.kz",
+            is_mock: false,
+            has_more: false,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+
+    renderWithRouter(<LotsPage />);
+    await userEvent.click(screen.getByRole("button", { name: /найти лоты/i }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toEqual(expect.objectContaining({ status: "active", limit: 20 }));
+    expect(bodies[0].published_from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    await userEvent.click(screen.getByLabelText("Архив"));
+    await userEvent.click(screen.getByRole("button", { name: /найти лоты/i }));
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1]).toEqual(expect.objectContaining({ status: "archive" }));
   });
 });
 

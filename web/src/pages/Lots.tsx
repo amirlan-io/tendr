@@ -54,18 +54,42 @@ type SearchResult = {
   total: number;
   source: string;
   is_mock: boolean;
+  next_cursor?: number | null;
+  has_more?: boolean;
+  total_is_exact?: boolean;
+  fetched_at?: string;
+  last_updated_at?: string;
+  scope?: "active" | "published" | "offers" | "archive" | "all";
 };
 
 type SortMode = "amount_desc" | "amount_asc" | "deadline";
+type StatusMode = "active" | "published" | "offers" | "archive";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const CACHE_PREFIX = "lots_cache:v4:";
+// v5 invalidates empty V2-search results cached before global V3 search.
+const CACHE_PREFIX = "lots_cache:v6:";
 const PRICE_MAX = 49_500_000_000;
 const PRICE_STEP = 50_000_000;
 const LOT_TYPES = [
   { value: "товар", label: "Товар", icon: Package },
   { value: "услуга", label: "Услуга", icon: BriefcaseBusiness },
   { value: "работа", label: "Работа", icon: Wrench },
+] as const;
+const REGIONS = [
+  ["10", "область Абай"], ["11", "Акмолинская область"],
+  ["15", "Актюбинская область"], ["19", "Алматинская область"],
+  ["23", "Атырауская область"], ["27", "Западно-Казахстанская область"],
+  ["31", "Жамбылская область"], ["33", "область Жетысу"],
+  ["35", "Карагандинская область"], ["39", "Костанайская область"],
+  ["43", "Кызылординская область"], ["47", "Мангистауская область"],
+  ["55", "Павлодарская область"], ["59", "Северо-Казахстанская область"],
+  ["61", "Туркестанская область"], ["62", "область Улытау"],
+  ["63", "Восточно-Казахстанская область"], ["71", "Астана"],
+  ["75", "Алматы"], ["79", "Шымкент"],
+] as const;
+const PROCUREMENT_METHODS = [
+  ["3", "Запрос ценовых предложений"],
+  ["6", "Из одного источника по несостоявшимся закупкам"],
 ] as const;
 const HISTOGRAM_BARS = [
   100, 84, 73, 64, 57, 51, 46, 42, 38, 35, 32, 30, 28, 26, 24, 23, 21,
@@ -104,6 +128,10 @@ function buildCacheKey(req: {
   min_amount_kzt: number;
   max_amount_kzt: number;
   only_urgent: boolean;
+  status: string;
+  procurement_method_ids: number[];
+  published_from?: string;
+  cursor?: number;
   limit: number;
 }): string {
   return [
@@ -114,6 +142,10 @@ function buildCacheKey(req: {
     req.min_amount_kzt,
     req.max_amount_kzt,
     req.only_urgent ? 1 : 0,
+    req.status,
+    req.procurement_method_ids.join(","),
+    req.published_from,
+    req.cursor,
     req.limit,
   ].join("|");
 }
@@ -145,11 +177,16 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("");
   const [category, setCategory] = useState("");
+  const [status, setStatus] = useState<StatusMode>("active");
+  const [procurementMethod, setProcurementMethod] = useState("");
+  const [publicationDays, setPublicationDays] = useState("30");
   const [customerBin, setCustomerBin] = useState("");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, PRICE_MAX]);
   const [onlyUrgent, setOnlyUrgent] = useState(false);
   const [withAi, setWithAi] = useState(false);
   const [sort, setSort] = useState<SortMode>("amount_desc");
+  const [currentCursor, setCurrentCursor] = useState<number | null>(null);
+  const [cursorHistory, setCursorHistory] = useState<Array<number | null>>([]);
   const [partnershipLot, setPartnershipLot] = useState<Lot | null>(null);
   const [partnershipRole, setPartnershipRole] = useState<
     "supplier" | "investor" | "applicant" | "partner"
@@ -161,21 +198,32 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
     text: string;
   } | null>(null);
 
-  const search = async () => {
+  const search = async (cursor: number | null = null, resetPagination = false) => {
     setLoading(true);
     setError(null);
+    const publishedFrom = publicationDays
+      ? new Date(Date.now() - Number(publicationDays) * 86_400_000)
+          .toISOString()
+          .slice(0, 10)
+      : undefined;
     const requestBody = {
       query,
       region,
       category,
+      status,
+      procurement_method_ids: procurementMethod ? [Number(procurementMethod)] : [],
+      published_from: publishedFrom,
       customer_bin: customerBin,
       min_amount_kzt: priceRange[0],
       max_amount_kzt: priceRange[1] >= PRICE_MAX ? 0 : priceRange[1],
       only_urgent: onlyUrgent,
       with_ai: withAi,
       ai_limit: withAi ? 3 : 0,
-      limit: 50,
+      cursor: cursor ?? undefined,
+      limit: 20,
     };
+    if (resetPagination) setCursorHistory([]);
+    setCurrentCursor(cursor);
     const cacheKey = buildCacheKey(requestBody);
     const cached = getCachedSearch(cacheKey);
     if (cached) {
@@ -233,10 +281,29 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
     setQuery("");
     setRegion("");
     setCategory("");
+    setStatus("active");
+    setProcurementMethod("");
+    setPublicationDays("30");
     setCustomerBin("");
     setPriceRange([0, PRICE_MAX]);
     setOnlyUrgent(false);
     setWithAi(false);
+    setCurrentCursor(null);
+    setCursorHistory([]);
+  };
+
+  const goToNextPage = () => {
+    const nextCursor = result?.next_cursor;
+    if (!nextCursor) return;
+    setCursorHistory((history) => [...history, currentCursor]);
+    void search(nextCursor);
+  };
+
+  const goToPreviousPage = () => {
+    if (!cursorHistory.length) return;
+    const previousCursor = cursorHistory[cursorHistory.length - 1] ?? null;
+    setCursorHistory((history) => history.slice(0, -1));
+    void search(previousCursor);
   };
 
   const clearCache = () => {
@@ -325,12 +392,12 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
             : "page-container py-8 sm:py-12"
         }
       >
-        <section className="overflow-hidden border border-white/[0.09] bg-[#0a0d0f]/95 shadow-[0_32px_100px_-55px_rgba(0,0,0,.95)] sm:rounded-[26px]">
+        <section className="overflow-hidden border border-white/[0.075] bg-[#0a0a0b] shadow-[0_32px_100px_-55px_rgba(0,0,0,.95)] sm:rounded-[18px]">
           <div className="grid min-h-[760px] lg:grid-cols-[286px_minmax(0,1fr)]">
-            <aside className="border-b border-white/[0.08] bg-[#101314] lg:border-b-0 lg:border-r">
+            <aside className="border-b border-white/[0.065] bg-[#111112] lg:border-b-0 lg:border-r">
               <div className="flex h-[68px] items-center justify-between border-b border-white/[0.08] px-5">
                 <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                  <SlidersHorizontal className="h-4 w-4 text-emerald-400" />
+                  <SlidersHorizontal className="h-4 w-4 text-white/55" />
                   Фильтры
                 </div>
                 <button
@@ -357,7 +424,7 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                           key={type.value}
                           className={`flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm transition ${
                             checked
-                              ? "bg-emerald-400/[0.08] text-emerald-300"
+                              ? "bg-white/[0.07] text-white"
                               : "text-white/58 hover:bg-white/[0.035] hover:text-white"
                           }`}
                         >
@@ -365,7 +432,7 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                             type="checkbox"
                             checked={checked}
                             onChange={() => setCategory(checked ? "" : type.value)}
-                            className="h-4 w-4 rounded border-white/20 bg-black/20 accent-emerald-400"
+                            className="h-4 w-4 rounded border-white/20 bg-black/20 accent-white"
                           />
                           <TypeIcon className="h-4 w-4" strokeWidth={1.7} />
                           <span className="flex-1">{type.label}</span>
@@ -380,21 +447,75 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
 
                 <div className="space-y-1 border-y border-white/[0.07] py-3">
                   <FilterDisclosure title="Статус">
-                    <label className="flex items-center gap-2 px-2 pb-2 text-xs text-white/50">
-                      <input type="checkbox" checked readOnly className="accent-emerald-400" />
-                      Опубликованные лоты
-                    </label>
+                    <div className="space-y-1 px-2 pb-2">
+                      {([
+                        ["active", "Актуальные"],
+                        ["published", "Приём заявок"],
+                        ["offers", "Приём ценовых предложений"],
+                        ["archive", "Архив"],
+                      ] as const).map(([value, label]) => (
+                        <label key={value} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-white/55 hover:bg-white/[0.035] hover:text-white">
+                          <input
+                            type="radio"
+                            name="lot-status"
+                            value={value}
+                            checked={status === value}
+                            onChange={() => setStatus(value)}
+                            className="accent-white"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
                   </FilterDisclosure>
                   <FilterDisclosure title="Метод закупки">
-                    <p className="px-2 pb-2 text-xs leading-5 text-white/38">
-                      Все официальные методы закупки
-                    </p>
+                    <div className="px-2 pb-2">
+                      <select
+                        value={procurementMethod}
+                        onChange={(event) => setProcurementMethod(event.target.value)}
+                        aria-label="Метод закупки"
+                        className="h-9 w-full rounded-lg border border-white/[0.09] bg-[#171718] px-2 text-xs text-white/70 outline-none"
+                      >
+                        <option value="">Все методы</option>
+                        {PROCUREMENT_METHODS.map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </FilterDisclosure>
                   <FilterDisclosure title="Регионы">
-                    <p className="px-2 pb-2 text-xs leading-5 text-white/38">
-                      Фильтр KATO будет подключён отдельно
-                    </p>
+                    <div className="px-2 pb-2">
+                      <select
+                        value={region}
+                        onChange={(event) => setRegion(event.target.value)}
+                        aria-label="Регион поставки"
+                        className="h-9 w-full rounded-lg border border-white/[0.09] bg-[#171718] px-2 text-xs text-white/70 outline-none"
+                      >
+                        <option value="">Все регионы</option>
+                        {REGIONS.map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </FilterDisclosure>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.17em] text-white/35">
+                    Дата публикации
+                  </label>
+                  <select
+                    value={publicationDays}
+                    onChange={(event) => setPublicationDays(event.target.value)}
+                    aria-label="Дата публикации"
+                    className="h-10 w-full rounded-xl border border-white/[0.09] bg-[#171718] px-3 text-xs text-white/70 outline-none"
+                  >
+                    <option value="7">За последние 7 дней</option>
+                    <option value="30">За последние 30 дней</option>
+                    <option value="90">За последние 90 дней</option>
+                    <option value="365">За последний год</option>
+                    <option value="">За всё время</option>
+                  </select>
                 </div>
 
                 <PriceHistogramSlider value={priceRange} onChange={setPriceRange} />
@@ -408,7 +529,7 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                     onChange={(event) => setCustomerBin(event.target.value.replace(/\D/g, ""))}
                     maxLength={12}
                     placeholder="12 цифр"
-                    className="h-10 w-full rounded-xl border border-white/[0.09] bg-black/20 px-3 font-mono text-xs text-white outline-none transition placeholder:text-white/20 focus:border-emerald-400/35"
+                    className="h-10 w-full rounded-xl border border-white/[0.09] bg-black/20 px-3 font-mono text-xs text-white outline-none transition placeholder:text-white/20 focus:border-white/25 focus:ring-4 focus:ring-white/[0.035]"
                   />
                 </div>
 
@@ -427,9 +548,9 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
 
                 <button
                   type="button"
-                  onClick={() => void search()}
+                  onClick={() => void search(null, true)}
                   disabled={loading}
-                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 text-sm font-semibold text-[#04120d] shadow-[0_14px_32px_-16px_rgba(52,211,153,.8)] transition hover:bg-emerald-300 disabled:cursor-wait disabled:opacity-50"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#f2f2f2] text-sm font-semibold text-[#111112] shadow-[0_12px_28px_-18px_rgba(255,255,255,.5)] transition hover:bg-white disabled:cursor-wait disabled:opacity-50"
                 >
                   <Search className="h-4 w-4" />
                   {loading ? "Ищем лоты…" : "Найти лоты"}
@@ -437,7 +558,7 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
               </div>
             </aside>
 
-            <div className="min-w-0 bg-[#080b0d]">
+            <div className="min-w-0 bg-[#0d0d0e]">
               <div className="flex min-h-[68px] flex-col gap-3 border-b border-white/[0.08] px-4 py-3 sm:flex-row sm:items-center sm:px-6">
                 <div className="relative min-w-0 flex-1 sm:max-w-[520px]">
                   <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
@@ -449,7 +570,7 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                     }}
                     placeholder="Поиск по названию или точному номеру лота"
                     aria-label="Ключевые слова поиска"
-                    className="h-11 w-full rounded-xl border border-white/[0.11] bg-[#111416] pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/33 focus:border-emerald-400/35 focus:ring-4 focus:ring-emerald-400/[0.06]"
+                    className="h-11 w-full rounded-xl border border-white/[0.09] bg-[#151516] pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/33 focus:border-white/25 focus:ring-4 focus:ring-white/[0.035]"
                   />
                 </div>
                 <div className="relative sm:ml-auto">
@@ -457,7 +578,7 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                   <select
                     value={sort}
                     onChange={(event) => setSort(event.target.value as SortMode)}
-                    className="h-11 min-w-48 appearance-none rounded-xl border border-white/[0.11] bg-[#111416] pl-10 pr-9 text-sm text-white/75 outline-none"
+                    className="h-11 min-w-48 appearance-none rounded-xl border border-white/[0.09] bg-[#151516] pl-10 pr-9 text-sm text-white/75 outline-none focus:border-white/25"
                   >
                     <option value="amount_desc">Сначала крупные</option>
                     <option value="amount_asc">Сначала небольшие</option>
@@ -469,13 +590,24 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
 
               <div className="p-4 sm:p-6">
                 <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1.5 text-xs text-emerald-300">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]" />
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.035] px-3 py-1.5 text-xs text-white/55">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/65" />
                     Госзакупки РК · официальный API
                   </span>
                   <span className="text-sm text-white/42">
-                    Найдено: <b className="font-semibold text-white/80">{result?.total ?? 0}</b> лотов
+                    {result?.total_is_exact === false ? "Показано" : "Найдено"}: {" "}
+                    <b className="font-semibold text-white/80">{result?.total ?? 0}</b> лотов
                   </span>
+                  {(result?.last_updated_at || result?.fetched_at) && (
+                    <span className="text-[11px] text-white/30">
+                      {result.last_updated_at ? "Реестр обновлён" : "Проверено"} {new Date((result.last_updated_at || result.fetched_at) as string).toLocaleString("ru-RU", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  )}
                   {fromCache && (
                     <button
                       type="button"
@@ -516,20 +648,43 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                     ))}
                   </div>
                 ) : sortedLots.length > 0 ? (
-                  <div className="space-y-3">
-                    {sortedLots.map((lot) => (
-                      <LotResultCard
-                        key={lot.id}
-                        lot={lot}
-                        analyzeBase={embedded ? "/dashboard" : ""}
-                        onPartnership={() => setPartnershipLot(lot)}
-                      />
-                    ))}
+                  <div>
+                    <div className="space-y-3">
+                      {sortedLots.map((lot) => (
+                        <LotResultCard
+                          key={lot.id}
+                          lot={lot}
+                          analyzeBase={embedded ? "/dashboard" : ""}
+                          onPartnership={() => setPartnershipLot(lot)}
+                        />
+                      ))}
+                    </div>
+                    {(cursorHistory.length > 0 || result?.has_more) && (
+                      <div className="mt-5 flex items-center justify-between border-t border-white/[0.07] pt-5">
+                        <button
+                          type="button"
+                          onClick={goToPreviousPage}
+                          disabled={!cursorHistory.length || loading}
+                          className="h-10 rounded-xl border border-white/[0.1] px-4 text-sm text-white/60 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          ← Назад
+                        </button>
+                        <span className="text-xs text-white/32">Страница {cursorHistory.length + 1}</span>
+                        <button
+                          type="button"
+                          onClick={goToNextPage}
+                          disabled={!result?.has_more || !result?.next_cursor || loading}
+                          className="h-10 rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          Дальше →
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex min-h-[460px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.09] bg-white/[0.015] px-6 text-center">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.09] bg-white/[0.03]">
-                      <Search className="h-5 w-5 text-emerald-400" />
+                      <Search className="h-5 w-5 text-white/50" />
                     </div>
                     <h2 className="mt-4 text-lg font-semibold text-white">
                       {result ? "Лоты не найдены" : "Найдите подходящие закупки"}
@@ -590,14 +745,14 @@ function ToggleFilter({
   return (
     <label className="flex cursor-pointer items-center justify-between gap-3 text-xs text-white/52">
       <span>{label}</span>
-      <span className={`relative h-5 w-9 rounded-full transition ${checked ? "bg-emerald-400" : "bg-white/10"}`}>
+      <span className={`relative h-5 w-9 rounded-full border transition ${checked ? "border-white/70 bg-white" : "border-white/10 bg-white/10"}`}>
         <input
           type="checkbox"
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}
           className="sr-only"
         />
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+        <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full shadow transition-transform ${checked ? "translate-x-[18px] bg-[#111112]" : "translate-x-0.5 bg-white/70"}`} />
       </span>
     </label>
   );
@@ -642,7 +797,7 @@ function PriceHistogramSlider({
           return (
             <span
               key={index}
-              className={`min-w-0 flex-1 rounded-t-[1px] transition-colors ${selected ? "bg-emerald-400" : "bg-white/10"}`}
+              className={`min-w-0 flex-1 rounded-t-[1px] transition-colors ${selected ? "bg-white/70" : "bg-white/10"}`}
               style={{ height: `${Math.max(10, height)}%` }}
             />
           );
@@ -652,7 +807,7 @@ function PriceHistogramSlider({
       <div className="relative mt-2 h-5">
         <div className="absolute left-0 right-0 top-2 h-1 rounded-full bg-white/10" />
         <div
-          className="absolute top-2 h-1 rounded-full bg-emerald-400"
+          className="absolute top-2 h-1 rounded-full bg-white/80"
           style={{ left: `${lowPct}%`, right: `${100 - highPct}%` }}
         />
         <input
@@ -725,12 +880,7 @@ function LotResultCard({
   const [saved, setSaved] = useState(() => isLotSaved(lot.id));
   const normalizedCategory = (lot.category || "").toLowerCase();
   const Icon = normalizedCategory === "работа" ? Wrench : normalizedCategory === "услуга" ? BriefcaseBusiness : Package;
-  const accent = normalizedCategory === "работа" ? "amber" : normalizedCategory === "услуга" ? "violet" : "emerald";
-  const accentClasses = {
-    amber: "border-amber-400/20 bg-amber-400/[0.08] text-amber-300",
-    violet: "border-violet-400/20 bg-violet-400/[0.08] text-violet-300",
-    emerald: "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-300",
-  }[accent];
+  const accentClasses = "border-white/[0.09] bg-white/[0.035] text-white/60";
 
   const toggleSaved = () => {
     if (saved) {
@@ -752,7 +902,7 @@ function LotResultCard({
   };
 
   return (
-    <article className="group relative grid gap-4 rounded-2xl border border-white/[0.1] bg-[#121516] p-4 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-400/25 hover:bg-[#14191a] sm:grid-cols-[52px_minmax(0,1fr)_auto] sm:p-5">
+    <article className="group relative grid gap-4 rounded-xl border border-white/[0.075] bg-[#121213]/90 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-[#151516] sm:grid-cols-[52px_minmax(0,1fr)_auto] sm:p-5">
       <div className={`flex h-12 w-12 items-center justify-center rounded-xl border ${accentClasses}`}>
         <Icon className="h-5 w-5" strokeWidth={1.8} />
       </div>
@@ -785,7 +935,7 @@ function LotResultCard({
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-white/38">
-          <span className="inline-flex items-center gap-1.5 font-mono text-emerald-300/75">
+          <span className="inline-flex items-center gap-1.5 font-mono text-white/48">
             № {lot.source_id}
           </span>
           {lot.region && (
@@ -808,7 +958,7 @@ function LotResultCard({
             to={`${analyzeBase}/analyze?lot_url=${encodeURIComponent(lot.source_url || "")}&lot_title=${encodeURIComponent(lot.title)}`}
             aria-label={`AI-анализ лота ${lot.source_id}`}
             title="AI-анализ"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-emerald-400/30 hover:text-emerald-300"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
           >
             <Sparkles className="h-3.5 w-3.5" />
           </Link>
@@ -817,16 +967,16 @@ function LotResultCard({
             onClick={toggleSaved}
             aria-pressed={saved}
             title={saved ? "Убрать из сохранённых" : "Сохранить"}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-emerald-400/30 hover:text-emerald-300"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
           >
-            <Bookmark className={`h-3.5 w-3.5 ${saved ? "fill-emerald-400 text-emerald-400" : ""}`} />
+            <Bookmark className={`h-3.5 w-3.5 ${saved ? "fill-white text-white" : ""}`} />
           </button>
           <button
             type="button"
             onClick={onPartnership}
             aria-label={`Сотрудничество по лоту ${lot.source_id}`}
             title="Сотрудничество"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-emerald-400/30 hover:text-emerald-300"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
           >
             <BriefcaseBusiness className="h-3.5 w-3.5" />
           </button>
@@ -837,7 +987,7 @@ function LotResultCard({
               rel="noopener noreferrer"
               aria-label={`Открыть лот ${lot.source_id} на Госзакупках`}
               title="Открыть источник"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-emerald-400/30 hover:text-emerald-300"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
             >
               <ArrowUpRight className="h-3.5 w-3.5" />
             </a>
@@ -884,9 +1034,9 @@ function PartnershipDialog({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onMouseDown={(event) => event.currentTarget === event.target && onClose()}>
-      <div className="w-full max-w-md space-y-4 rounded-2xl border border-white/[0.1] bg-[#111516] p-6 shadow-2xl">
+      <div className="w-full max-w-md space-y-4 rounded-xl border border-white/[0.09] bg-[#151516] p-6 shadow-2xl">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Сотрудничество</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">Сотрудничество</p>
           <h3 className="mt-2 text-lg font-semibold text-white">Предложение по лоту</h3>
           <p className="mt-1 line-clamp-2 text-sm text-white/42">{lot.title}</p>
         </div>
@@ -901,7 +1051,7 @@ function PartnershipDialog({
         {status && <div className={`rounded-xl border p-3 text-sm ${status.type === "success" ? "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-200" : "border-red-400/25 bg-red-400/[0.08] text-red-200"}`}>{status.text}</div>}
         <div className="flex gap-2">
           <button type="button" onClick={onClose} className="h-11 flex-1 rounded-xl border border-white/10 text-sm text-white/55">Отмена</button>
-          <button type="button" onClick={onSubmit} className="h-11 flex-1 rounded-xl bg-emerald-400 text-sm font-semibold text-[#04120d]">Отправить</button>
+          <button type="button" onClick={onSubmit} className="h-11 flex-1 rounded-xl bg-[#f2f2f2] text-sm font-semibold text-[#111112] transition hover:bg-white">Отправить</button>
         </div>
       </div>
     </div>

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import os
 import re
 import tempfile
@@ -250,17 +251,49 @@ def _safe_download_filename(kind: str, lot_id: int | str) -> str:
     return f"{slug}_{safe_lot}.docx"
 
 
+def _deadline_metadata(
+    deadline: datetime | None,
+    *,
+    now: datetime | None = None,
+) -> tuple[int | None, bool, str | None]:
+    """Возвращает срок без превращения просроченного лота в «срочный»."""
+    if deadline is None:
+        return None, False, None
+
+    reference = now or datetime.now(deadline.tzinfo)
+    if deadline.tzinfo is None and reference.tzinfo is not None:
+        reference = reference.replace(tzinfo=None)
+    elif deadline.tzinfo is not None and reference.tzinfo is None:
+        reference = reference.replace(tzinfo=deadline.tzinfo)
+
+    delta_seconds = (deadline - reference).total_seconds()
+    time_str = deadline.strftime("%H:%M")
+    if delta_seconds <= 0:
+        return None, False, f"приём завершён {deadline.strftime('%d.%m.%Y в %H:%M')}"
+
+    days_left = max(1, math.ceil(delta_seconds / 86_400))
+    is_urgent = delta_seconds <= 3 * 86_400
+    if delta_seconds < 86_400 and deadline.date() == reference.date():
+        hours_left = int(delta_seconds // 3600)
+        if hours_left > 0:
+            label = f"сегодня до {time_str} (осталось {hours_left}ч)"
+        else:
+            label = f"сегодня до {time_str} (осталось {max(1, int(delta_seconds // 60))} мин)"
+    elif days_left == 1:
+        label = f"завтра до {time_str}"
+    elif days_left <= 7:
+        label = deadline.strftime("%d.%m в %H:%M")
+    else:
+        label = deadline.strftime("%d.%m.%Y %H:%M")
+    return days_left, is_urgent, label
+
+
 @router.post("/search", response_model=LotSearchResult)
 async def search_lots(
     req: LotSearchRequest,
     db: AsyncSession = Depends(get_db),
 ) -> LotSearchResult:
-    """
-    Поиск лотов со всех площадок (zakup.gov.kz, ets-tender.kz, ...).
-
-    Пока работает в mock-режиме (демо-данные). Когда придёт токен goszakup
-    и подключим парсеры других площадок — будут реальные данные.
-    """
+    """Поиск реальных лотов в официальном реестре zakup.gov.kz V3."""
     settings = get_settings()
     api_token = _get_api_token()
     # Реальный токен — не mock-заглушка
@@ -279,10 +312,27 @@ async def search_lots(
         category=req.category,
         customer_bin=req.customer_bin,
         customer_bin_like=req.customer_bin_like,
+        status=req.status,
+        procurement_method_ids=req.procurement_method_ids,
+        published_from=req.published_from.isoformat() if req.published_from else "",
+        published_to=req.published_to.isoformat() if req.published_to else "",
+        cursor=req.cursor,
         only_with_amount=req.only_with_amount,
         use_graphql=req.use_graphql,
         limit=req.limit,
     )
+
+    # Даже при ошибочном/запаздывающем статусе реестра завершённый срок не
+    # должен попадать в основной каталог. Архив при этом сохраняет историю.
+    if req.status in {"active", "published", "offers"}:
+        active_lots = []
+        for parsed_lot in parsed_lots:
+            if parsed_lot.deadline_date:
+                _, _, deadline_label = _deadline_metadata(parsed_lot.deadline_date)
+                if deadline_label and deadline_label.startswith("приём завершён"):
+                    continue
+            active_lots.append(parsed_lot)
+        parsed_lots = active_lots
 
     # Если официальный API недоступен и parser перешёл на demo fallback,
     # нельзя маркировать эти записи как реальные только из-за наличия токена.
@@ -324,8 +374,17 @@ async def search_lots(
         else:
             # Обновляем изменившиеся поля
             lot.title = pl.title
+            lot.description = pl.description
+            lot.category = pl.category
+            lot.procurement_method = pl.procurement_method
             lot.amount_kzt = pl.amount_kzt
+            lot.region = pl.region
+            lot.delivery_address = pl.delivery_address
+            lot.publish_date = pl.publish_date
             lot.deadline_date = pl.deadline_date
+            lot.organizer = pl.organizer
+            lot.organizer_bin = pl.organizer_bin
+            lot.source_url = pl.source_url
             lot.status = pl.status
             saved_lots.append(lot)
 
@@ -376,38 +435,9 @@ async def search_lots(
                 # Не критично — лоты работают и без AI
 
     # Конвертируем в response schema с вычислением days_until_deadline
-    from datetime import datetime
-
     items: list[LotItem] = []
     for lot in saved_lots:
-        days_left = None
-        is_urgent = False
-        deadline_time_str = None
-        if lot.deadline_date:
-            now = datetime.now(lot.deadline_date.tzinfo)
-            delta_days = (lot.deadline_date - now).days
-            delta_seconds = (lot.deadline_date - now).total_seconds()
-            days_left = max(0, delta_days)
-            is_urgent = days_left <= 3
-            # Формируем человеко-читаемое время дедлайна
-            time_str = lot.deadline_date.strftime("%H:%M")
-            if delta_days == 0:
-                if delta_seconds > 0:
-                    # сегодня, до HH:MM
-                    hours_left = int(delta_seconds // 3600)
-                    if hours_left > 0:
-                        deadline_time_str = f"сегодня до {time_str} (осталось {hours_left}ч)"
-                    else:
-                        mins_left = max(1, int(delta_seconds // 60))
-                        deadline_time_str = f"сегодня до {time_str} (⏰ {mins_left} мин!)"
-                else:
-                    deadline_time_str = f"просрочен ({time_str})"
-            elif delta_days == 1:
-                deadline_time_str = f"завтра до {time_str}"
-            elif delta_days <= 7:
-                deadline_time_str = lot.deadline_date.strftime("%a %d.%m %H:%M")
-            else:
-                deadline_time_str = lot.deadline_date.strftime("%d.%m.%Y %H:%M")
+        days_left, is_urgent, deadline_time_str = _deadline_metadata(lot.deadline_date)
 
         # Фильтр по urgency
         if req.only_urgent and not is_urgent:
@@ -452,9 +482,15 @@ async def search_lots(
 
     return LotSearchResult(
         lots=items,
-        total=len(items),
+        total=(len(items) if req.only_urgent else aggregator.page_info.total_count),
         source="zakup.gov.kz (mock)" if is_mock else "zakup.gov.kz",
         is_mock=is_mock,
+        next_cursor=aggregator.page_info.next_cursor,
+        has_more=aggregator.page_info.has_next_page,
+        total_is_exact=aggregator.page_info.total_is_exact and not req.only_urgent,
+        fetched_at=aggregator.page_info.fetched_at,
+        last_updated_at=aggregator.page_info.last_updated_at,
+        scope=req.status,
     )
 
 

@@ -167,25 +167,25 @@ html.dark .lava-background {
         width: 17px;
         height: 17px;
         appearance: none;
-        border: 2px solid #34d399;
+        border: 2px solid rgba(255, 255, 255, .82);
         border-radius: 9999px;
-        background: #0b1113;
-        box-shadow: 0 0 0 3px rgba(52, 211, 153, .08), 0 4px 14px rgba(0, 0, 0, .55);
+        background: #111112;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, .06), 0 4px 14px rgba(0, 0, 0, .55);
         cursor: grab;
         pointer-events: auto;
         transition: transform .15s ease, box-shadow .15s ease;
     }
     .lot-range-input::-webkit-slider-thumb:hover {
         transform: scale(1.15);
-        box-shadow: 0 0 0 5px rgba(52, 211, 153, .1), 0 4px 14px rgba(0, 0, 0, .55);
+        box-shadow: 0 0 0 5px rgba(255, 255, 255, .08), 0 4px 14px rgba(0, 0, 0, .55);
     }
     .lot-range-input::-moz-range-thumb {
         width: 14px;
         height: 14px;
-        border: 2px solid #34d399;
+        border: 2px solid rgba(255, 255, 255, .82);
         border-radius: 9999px;
-        background: #0b1113;
-        box-shadow: 0 0 0 3px rgba(52, 211, 153, .08), 0 4px 14px rgba(0, 0, 0, .55);
+        background: #111112;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, .06), 0 4px 14px rgba(0, 0, 0, .55);
         cursor: grab;
         pointer-events: auto;
     }
