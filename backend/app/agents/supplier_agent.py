@@ -47,7 +47,13 @@ DEFAULT_SEARCH_DOMAINS: tuple[str, ...] = (
 MIDDLEMAN_DOMAINS = {"kaspi.kz", "olx.kz", "sulpak.kz", "technodom.kz", "avito.kz"}
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]{2,}")
+# Основной формат: +7/8 с префиксом.
 _PHONE_RE = re.compile(r"(?:\+7|8)[\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-()]*\d{2}[\s\-()]*\d{2}")
+# Казахстанский формат без префикса +7/8: 7 и ещё 10 цифр, между
+# группами — дефисы (7801-31090-30). Дефисы обязательны: без них «7» и
+# 10 случайных цифр дали бы много ложных срабатываний на страницах
+# каталогов. Итоговое число цифр проверяется в find_contacts.
+_PHONE_KZ_RE = re.compile(r"\b7[\d-]{11,17}\b")
 
 #: Статусы сверки по пункту ТЗ (F2).
 MATCH_FITS = "fits"
@@ -75,11 +81,14 @@ class Costs:
     llm_usd: float = 0.0
     tavily_usd: float = 0.0
     browser_usd: float = 0.0
+    # Счётчики бесплатных операций — для отчётности по себестоимости.
+    page_fetch_count: int = 0
 
-    def merge(self, other: Costs) -> None:
+    def merge(self, other: "Costs") -> None:
         self.llm_usd += other.llm_usd
         self.tavily_usd += other.tavily_usd
         self.browser_usd += other.browser_usd
+        self.page_fetch_count += other.page_fetch_count
 
 
 @dataclass(slots=True)
@@ -152,6 +161,13 @@ def find_contacts(text: str) -> tuple[str, str]:
     phone_match = _PHONE_RE.search(text)
     email = email_match.group(0) if email_match else ""
     phone = phone_match.group(0).strip() if phone_match else ""
+    if not phone:
+        # Номера вида 7801-31090-30 (flagma) идут без префикса +7/8.
+        for candidate in _PHONE_KZ_RE.findall(text):
+            digits = re.sub(r"\D", "", candidate)
+            if len(digits) == 11:  # 7 + 10 цифр — казахстанский формат
+                phone = candidate
+                break
     # Отсекаем мусор: email из картинки/метрики.
     if email and (email.endswith((".png", ".jpg", ".webp")) or len(email) > 64):
         email = ""
@@ -377,7 +393,74 @@ class SupplierAgent(Agent):
         collected.sort(key=lambda r: r["score"], reverse=True)
         return collected[:max_results], costs
 
-    # ── Шаг 3: Browser-Use — чтение страницы поставщика ───────────────
+    # ── Шаг 3a: бесплатное чтение страниц (Jina → Tavily) ─────────
+    async def enrich_with_pages(
+        self, candidates: list[SupplierCandidate], *, top_n: int = 5
+    ) -> Costs:
+        """Прочитать страницы поставщиков и достать контакты/цену.
+
+        Идёт перед платным Browser-Use: Jina Reader бесплатен и рендерит
+        JavaScript, поэтому в большинстве случаев платить не нужно вовсе.
+        """
+        from app.agents.page_fetcher import fetch_page
+
+        costs = Costs()
+        for candidate in candidates[:top_n]:
+            if not candidate.url:
+                continue
+            page = await fetch_page(candidate.url)
+            if not page.is_usable:
+                logger.info(
+                    "[supplier] страница не прочитана ({}): {}",
+                    page.provider,
+                    page.error or "empty",
+                )
+                candidate.warnings.append("Страницу поставщика не удалось прочитать.")
+                continue
+            costs.page_fetch_count += 1
+            self._apply_page_text(candidate, page.text)
+        return costs
+
+    def _apply_page_text(self, candidate: SupplierCandidate, text: str) -> None:
+        """Разобрать текст страницы: контакты, цена, наличие, город."""
+        from app.agents.product_search import _parse_price
+
+        email, phone = find_contacts(text)
+        if email and not candidate.email:
+            candidate.email = email
+            candidate.sources["email"] = candidate.url
+        if phone and not candidate.phone:
+            candidate.phone = phone
+            candidate.sources["phone"] = candidate.url
+
+        if candidate.price_kzt is None:
+            # Ищем цену рядом со словом «тг»/«₸», чтобы не взять первую
+            # попавшуюся цифру (год выпуска, количество и т.п.).
+            price = None
+            for match in re.finditer(r"([\d][\d\s]{1,11})\s*(?:₸|тг|KZT)", text):
+                parsed = _parse_price(match.group(1))
+                if parsed and parsed > 0:
+                    price = parsed
+                    break
+            if price is not None:
+                candidate.price_kzt = price
+                candidate.sources["price"] = candidate.url
+
+        if candidate.in_stock is None and re.search(
+            r"\b(в наличии|есть в наличии|instock|на складе)\b", text, re.IGNORECASE
+        ):
+            candidate.in_stock = True
+
+        if not candidate.city:
+            match = re.search(
+                r"(Астана|Алматы|Павлодар|Караганда|Шымкент|Актобе|Тараз|Костанай|"
+                r"Петропавловск|Семей|Орал|Кызылорда|Атырау|Темиртау|Актолай)",
+                text,
+            )
+            if match:
+                candidate.city = match.group(1)
+
+    # ── Шаг 3b: Browser-Use — платный запасной вариант ────────────
     async def enrich_with_browser(
         self, candidates: list[SupplierCandidate], *, top_n: int = 3
     ) -> Costs:
@@ -533,6 +616,7 @@ class SupplierAgent(Agent):
         budget_kzt: float | None = None,
         blocked: set[str] | None = None,
         enrich_browser: bool = True,
+        page_fetch_top_n: int = 5,
     ) -> list[SupplierCandidate]:
         """Точка входа агента (контракт Agent.run).
 
@@ -544,6 +628,7 @@ class SupplierAgent(Agent):
             budget_kzt=budget_kzt,
             blocked=blocked,
             enrich_browser=enrich_browser,
+            page_fetch_top_n=page_fetch_top_n,
         )
         return candidates
 
@@ -554,6 +639,7 @@ class SupplierAgent(Agent):
         budget_kzt: float | None = None,
         blocked: set[str] | None = None,
         enrich_browser: bool = True,
+        page_fetch_top_n: int = 5,
     ) -> tuple[list[SupplierCandidate], Costs, dict[str, Any]]:
         """Полный конвейер F1+F2. Возвращает кандидатов, расходы и метаданные."""
         requirements = dedupe_requirements(requirements)
@@ -602,9 +688,17 @@ class SupplierAgent(Agent):
         if not candidates:
             return [], total, meta
 
+        # Сначала бесплатное чтение страниц, потом (если нужно) платный браузер.
         if enrich_browser:
-            costs = await self.enrich_with_browser(candidates, top_n=3)
+            costs = await self.enrich_with_pages(candidates, top_n=page_fetch_top_n)
             total.merge(costs)
+            # Browser-Use нужен лишь там, где бесплатные источники не справились.
+            if enrich_browser and any(
+                "Страницу поставщика не удалось прочитать" in c.warnings
+                for c in candidates[:page_fetch_top_n]
+            ):
+                costs = await self.enrich_with_browser(candidates, top_n=3)
+                total.merge(costs)
 
         costs = await self.match_requirements(candidates, requirements)
         total.merge(costs)
