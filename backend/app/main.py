@@ -13,12 +13,15 @@ from app.api import (
     account,
     admin,
     applications,
+    approvals,
     b2g,
     browser_actions,
     discovery,
     health,
     lots,
     products,
+    suppliers,
+    tenders,
 )
 from app.core.config import get_settings
 from app.core.logging import setup_logging
@@ -32,7 +35,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
-        if request.url.path.startswith("/api/admin") or request.url.path.startswith("/api/account"):
+        if (
+            request.url.path.startswith("/api/admin")
+            or request.url.path.startswith("/api/account")
+            or request.url.path.startswith("/api/suppliers")
+            or request.url.path.startswith("/api/approvals")
+            or request.url.path.startswith("/api/outreach")
+        ):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
 
@@ -85,6 +94,12 @@ def create_app(*, test_mode: bool = False) -> FastAPI:
     app.include_router(products.router, prefix="/api")
     app.include_router(applications.router, prefix="/api")
     app.include_router(browser_actions.router, prefix="/api")
+    # Supplier Agent: поиск поставщиков, одобрения, исходящие, персонализация.
+    app.include_router(suppliers.router, prefix="/api")
+    app.include_router(approvals.router, prefix="/api")
+    app.include_router(approvals.outreach_router, prefix="/api")
+    app.include_router(tenders.router, prefix="/api")
+    app.include_router(tenders.profile_router, prefix="/api")
     return app
 
 

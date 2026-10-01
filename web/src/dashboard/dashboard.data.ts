@@ -9,6 +9,7 @@ export const DASHBOARD_NAV: NavItem[] = [
   { to: "/dashboard", label: "Обзор", description: "Рабочий стол", icon: "home" },
   { to: "/dashboard/analyze", label: "AI-анализ", description: "Проверить закупку", icon: "spark" },
   { to: "/dashboard/lots", label: "Поиск лотов", description: "Найти возможности", icon: "lots" },
+    { to: "/dashboard/suppliers", label: "Поставщики", description: "Кто поставит под лот", icon: "suppliers" },
   { to: "/dashboard/history", label: "Мои закупки", description: "История анализов", icon: "history" },
   { to: "/dashboard/documents", label: "Документы", description: "Жалобы и отчёты", icon: "docs" },
   { to: "/dashboard/b2g", label: "Подготовка ТЗ", description: "Черновики заказчикам", icon: "briefcase" },
