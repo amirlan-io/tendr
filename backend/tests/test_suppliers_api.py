@@ -78,7 +78,17 @@ async def anon_client():
     ],
 )
 async def test_supplier_endpoints_require_auth(anon_client, method: str, path: str) -> None:
-    resp = await anon_client.request(method, path, json={})
+    # Валидное тело: иначе FastAPI отвечает 422 на этапе валидации тела,
+    # не доходя до проверки авторизации.
+    body = {
+        "/api/suppliers/search": {"lot_id": "1", "requirements": []},
+        "/api/suppliers/feedback": {"candidate_id": 1, "verdict": "fits"},
+        "/api/suppliers/draft": {"candidate_id": 1, "kind": "email"},
+        "/api/tenders/feedback": {"lot_id": "1", "verdict": "fits"},
+        "/api/outreach/email": {"approval_id": 1, "subject": "тема"},
+        "/api/outreach/call": {"approval_id": 1},
+    }
+    resp = await anon_client.request(method, path, json=body.get(path, {}))
     assert resp.status_code == 401, f"{method} {path} должен требовать авторизацию"
 
 
@@ -246,3 +256,149 @@ async def test_audit_log_shape(client) -> None:
     resp = await client.get("/api/audit?limit=5")
     assert resp.status_code == 200
     assert "items" in resp.json()
+
+
+# ── Реальная схема Documenter (name/value/is_critical) ────────────────
+
+
+def test_requirements_parser_handles_real_documenter_schema() -> None:
+    """Documenter отдаёт name/value/is_critical, а не title/description.
+
+    На живом тендере пустые заголовки означали бы, что агент сверяет
+    поставщиков с пустым списком — поэтому схема зафиксирована тестом.
+    """
+    from app.api.suppliers import _requirement_lines, _requirements_from_analysis
+
+    class FakeAnalysis:
+        result_json = {
+            "lot": {
+                "requirements": [
+                    {
+                        "name": "Вал карданный",
+                        "value": "Требуется 1 шт. вала карданного.",
+                        "is_critical": True,
+                        "category": "",
+                    },
+                    {
+                        "name": "Фильтр тонкой очистки",
+                        "value": "Требуется 1 шт. фильтра масла.",
+                        "is_critical": True,
+                    },
+                ]
+            }
+        }
+
+    reqs = _requirements_from_analysis(FakeAnalysis())
+    assert len(reqs) == 2
+    assert reqs[0]["title"] == "Вал карданный"
+    assert "вала карданного" in reqs[0]["description"]
+    assert reqs[0]["is_mandatory"] is True
+    assert reqs[0]["code"]
+
+    lines = _requirement_lines(reqs)
+    assert any("Вал карданный" in line for line in lines)
+    assert any("[обязательный]" in line for line in lines)
+
+
+def test_requirements_parser_handles_legacy_title_schema() -> None:
+    from app.api.suppliers import _requirements_from_analysis
+
+    class FakeAnalysis:
+        result_json = {
+            "lot": {
+                "requirements": [
+                    {"title": "Сталь 304", "description": "нержавеющая", "is_mandatory": True},
+                    {"title": "Покрытие"},  # без description
+                    {"name": ""},  # пустое — пропустить
+                ]
+            }
+        }
+
+    reqs = _requirements_from_analysis(FakeAnalysis())
+    assert [r["title"] for r in reqs] == ["Сталь 304", "Покрытие"]
+
+
+def test_supplier_agent_is_instantiable() -> None:
+    """Agent — ABC: без run() агент нельзя создать.
+
+    На живом прогоне это дало 500 «Can't instantiate abstract class».
+    """
+    from app.agents.supplier_agent import Requirement, SupplierAgent
+
+    agent = SupplierAgent()
+    assert callable(agent.run)
+    assert hasattr(agent, "find_suppliers")
+    assert agent.name == "supplier_agent"
+    assert Requirement(code="1", title="Фильтр").is_mandatory is False
+
+
+def test_requirements_parser_skips_empty_results() -> None:
+    from app.api.suppliers import _requirements_from_analysis
+
+    assert _requirements_from_analysis(None) == []
+
+    class NoLot:
+        result_json = {}
+
+    assert _requirements_from_analysis(NoLot()) == []
+
+
+@pytest.mark.asyncio
+async def test_push_history_persists_full_result_as_json() -> None:
+    """result_json должен пережить JSON-сериализацию.
+
+    Реальный прогон на тендере упал с «Object of type datetime is not
+    JSON serializable»: в полном результате есть datetime, который JSONB
+    не принимает. Проверяем, что datetime приводится к ISO-строке.
+    """
+    import json
+    from datetime import datetime
+
+    from app.db import supplier_repo  # noqa: F401  (проверка импорта репо)
+    from app.db import Base
+    from app.db import repo as db_repo
+    from app.db.models import User
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with maker() as session:
+        user = User(web_client_id="jsoncheck_user_000001")
+        session.add(user)
+        await session.flush()
+
+        row = await db_repo.push_history(
+            session,
+            user.id,
+            {
+                "lot_id": "777",
+                "title": "Лот",
+                "url": "https://v3bl.goszakup.gov.kz/ru/announce/index/777-1",
+                "overall_risk": "low",
+                "n_requirements": 1,
+                "n_red_flags": 0,
+                "result_json": {
+                    "lot": {
+                        "lot_id": "777",
+                        "title": "Лот",
+                        "requirements": [{"name": "Фильтр", "value": "1 шт."}],
+                    },
+                    "created_at": datetime(2026, 1, 1, 12, 0, 0),
+                },
+            },
+        )
+        assert row is not None
+        # Сериализуется без исключения — значит, datetime уже приведён.
+        # ensure_ascii=False, иначе кириллица экранируется и проверка врёт.
+        dumped = json.dumps(row.result_json, ensure_ascii=False, default=str)
+        assert "Фильтр" in dumped
+        assert "2026-01-01T12:00:00" in dumped
+        # И требования читаются обратно агентом.
+        from app.api.suppliers import _requirements_from_analysis
+
+        assert _requirements_from_analysis(row)[0]["title"] == "Фильтр"
+
+    await engine.dispose()

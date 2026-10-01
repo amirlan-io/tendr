@@ -524,6 +524,27 @@ class SupplierAgent(Agent):
             candidate.warnings = build_warnings(candidate, requirements)
 
     # ── Оркестрация ──────────────────────────────────────────────────
+    async def run(
+        self,
+        requirements: list[Requirement],
+        *,
+        budget_kzt: float | None = None,
+        blocked: set[str] | None = None,
+        enrich_browser: bool = True,
+    ) -> list[SupplierCandidate]:
+        """Точка входа агента (контракт Agent.run).
+
+        Возвращает только кандидатов; расходы и метаданные доступны через
+        find_suppliers, которому нужен аудит.
+        """
+        candidates, _costs, _meta = await self.find_suppliers(
+            requirements,
+            budget_kzt=budget_kzt,
+            blocked=blocked,
+            enrich_browser=enrich_browser,
+        )
+        return candidates
+
     async def find_suppliers(
         self,
         requirements: list[Requirement],

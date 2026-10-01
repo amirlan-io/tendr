@@ -718,6 +718,11 @@ async def analyze_lot_url(
                     else None,
                     "n_requirements": len(result.lot.requirements or []),
                     "n_red_flags": len(result.lot.red_flags or []),
+                    # Полный результат: без него запись бесполезна для
+                    # скачивания документов и для подбора поставщиков.
+                    # mode="json" — в result_json попадает datetime,
+                    # который не сериализуется в JSONB.
+                    "result_json": result.model_dump(mode="json"),
                 },
             )
     except Exception as e:
@@ -829,6 +834,8 @@ async def analyze_lot_upload(
                     "overall_risk": result.legal.overall_risk if result.legal else None,
                     "n_requirements": len(result.lot.requirements or []),
                     "n_red_flags": len(result.lot.red_flags or []),
+                    # Полный результат — см. analyze_lot_url.
+                    "result_json": result.model_dump(mode="json"),
                 },
             )
     except Exception as e:

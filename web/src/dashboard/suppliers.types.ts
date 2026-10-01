@@ -67,6 +67,22 @@ export interface ShortlistResponse {
   candidates: SupplierCandidate[];
 }
 
+/**
+ * Требования ТЗ по лоту — вход для агента.
+ *
+ * `has_analysis: false` означает, что разбора ТЗ ещё не было. В этом случае
+ * агент запускать бессмысленно: он сверял бы поставщиков с пустым списком.
+ */
+export interface LotRequirements {
+  lot_id: string;
+  title: string;
+  customer: string;
+  budget_kzt: number | null;
+  requirements: Array<{ code: string; title: string; is_mandatory?: boolean }>;
+  has_analysis: boolean;
+  message: string;
+}
+
 /** Тип исходящего действия: письмо или звонок. */
 export type OutreachKind = "email" | "call";
 

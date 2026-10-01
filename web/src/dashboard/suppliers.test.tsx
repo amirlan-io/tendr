@@ -195,10 +195,25 @@ describe("SuppliersPage: пустое состояние и ошибки", () =>
 
   it("при успешном поиске показывает карточки поставщиков", async () => {
     const candidate = makeCandidate();
+    // Страница сначала спрашивает требования ТЗ, потом запускает поиск.
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response(
+      vi.fn(async (url: unknown) => {
+        if (String(url).includes("/requirements")) {
+          return new Response(
+            JSON.stringify({
+              lot_id: "17699886",
+              title: "Поставка фильтров",
+              customer: "Акимат",
+              budget_kzt: 500000,
+              requirements: [{ code: "1", title: "Сталь 304" }],
+              has_analysis: true,
+              message: "",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(
           JSON.stringify({
             lot_id: "17699886",
             candidates: [candidate],
@@ -208,8 +223,8 @@ describe("SuppliersPage: пустое состояние и ошибки", () =>
             costs_usd: { llm: 0.001, tavily: 0.008, browser: 0 },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      ),
+        );
+      }),
     );
     render(
       <MemoryRouter>
@@ -220,5 +235,40 @@ describe("SuppliersPage: пустое состояние и ошибки", () =>
     await userEvent.click(screen.getByRole("button", { name: /найти поставщиков/i }));
     expect(await screen.findByText(/Найдено поставщиков/i)).toBeInTheDocument();
     expect(screen.getByRole("article")).toBeInTheDocument();
+    // Показан лот, по которому искали, — с требованиями ТЗ.
+    expect(screen.getByText("Поставка фильтров")).toBeInTheDocument();
+    expect(screen.getByText("Сталь 304")).toBeInTheDocument();
+  });
+
+  it("без разбора ТЗ честно объясняет, что сначала нужен анализ", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) => {
+        if (String(url).includes("/requirements")) {
+          return new Response(
+            JSON.stringify({
+              lot_id: "999",
+              title: "",
+              customer: "",
+              budget_kzt: null,
+              requirements: [],
+              has_analysis: false,
+              message: "Для этого лота ещё нет разбора ТЗ. Запустите AI-анализ.",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        throw new Error("поиск не должен запускаться без требований");
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <SuppliersPage />
+      </MemoryRouter>,
+    );
+    await userEvent.type(screen.getByLabelText(/ID лота/i), "999");
+    await userEvent.click(screen.getByRole("button", { name: /найти поставщиков/i }));
+    expect(await screen.findByText(/нет разбора ТЗ/i)).toBeInTheDocument();
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
   });
 });

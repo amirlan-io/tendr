@@ -23,6 +23,7 @@ import type {
   SupplierCandidate,
   SupplierLists,
   SupplierSearchResponse,
+  LotRequirements,
 } from "./suppliers.types";
 
 /** Поиск поставщиков по лоту (F1+F2). Долгий запрос — 60–180 сек. */
@@ -45,6 +46,18 @@ export async function searchSuppliers(
 /** Шорт-лист без повторного поиска. */
 export async function fetchShortlist(lotId: string): Promise<ShortlistResponse> {
   return api<ShortlistResponse>(`/api/suppliers/shortlist?lot_id=${encodeURIComponent(lotId)}`);
+}
+
+/**
+ * Требования ТЗ по последнему анализу лота.
+ *
+ * Источник входа для агента. Берём с сервера, а не из состояния страницы:
+ * пользователь может открыть раздел напрямую или после перезагрузки.
+ */
+export async function fetchLotRequirements(lotId: string): Promise<LotRequirements> {
+  return api<LotRequirements>(
+    `/api/suppliers/requirements?lot_id=${encodeURIComponent(lotId)}`,
+  );
 }
 
 /** Одобрить/отклонить поставщика — сигнал для будущего скоринга. */

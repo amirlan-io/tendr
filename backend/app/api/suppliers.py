@@ -166,6 +166,38 @@ async def get_shortlist(
     return {"lot_id": lot_id, "candidates": [_candidate_payload(r) for r in rows]}
 
 
+@router.get("/requirements")
+async def get_lot_requirements(
+    lot_id: str,
+    auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Требования ТЗ по последнему анализу лота — вход для агента.
+
+    Отдельный ручкой, а не клиентским состоянием: пользователь может
+    открыть страницу поиска поставщиков напрямую или после перезагрузки.
+    Если анализа не было — честный пустой ответ с подсказкой, а не
+    выдуманные требования.
+    """
+    user = await _user(session, auth_user)
+    analysis = await db_repo.get_analysis_by_lot(session, user.id, lot_id)
+    requirements = _requirements_from_analysis(analysis)
+    lot = (analysis.result_json or {}).get("lot", {}) if analysis else {}
+    return {
+        "lot_id": lot_id,
+        "title": (lot.get("title") or (analysis.title if analysis else "")) or "",
+        "customer": (lot.get("customer") or (analysis.customer if analysis else "")) or "",
+        "budget_kzt": analysis.budget_kzt if analysis else None,
+        "requirements": requirements,
+        "has_analysis": bool(requirements),
+        "message": (
+            ""
+            if requirements
+            else "Для этого лота ещё нет разбора ТЗ. Запустите AI-анализ — тогда агент найдёт поставщиков именно по вашим требованиям."
+        ),
+    }
+
+
 class FeedbackRequest(BaseModel):
     candidate_id: int = Field(..., gt=0)
     verdict: str = Field(..., pattern="^(fits|not_fits)$")
@@ -204,6 +236,19 @@ class DraftRequest(BaseModel):
     kind: str = Field(..., pattern="^(email|call)$")
 
 
+def _requirement_lines(requirements: list[dict[str, Any]]) -> list[str]:
+    """Человекочитаемые строки для промпта: «название — описание»."""
+    lines: list[str] = []
+    for req in requirements[:12]:
+        title = str(req.get("title") or "").strip()
+        if not title:
+            continue
+        description = str(req.get("description") or "").strip()
+        mark = " [обязательный]" if req.get("is_mandatory") else ""
+        lines.append(f"- {title}{mark}" + (f": {description}" if description else ""))
+    return lines
+
+
 @router.post("/draft")
 async def create_draft(
     payload: DraftRequest,
@@ -235,11 +280,12 @@ async def create_draft(
 
     agent = OutreachAgent()
     lot_title = (analysis.title if analysis and analysis.title else candidate.title) or candidate.title
+    requirement_lines = _requirement_lines(requirements)
     if payload.kind == "email":
         draft = await agent.draft_email(
             supplier_name=candidate.supplier,
             lot_title=lot_title,
-            requirements=requirements,
+            requirements=requirement_lines,
             contacts=contacts,
             known_price_kzt=analysis.budget_kzt if analysis else None,
             price_action=action,
@@ -257,7 +303,7 @@ async def create_draft(
         plan = await agent.draft_call_plan(
             supplier_name=candidate.supplier,
             lot_title=lot_title,
-            requirements=requirements,
+            requirements=requirement_lines,
             contacts=contacts,
             price_action=action,
             counter_script=policy.counter_script,
@@ -442,18 +488,41 @@ def _company_profile_payload(profile) -> dict[str, Any]:
     }
 
 
-def _requirements_from_analysis(analysis) -> list[str]:
-    """Достать пункты ТЗ из сохранённого результата анализа."""
+def _requirements_from_analysis(analysis) -> list[dict[str, Any]]:
+    """Достать пункты ТЗ из сохранённого результата анализа.
+
+    Documenter отдаёт ``name`` / ``value`` / ``is_critical``, а не
+    ``title`` / ``description`` / ``is_mandatory`` — учитываем оба варианта,
+    иначе в агент уйдут пустые требования.
+    """
     if analysis is None or not isinstance(analysis.result_json, dict):
         return []
     lot = analysis.result_json.get("lot") or {}
+    if not isinstance(lot, dict):
+        return []
     requirements = lot.get("requirements") or []
-    titles: list[str] = []
-    for item in requirements[:12]:
-        if isinstance(item, dict):
-            title = str(item.get("title") or "").strip()
-            if title:
-                titles.append(title[:300])
-        elif isinstance(item, str) and item.strip():
-            titles.append(item.strip()[:300])
-    return titles
+    out: list[dict[str, Any]] = []
+    for index, item in enumerate(requirements[:12], start=1):
+        if isinstance(item, str):
+            title = item.strip()
+            description = ""
+            critical = False
+        elif isinstance(item, dict):
+            title = str(item.get("title") or item.get("name") or "").strip()
+            description = str(
+                item.get("description") or item.get("value") or ""
+            ).strip()
+            critical = bool(item.get("is_mandatory") or item.get("is_critical"))
+        else:
+            continue
+        if not title:
+            continue
+        out.append(
+            {
+                "code": str(item.get("code") or index) if isinstance(item, dict) else str(index),
+                "title": title[:300],
+                "description": description[:1000],
+                "is_mandatory": critical,
+            }
+        )
+    return out

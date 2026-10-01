@@ -16,12 +16,20 @@ import {
   createDraft,
   decideApproval,
   explainBlock,
+  fetchLotRequirements,
   fetchShortlist,
   friendlyError,
   searchSuppliers,
   sendSupplierFeedback,
 } from "../suppliers.api";
-import type { Approval, CallPlan, DraftResponse, EmailDraft, SupplierCandidate } from "../suppliers.types";
+import type {
+  Approval,
+  CallPlan,
+  DraftResponse,
+  EmailDraft,
+  LotRequirements,
+  SupplierCandidate,
+} from "../suppliers.types";
 import { SupplierCandidateCard } from "../components/SupplierCandidateCard";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
@@ -43,6 +51,7 @@ export function SuppliersPage() {
   const [draft, setDraft] = useState<DraftResponse | null>(null);
   const [approval, setApproval] = useState<Approval | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [lotInfo, setLotInfo] = useState<LotRequirements | null>(null);
 
   useEffect(() => {
     const lot = new URLSearchParams(window.location.search).get("lot_id");
@@ -58,16 +67,41 @@ export function SuppliersPage() {
     setLoading(true);
     setError(null);
     setNotice(null);
+
+    // Требования берём с сервера: без разбора ТЗ агенту нечего сверять.
+    let requirements: LotRequirements | null = null;
     try {
-      // Пустой список требований даст честный отказ бэкенда, а не выдумку.
-      const res = await searchSuppliers(id, []);
+      requirements = await fetchLotRequirements(id);
+    } catch (e) {
+      setError(explainBlock(e));
+      setLoading(false);
+      return;
+    }
+
+    if (!requirements.has_analysis || requirements.requirements.length === 0) {
+      setNotice(
+        requirements.message ||
+          "Для этого лота ещё нет разбора ТЗ. Запустите AI-анализ, чтобы агент искал поставщиков по вашим требованиям.",
+      );
+      setLotInfo(null);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await searchSuppliers(id, requirements.requirements, {
+        budgetKzt: requirements.budget_kzt,
+      });
+      setLotInfo(requirements);
       setCandidates(res.candidates);
       if (res.candidates.length === 0) {
         setNotice(
           res.queries.length > 0
-            ? "По этим требованиям ничего не найдено. Попробуйте другой лот или уточните ТЗ."
-            : "Нужен разбор лота: сначала запустите AI-анализ, чтобы получить требования.",
+            ? "По этим требованиям ничего не нашлось. Попробуйте другой лот или дополните ТЗ."
+            : "Поисковые запросы не сформировались — попробуйте позже.",
         );
+      } else if (res.blocked_filtered > 0) {
+        setNotice(`Скрыто поставщиков из стоп-листа: ${res.blocked_filtered}.`);
       }
     } catch (e) {
       setError(explainBlock(e));
@@ -75,8 +109,9 @@ export function SuppliersPage() {
       try {
         const saved = await fetchShortlist(id);
         if (saved.candidates.length > 0) {
+          setLotInfo(requirements);
           setCandidates(saved.candidates);
-          setNotice("Показаны ранее найденные поставщики (поиск не удался).");
+          setNotice("Показаны ранее найденные поставщики — новый поиск не удался.");
         }
       } catch {
         /* тихо — основная ошибка уже показана */
@@ -194,7 +229,32 @@ export function SuppliersPage() {
         </p>
       )}
 
-      {loading && (
+      {lotInfo && (
+              <section className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
+                <p className="text-xs text-white/40">Требования ТЗ, по которым ищем:</p>
+                <p className="mt-1 text-sm font-medium text-white/80">{lotInfo.title || `Лот ${lotInfo.lot_id}`}</p>
+                {lotInfo.customer && (
+                  <p className="mt-0.5 text-xs text-white/35">{lotInfo.customer}</p>
+                )}
+                <ul className="mt-3 flex flex-wrap gap-1.5">
+                  {lotInfo.requirements.slice(0, 8).map((r) => (
+                    <li
+                      key={r.code || r.title}
+                      className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[11px] text-white/55"
+                    >
+                      {r.title.length > 60 ? `${r.title.slice(0, 60)}…` : r.title}
+                    </li>
+                  ))}
+                  {lotInfo.requirements.length > 8 && (
+                    <li className="px-2 py-1 text-[11px] text-white/35">
+                      +{lotInfo.requirements.length - 8} ещё
+                    </li>
+                  )}
+                </ul>
+              </section>
+            )}
+
+            {loading && (
         <div className="space-y-3">
           <p className="text-xs text-white/40">Поиск и сверка занимают до 2–3 минут…</p>
           <Skeleton className="h-40" />
