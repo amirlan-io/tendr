@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowDownUp,
@@ -16,6 +23,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Wrench,
+  X,
 } from "lucide-react";
 import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { api, ApiError, getOrCreateClientId } from "../clientId";
@@ -91,11 +99,7 @@ const PROCUREMENT_METHODS = [
   ["3", "Запрос ценовых предложений"],
   ["6", "Из одного источника по несостоявшимся закупкам"],
 ] as const;
-const HISTOGRAM_BARS = [
-  100, 84, 73, 64, 57, 51, 46, 42, 38, 35, 32, 30, 28, 26, 24, 23, 21,
-  20, 19, 18, 17, 16, 15, 15, 14, 13, 13, 12, 12, 11, 10, 10, 9, 9, 8, 8,
-  7, 7, 6, 5,
-];
+const PRICE_LABELS = [0, PRICE_MAX * 0.25, PRICE_MAX * 0.5, PRICE_MAX * 0.75, PRICE_MAX];
 
 function getCachedSearch(key: string): SearchResult | null {
   try {
@@ -166,6 +170,14 @@ function formatCompactKzt(value: number): string {
 function formatFullKzt(value?: number): string {
   if (value === undefined || value === null) return "Сумма не указана";
   return `${value.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₸`;
+}
+
+function formatPriceTick(value: number, index: number): string {
+  if (value === 0) return "0";
+  const amount = (value / 1_000_000_000).toLocaleString("ru-RU", {
+    maximumFractionDigits: 1,
+  });
+  return index === PRICE_LABELS.length - 1 ? `${amount} млрд ₸` : amount;
 }
 
 export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
@@ -518,7 +530,7 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                   </select>
                 </div>
 
-                <PriceHistogramSlider value={priceRange} onChange={setPriceRange} />
+                <PriceRangeSlider value={priceRange} onChange={setPriceRange} />
 
                 <div>
                   <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.17em] text-white/35">
@@ -758,57 +770,87 @@ function ToggleFilter({
   );
 }
 
-function PriceHistogramSlider({
+function PriceRangeSlider({
   value,
   onChange,
 }: {
   value: [number, number];
   onChange: (value: [number, number]) => void;
 }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [preview, setPreview] = useState<number | null>(null);
   const [low, high] = value;
   const lowPct = (low / PRICE_MAX) * 100;
   const highPct = (high / PRICE_MAX) * 100;
   const updateLow = (next: number) => onChange([Math.min(next, high - PRICE_STEP), high]);
   const updateHigh = (next: number) => onChange([low, Math.max(next, low + PRICE_STEP)]);
+  const previewPct = preview === null ? null : (preview / PRICE_MAX) * 100;
+  const isFullRange = low === 0 && high === PRICE_MAX;
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const rawValue = ((event.clientX - rect.left) / rect.width) * PRICE_MAX;
+    const roundedValue = Math.round(rawValue / PRICE_STEP) * PRICE_STEP;
+    setPreview(Math.max(0, Math.min(PRICE_MAX, roundedValue)));
+  };
+
+  let ghostLeft = 0;
+  let ghostWidth = 0;
+  if (previewPct !== null && previewPct < lowPct) {
+    ghostLeft = previewPct;
+    ghostWidth = lowPct - previewPct;
+  } else if (previewPct !== null && previewPct > highPct) {
+    ghostLeft = highPct;
+    ghostWidth = previewPct - highPct;
+  }
 
   return (
-    <div>
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
+    <div className="space-y-5">
+      <div>
+        <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-white/35">Сумма лота</p>
-          <p className="mt-1.5 text-sm font-semibold tabular-nums text-white">
-            {formatCompactKzt(low)} <span className="px-1 text-white/25">—</span> {formatCompactKzt(high)}
-          </p>
+          <button
+            type="button"
+            onClick={() => onChange([0, PRICE_MAX])}
+            disabled={isFullRange}
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-white/[0.1] bg-white/[0.025] px-2.5 text-[11px] text-white/45 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <X className="h-3 w-3" />
+            Очистить
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => onChange([0, PRICE_MAX])}
-          disabled={low === 0 && high === PRICE_MAX}
-          className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-white/35 transition hover:text-white disabled:opacity-30"
-        >
-          Очистить
-        </button>
+        <p className="mt-1.5 whitespace-nowrap text-lg font-semibold tabular-nums tracking-[-0.025em] text-white">
+          {formatCompactKzt(low)} <span className="px-1 text-white/28">—</span> {formatCompactKzt(high)}
+        </p>
       </div>
 
-      <div className="flex h-12 items-end gap-[2px]" aria-hidden>
-        {HISTOGRAM_BARS.map((height, index) => {
-          const pct = (index / (HISTOGRAM_BARS.length - 1)) * 100;
-          const selected = pct >= lowPct && pct <= highPct;
-          return (
-            <span
-              key={index}
-              className={`min-w-0 flex-1 rounded-t-[1px] transition-colors ${selected ? "bg-white/70" : "bg-white/10"}`}
-              style={{ height: `${Math.max(10, height)}%` }}
-            />
-          );
-        })}
-      </div>
-
-      <div className="relative mt-2 h-5">
-        <div className="absolute left-0 right-0 top-2 h-1 rounded-full bg-white/10" />
+      <div
+        ref={rootRef}
+        className="relative h-6 w-full touch-none"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setPreview(null)}
+      >
+        <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-white/[0.11]" />
         <div
-          className="absolute top-2 h-1 rounded-full bg-white/80"
+          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-white/80 shadow-[0_0_16px_rgba(255,255,255,.08)]"
           style={{ left: `${lowPct}%`, right: `${100 - highPct}%` }}
+        />
+        {ghostWidth > 0 && (
+          <div
+            className="pointer-events-none absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-white/20 transition-[left,width] duration-75"
+            style={{ left: `${ghostLeft}%`, width: `${ghostWidth}%` }}
+          />
+        )}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 z-[5] h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/85 bg-[#0d0d0e] shadow-[0_0_0_3px_rgba(255,255,255,.06),0_4px_14px_rgba(0,0,0,.55)]"
+          style={{ left: `${lowPct}%` }}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 z-[5] h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/85 bg-[#0d0d0e] shadow-[0_0_0_3px_rgba(255,255,255,.06),0_4px_14px_rgba(0,0,0,.55)]"
+          style={{ left: `${highPct}%` }}
         />
         <input
           type="range"
@@ -818,7 +860,7 @@ function PriceHistogramSlider({
           value={low}
           onChange={(event) => updateLow(Number(event.target.value))}
           aria-label="Минимальная сумма лота"
-          className="lot-range-input"
+          className="lot-range-input lot-range-input-low"
         />
         <input
           type="range"
@@ -828,40 +870,14 @@ function PriceHistogramSlider({
           value={high}
           onChange={(event) => updateHigh(Number(event.target.value))}
           aria-label="Максимальная сумма лота"
-          className="lot-range-input"
+          className="lot-range-input lot-range-input-high"
         />
       </div>
 
-      <div className="mt-1 flex justify-between text-[11px] tabular-nums text-white/38">
-        <span>0 ₸</span>
-        <span>49,5 млрд ₸</span>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <label className="rounded-lg border border-white/[0.08] bg-black/15 px-2.5 py-2">
-          <span className="block text-[9px] uppercase tracking-wider text-white/28">От, ₸</span>
-          <input
-            type="number"
-            min={0}
-            max={high - PRICE_STEP}
-            step={PRICE_STEP}
-            value={low}
-            onChange={(event) => updateLow(Math.max(0, Number(event.target.value)))}
-            className="mt-1 w-full bg-transparent text-xs tabular-nums text-white outline-none"
-          />
-        </label>
-        <label className="rounded-lg border border-white/[0.08] bg-black/15 px-2.5 py-2">
-          <span className="block text-[9px] uppercase tracking-wider text-white/28">До, ₸</span>
-          <input
-            type="number"
-            min={low + PRICE_STEP}
-            max={PRICE_MAX}
-            step={PRICE_STEP}
-            value={high}
-            onChange={(event) => updateHigh(Math.min(PRICE_MAX, Number(event.target.value)))}
-            className="mt-1 w-full bg-transparent text-xs tabular-nums text-white outline-none"
-          />
-        </label>
+      <div className="flex select-none justify-between text-[10px] font-medium tabular-nums text-white/32">
+        {PRICE_LABELS.map((label, index) => (
+          <span key={label}>{formatPriceTick(label, index)}</span>
+        ))}
       </div>
     </div>
   );
