@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends
 
 from app.core.config import Settings, get_settings
@@ -44,7 +46,15 @@ async def health(settings: Settings = Depends(get_settings)) -> dict:
         checks["database"] = "db unavailable"
         status = "degraded"
 
-    if _qdrant_is_available():
+    try:
+        qdrant_ok = await asyncio.wait_for(
+            asyncio.to_thread(_qdrant_is_available),
+            timeout=3.0,
+        )
+    except Exception:
+        qdrant_ok = False
+
+    if qdrant_ok:
         checks["qdrant"] = "ok"
     else:
         checks["qdrant"] = "qdrant unavailable"
@@ -52,7 +62,7 @@ async def health(settings: Settings = Depends(get_settings)) -> dict:
 
     llm = get_llm()
     try:
-        llm_ok = await llm.healthcheck()
+        llm_ok = await asyncio.wait_for(llm.healthcheck(), timeout=5.0)
         checks["llm"] = "ok" if llm_ok else "llm unavailable"
         if not llm_ok:
             status = "degraded"
