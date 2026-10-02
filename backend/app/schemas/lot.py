@@ -488,6 +488,12 @@ class LegalCheckItem(BaseModel):
     rule_id: str | None = None
     rule_title: str | None = None
     law_reference: str | None = None
+    # Ссылки на источник нормы и цитату для прозрачной проверки
+    article: str | None = None
+    source: str | None = None
+    quote: str | None = None
+    citation_url: str | None = None
+    legal_text_revision: str | None = None
 
 
 class LegalCheckResult(BaseModel):
@@ -508,6 +514,7 @@ class LegalCheckResult(BaseModel):
     complaint_draft: str | dict | None = None  # черновик жалобы
     summary: str = ""
     can_complain_to_counting_committee: bool = False
+    corpus_revision: str | None = None
 
 
 # ═════ B2G (workspace) ═════
