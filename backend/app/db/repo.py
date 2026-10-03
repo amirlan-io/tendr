@@ -5,9 +5,9 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
-from typing import Any
 import uuid
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import and_, func, or_, select
@@ -35,10 +35,10 @@ PLAN_LIMITS: dict[str, tuple[int, int]] = {
 
 def _normalize_utc(dt: datetime | None) -> datetime:
     if dt is None:
-        dt = datetime.now(timezone.utc)
+        dt = datetime.now(UTC)
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _utc_naive(dt: datetime | None) -> datetime | None:
@@ -56,7 +56,7 @@ async def _run_in_transaction(session: AsyncSession, callback):
 
 def _month_start_utc(now: datetime | None = None) -> datetime:
     now = _normalize_utc(now)
-    return datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    return datetime(now.year, now.month, 1, tzinfo=UTC)
 
 
 async def _current_reserved_amount(
@@ -172,7 +172,9 @@ async def cleanup_expired_quota_reservations(
     expired = rows.scalars().all()
     for reservation in expired:
         reservation.status = "released"
-        reservation.released_at = now
+        # Наивное UTC: в колонку TIMESTAMP WITHOUT TIME ZONE нельзя
+        # писать aware-значение (ошибка asyncpg про offset-aware/naive).
+        reservation.released_at = now_naive
         reservation.release_reason = "expired"
     if expired:
         await session.flush()
@@ -319,7 +321,9 @@ async def release_user_quota(
         if reservation.status in {"released", "confirmed"}:
             return False
         reservation.status = "released"
-        reservation.released_at = now
+        # Колонка TIMESTAMP WITHOUT TIME ZONE: aware-значение приводит
+        # asyncpg к ошибке "can't subtract offset-naive and offset-aware".
+        reservation.released_at = _utc_naive(now)
         reservation.release_reason = "manual"
         await session.flush()
         return True

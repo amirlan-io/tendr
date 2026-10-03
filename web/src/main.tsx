@@ -22,6 +22,7 @@ import { BillingPage } from "./dashboard/pages/Billing";
 import { SettingsPage } from "./dashboard/pages/Settings";
 import { DocumentsPage } from "./dashboard/pages/Documents";
 import { SuppliersPage } from "./dashboard/pages/Suppliers";
+import { SandboxPage } from "./dashboard/pages/Sandbox";
 import { installErrorReporting } from "./monitoring/errorReporter";
 
 // Сразу создаём client_id при загрузке.
@@ -69,6 +70,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="history" element={<HistoryPage embedded />} />
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="suppliers" element={<SuppliersPage />} />
+            <Route path="sandbox" element={<SandboxPage />} />
             <Route path="b2g" element={<B2GPage embedded />} />
             <Route path="billing" element={<BillingPage />} />
             <Route path="settings" element={<SettingsPage />} />

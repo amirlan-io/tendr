@@ -34,6 +34,23 @@ def _qdrant_is_available() -> bool:
         return False
 
 
+async def _rag_embeddings_ok() -> tuple[bool, str]:
+    """Проверить эмбеддер RAG и наличие проиндексированных документов."""
+    try:
+        from app.rag import RAGStore
+
+        store = RAGStore("law_kz")
+        embedder = store._get_embedder()
+        if embedder is None:
+            return False, "embedder unavailable"
+        hits = await store.search("государственные закупки", top_k=1)
+        if not hits:
+            return False, "индекс law_kz пуст — юридическая проверка работать не будет"
+        return True, "ok"
+    except Exception:
+        return False, "unavailable"
+
+
 @router.get("/health")
 async def health(settings: Settings = Depends(get_settings)) -> dict:
     checks: dict[str, str] = {}
@@ -62,13 +79,25 @@ async def health(settings: Settings = Depends(get_settings)) -> dict:
 
     llm = get_llm()
     try:
-        llm_ok = await asyncio.wait_for(llm.healthcheck(), timeout=5.0)
+        llm_ok = await asyncio.wait_for(llm.healthcheck(), timeout=15.0)
         checks["llm"] = "ok" if llm_ok else "llm unavailable"
         if not llm_ok:
             status = "degraded"
     except Exception:
         checks["llm"] = "llm unavailable"
         status = "degraded"
+
+    # Эмбеддинги проверяем у того провайдера, который реально использует
+    # RAG. Проверять llm.embed() здесь бессмысленно: при alemLLM без
+    # поддержки embed поиск по закону всё равно работает, потому что
+    # индекс обслуживает локальный эмбеддер.
+    try:
+        embeddings_ok, detail = await asyncio.wait_for(
+            _rag_embeddings_ok(), timeout=15.0
+        )
+        checks["embeddings"] = "ok" if embeddings_ok else (detail or "unavailable")
+    except Exception:
+        checks["embeddings"] = "unavailable"
 
     return {
         "status": status,
