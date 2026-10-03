@@ -26,8 +26,8 @@ from loguru import logger
 from app.agents.base import Agent
 from app.core.config import get_settings
 
-# Домены, где ищем поставщиков в Казахстане. Не «интернет вообще» —
-# иначе агент приносит Alibaba-перекупщиков вместо местных поставщиков.
+# Маркетплейсы и доски объявлений: быстрый путь, но там почти всегда
+# посредник и спрятанные за кнопкой контакты.
 DEFAULT_SEARCH_DOMAINS: tuple[str, ...] = (
     "kaspi.kz",
     "sulpak.kz",
@@ -43,8 +43,55 @@ DEFAULT_SEARCH_DOMAINS: tuple[str, ...] = (
     "flagma.kz",
 )
 
+# Второй проход: ищем САМОГО производителя/дистрибьютора, без ограничения
+# доменов. На сайтах компаний контакты почти всегда есть открытым текстом,
+# а цена ниже, потому что нет наценки площадки.
+DIRECT_QUERY_HINTS: tuple[str, ...] = (
+    "производитель",
+    "оптом",
+    "завод",
+    "поставщик",
+    "дистрибьютор",
+    "оптовая продажа",
+    "производство",
+)
+
+#: Уценка маржа за посредничество: прямой поставщик приоритетнее.
+DIRECT_SUPPLIER_BONUS = 12
+
 # Признаки посредника: страница не производителя, а маркетплейса/доски объявлений.
 MIDDLEMAN_DOMAINS = {"kaspi.kz", "olx.kz", "sulpak.kz", "technodom.kz", "avito.kz"}
+
+#: Агрегаторы и маркетплейсы. Наличие товара там не означает, что продаёт
+#: производитель — цена выше и контактов Often нет.
+AGGREGATOR_DOMAINS = {
+    "kaspi.kz", "olx.kz", "sulpak.kz", "technodom.kz", "flagma.kz", "satu.kz",
+    "pulscen.kz", "prom.ua", "avito.kz", "prom.kz", "blizko.kz", "vsevoli.kz",
+    "shopping.kz", "mag.kz", "market.kz", "tavito.kz", "obyavlenie.kz",
+    "prom24.kz", "deal.by", "ucoz.kz",
+}
+
+#: Доски объявлений и соцсети — там контактов продавца обычно нет.
+CLASSIFIEDS_DOMAINS = {
+    "facebook.com", "instagram.com", "vk.com", "t.me", "telegram.me",
+    "youtube.com", "linkedin.com", "ok.ru", "pinterest.com",
+}
+
+#: Признаки прямого производителя/дилера на странице.
+_DIRECT_HINTS = (
+    "производство", "производитель", "завод", "фабрика", "собственное производство",
+    "дилер", "официальный дилер", "оптом", "оптовые цены", "оптовый отдел",
+    "контакты", "наши контакты", "о нас", "контактная информация",
+)
+
+#: Суффиксы, которые направляют Tavily к сайтам компаний, а не к витринам.
+_MANUFACTURER_QUERY_SUFFIXES = (
+    "производитель казахстан",
+    "оптом напрямую от производителя",
+    "официальный сайт поставщика",
+    "завод изготовитель казахстан",
+    "дилерский центр",
+)
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]{2,}")
 # Основной формат: +7/8 с префиксом.
@@ -113,6 +160,9 @@ class SupplierCandidate:
     warnings: list[str] = field(default_factory=list)
     score: int = 0
     is_middleman: bool = False
+    # Тип площадки: direct (сайт компании) / aggregator (маркетплейс) /
+    # classifieds (доска объявлений). Определяется classify_domain.
+    domain_kind: str = "unknown"
 
     def to_card(self) -> dict[str, Any]:
         return {
@@ -131,6 +181,7 @@ class SupplierCandidate:
             "warranty": self.warranty,
             "sources": self.sources,
             "is_middleman": self.is_middleman,
+            "domain_kind": self.domain_kind,
         }
 
     def to_match(self) -> dict[str, Any]:
@@ -147,6 +198,51 @@ def extract_domain(url: str) -> str:
     except ValueError:
         return ""
     return host.removeprefix("www.")
+
+
+#: Национальные домены Казахстана. Поиск без ограничения доменов
+#: неизбежно приносит российские и китайские площадки: перекрёстная
+#: логистика, другая гарантия, часто нет документов для участия в
+#: тендерах РК. Такие домены понижаем, казахстанские — поднимаем.
+KZ_TLDS = (".kz", ".gov.kz", ".edu.kz", ".org.kz")
+KZ_BONUS = 15
+FOREIGN_PENALTY = 10
+
+
+def domain_country_hint(domain: str) -> str:
+    """kz / foreign / neutral — по суффиксу домена."""
+    d = (domain or "").lower()
+    if not d:
+        return "neutral"
+    if any(d.endswith(tld) for tld in KZ_TLDS):
+        return "kz"
+    if d.endswith((".ru", ".su", ".cn", ".by")):
+        return "foreign"
+    return "neutral"
+
+
+def classify_domain(domain: str) -> str:
+    """Классифицировать домен: direct / aggregator / classifieds / unknown.
+
+    От этого зависит, покажем ли мы карточку как «прямого поставщика»
+    и стоит ли с неё начинать поиск контактов.
+    """
+    d = (domain or "").lower()
+    if not d:
+        return "unknown"
+    if any(d == s or d.endswith("." + s) for s in CLASSIFIEDS_DOMAINS):
+        return "classifieds"
+    if any(d == s or d.endswith("." + s) for s in AGGREGATOR_DOMAINS):
+        return "aggregator"
+    if d in DEFAULT_SEARCH_DOMAINS:
+        return "aggregator"
+    return "direct"
+
+
+def looks_like_manufacturer(text: str) -> bool:
+    """Есть ли на странице признаки прямого поставщика."""
+    lowered = (text or "").lower()[:4000]
+    return any(hint in lowered for hint in _DIRECT_HINTS)
 
 
 def find_contacts(text: str) -> tuple[str, str]:
@@ -239,6 +335,15 @@ def build_warnings(candidate: SupplierCandidate, requirements: list[Requirement]
         warnings.append("Контакты на странице не найдены.")
     if candidate.is_middleman:
         warnings.append("Похоже на посредника, а не производителя — уточните, кто фактический поставщик.")
+    if domain_country_hint(candidate.domain) == "foreign":
+        warnings.append(
+            "Зарубежный поставщик: уточните сроки и стоимость доставки, "
+            "а также подходят ли документы для участия в тендере РК."
+        )
+    if candidate.domain_kind == "direct" and not candidate.is_middleman:
+        # Прямой поставщик — контакты и цена производителя, а не витрины.
+        if not candidate.email and not candidate.phone:
+            warnings.append("Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».")
     mandatory = [r for r in requirements if r.is_mandatory]
     if mandatory:
         misses = sum(
@@ -274,6 +379,8 @@ class SupplierAgent(Agent):
 3. Статусы: fits (подходит) / partial (подходит частично) /
    no (не подходит) / unknown (нет данных).
 4. Если товар — посредник, а производитель другой — укажи это в warnings.
+5. Сайт производителя или дилера ценнее маркетплейса: на нём есть реальные
+   контакты, оптовые цены и сертификаты. Отмечай такие в supplier_type.
 
 Сначала верни JSON со search_queries: 3–7 поисковых запросов (казахский и
 русский), по которым реально можно найти поставщика.
@@ -354,9 +461,17 @@ class SupplierAgent(Agent):
 
     # ── Шаг 2: Tavily ────────────────────────────────────────────────
     async def search_web(
-        self, queries: list[str], *, max_results: int = 20
+        self,
+        queries: list[str],
+        *,
+        max_results: int = 20,
+        domains: Sequence[str] | None = DEFAULT_SEARCH_DOMAINS,
     ) -> tuple[list[dict[str, Any]], Costs]:
-        """Поиск в интернете. Без Tavily возвращает пустой список, а не выдумку."""
+        """Поиск в интернете. Без Tavily возвращает пустой список, а не выдумку.
+
+        ``domains=None`` означает поиск по всему интернету — так находится
+        сайт самого производителя, а не витрина маркетплейса.
+        """
         costs = Costs()
         if not self._tavily_client:
             logger.info("[supplier] Tavily не сконфигурирован — поиск пропущен")
@@ -366,12 +481,14 @@ class SupplierAgent(Agent):
         seen: set[str] = set()
         for query in queries[:7]:
             try:
-                response = self._tavily_client.search(
+                kwargs: dict[str, Any] = dict(
                     query=query,
                     search_depth="advanced",
                     max_results=10,
-                    include_domains=list(DEFAULT_SEARCH_DOMAINS),
                 )
+                if domains:
+                    kwargs["include_domains"] = list(domains)
+                response = self._tavily_client.search(**kwargs)
             except Exception as exc:
                 logger.warning("[supplier] Tavily search failed for '{}': {}", query, exc)
                 continue
@@ -388,6 +505,76 @@ class SupplierAgent(Agent):
                         "url": url[:1000],
                         "content": str(item.get("content") or "")[:1500],
                         "score": float(item.get("score") or 0.0),
+                    }
+                )
+        collected.sort(key=lambda r: r["score"], reverse=True)
+        return collected[:max_results], costs
+
+    # ── Шаг 2b: поиск прямых производителей в открытом веб-поиске ──
+    async def search_manufacturers(
+        self, requirements: list[Requirement], *, max_results: int = 12
+    ) -> tuple[list[dict[str, Any]], Costs]:
+        """Найти сайты производителей и дилеров без ограничения доменов.
+
+        Зачем вторая фаза: маркетплейсы (Kaspi, OLX, Flagma) не дают
+        контакты и цену производителя, а на сайте самого завода они есть
+        почти всегда. Маркетплейс остаётся быстрым способом сравнить цены,
+        но прямой поставщик — это то, что реально можно связаться.
+        """
+        costs = Costs()
+        if not self._tavily_client or not requirements:
+            return [], costs
+
+        # Запросы строим из названия товара + подсказка «производитель/оптом».
+        base_terms: list[str] = []
+        for req in requirements[:3]:
+            title = re.sub(r"[^\w\s-]", " ", req.title).strip()
+            title = re.sub(r"\s+", " ", title)[:60]
+            if title:
+                base_terms.append(title)
+        if not base_terms:
+            return [], costs
+
+        queries: list[str] = []
+        for term in base_terms[:2]:
+            queries.append(f"{term} {_MANUFACTURER_QUERY_SUFFIXES[0]}")
+        queries.append(f"{base_terms[0]} {_MANUFACTURER_QUERY_SUFFIXES[1]}")
+        queries = queries[:3]
+
+        collected: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for query in queries:
+            try:
+                # Без include_domains — ищем сайты компаний по всему вебу.
+                response = self._tavily_client.search(
+                    query=query,
+                    search_depth="advanced",
+                    max_results=8,
+                )
+            except Exception as exc:
+                logger.warning("[supplier] manufacturer search failed: {}", exc)
+                continue
+            costs.tavily_usd += 0.008  # ~$0.008 за запрос
+            for item in response.get("results", []):
+                url = str(item.get("url") or "")
+                if not url or url in seen:
+                    continue
+                domain = extract_domain(url)
+                kind = classify_domain(domain)
+                # Соцсети и доски объявлений бесполезны: контактов там нет.
+                if kind == "classifieds":
+                    continue
+                seen.add(url)
+                content = str(item.get("content") or "")[:1500]
+                direct = kind == "direct" and looks_like_manufacturer(content)
+                collected.append(
+                    {
+                        "title": str(item.get("title") or "")[:512],
+                        "url": url[:1000],
+                        "content": content,
+                        "domain_kind": kind,
+                        # Прямого производителя поднимаем выше площадки.
+                        "score": float(item.get("score") or 0.0) + (0.5 if direct else 0.0),
                     }
                 )
         collected.sort(key=lambda r: r["score"], reverse=True)
@@ -657,17 +844,48 @@ class SupplierAgent(Agent):
 
         results, costs = await self.search_web(queries)
         total.merge(costs)
+
+        # Вторая фаза: сайты производителей и дилеров в открытом вебе.
+        manufacturer_results, costs = await self.search_manufacturers(requirements)
+        total.merge(costs)
+        known_urls = {str(item.get("url")) for item in results}
+        for item in manufacturer_results:
+            if item["url"] in known_urls:
+                continue
+            results.append(item)
+            known_urls.add(item["url"])
+
         if not results:
             return [], total, meta
 
         blocked = blocked or set()
         candidates: list[SupplierCandidate] = []
+        # Приоритет: прямой поставщик важнее витрины. Без этой сортировки
+        # маркетплейсы забивают лимит 20 первыми, и сайты производителей
+        # (а именно там есть контакты) до него не доходят.
+        def _priority(item: dict[str, Any]) -> tuple[int, float]:
+            domain = extract_domain(item["url"])
+            kind = str(item.get("domain_kind") or classify_domain(domain))
+            # 0 — прямой поставщик, 1 — агрегатор/неизвестно
+            # Внутри группы приоритет казахстанским доменам: закупка в КЗ
+            # без перекрёстной логистики и с местными документами.
+            country_rank = {"kz": 0, "neutral": 1, "foreign": 2}.get(
+                domain_country_hint(domain), 1
+            )
+            return (0 if kind == "direct" else 1, country_rank, -float(item.get("score") or 0.0))
+
+        results = sorted(results, key=_priority)
+
         for item in results:
             domain = extract_domain(item["url"])
             supplier = item["title"][:256] or domain
             # Стоп-лист: не показываем и не предлагаем (F6).
             if supplier in blocked or domain in blocked:
                 meta["blocked_filtered"] += 1
+                continue
+            kind = str(item.get("domain_kind") or classify_domain(domain))
+            # Соцсети и доски объявлений пропускаем: контактов там нет.
+            if kind == "classifieds":
                 continue
             email, phone = find_contacts(item.get("content", ""))
             candidate = SupplierCandidate(
@@ -677,7 +895,8 @@ class SupplierAgent(Agent):
                 url=item["url"],
                 email=email,
                 phone=phone,
-                is_middleman=domain in MIDDLEMAN_DOMAINS,
+                is_middleman=kind == "aggregator",
+                domain_kind=kind,
             )
             candidate.sources["search"] = item["url"]
             candidates.append(candidate)

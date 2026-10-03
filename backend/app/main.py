@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import traceback
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import (
@@ -17,6 +19,7 @@ from app.api import (
     b2g,
     browser_actions,
     discovery,
+    errors,
     health,
     lots,
     products,
@@ -32,7 +35,31 @@ from app.services.goszakup_parser import close_parser, get_parser
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Необработанное исключение не должно теряться: пересылаем
+            # владельцу и отдаём клиенту безопасный ответ без деталей.
+            from app.services.error_reporter import get_reporter, scrub
+
+            try:
+                await get_reporter().report(
+                    {
+                        "name": type(exc).__name__,
+                        "message": scrub(str(exc)),
+                        "stack": scrub("".join(traceback.format_exception(exc))[:1200]),
+                        "source": "backend",
+                        "where": f"{request.method} {request.url.path}",
+                    }
+                )
+            except Exception:  # noqa: BLE001 - репортер не должен ломать ответ
+                pass
+            logger_opt = __import__("loguru").logger
+            logger_opt.exception("[unhandled] {} {}", request.method, request.url.path)
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "INTERNAL_ERROR"},
+            )
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         if (
@@ -94,6 +121,8 @@ def create_app(*, test_mode: bool = False) -> FastAPI:
     app.include_router(products.router, prefix="/api")
     app.include_router(applications.router, prefix="/api")
     app.include_router(browser_actions.router, prefix="/api")
+    # Сбор ошибок от клиента и тест канала уведомлений.
+    app.include_router(errors.router, prefix="/api")
     # Supplier Agent: поиск поставщиков, одобрения, исходящие, персонализация.
     app.include_router(suppliers.router, prefix="/api")
     app.include_router(approvals.router, prefix="/api")

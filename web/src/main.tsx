@@ -22,6 +22,7 @@ import { BillingPage } from "./dashboard/pages/Billing";
 import { SettingsPage } from "./dashboard/pages/Settings";
 import { DocumentsPage } from "./dashboard/pages/Documents";
 import { SuppliersPage } from "./dashboard/pages/Suppliers";
+import { installErrorReporting } from "./monitoring/errorReporter";
 
 // Сразу создаём client_id при загрузке.
 // Контролируемая ошибка (нет Web Crypto) не должна ронять старт приложения.
@@ -32,6 +33,10 @@ try {
 }
 // Применяем тему до рендера, чтобы избежать flash
 applyTheme("dark");
+
+// Автосообщения об ошибках: необработанные JS-ошибки и отклонённые
+// промисы уходят на backend и дальше владельцу в Telegram.
+installErrorReporting(window.location.pathname);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -63,7 +68,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="lots" element={<LotsPage embedded />} />
             <Route path="history" element={<HistoryPage embedded />} />
             <Route path="documents" element={<DocumentsPage />} />
-                        <Route path="suppliers" element={<SuppliersPage />} />
+            <Route path="suppliers" element={<SuppliersPage />} />
             <Route path="b2g" element={<B2GPage embedded />} />
             <Route path="billing" element={<BillingPage />} />
             <Route path="settings" element={<SettingsPage />} />
