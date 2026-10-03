@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
@@ -93,7 +93,12 @@ _MANUFACTURER_QUERY_SUFFIXES = (
     "дилерский центр",
 )
 
-_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]{2,}")
+# Email ищем аккуратно:
+#  * (?<![0-9-]) — не начинатьmatch посреди номера телефона (было «312-26-99info@…»);
+#  * домен верхнего уровня только из букв — иначе «.kz9» попадал в адрес.
+_EMAIL_RE = re.compile(
+    r"(?<![0-9\-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}\b"
+)
 # Основной формат: +7/8 с префиксом.
 _PHONE_RE = re.compile(r"(?:\+7|8)[\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-()]*\d{2}[\s\-()]*\d{2}")
 # Казахстанский формат без префикса +7/8: 7 и ещё 10 цифр, между
@@ -107,6 +112,9 @@ MATCH_FITS = "fits"
 MATCH_PARTIAL = "partial"
 MATCH_NO = "no"
 MATCH_UNKNOWN = "unknown"
+
+#: Сколько символов вокруг названия товара искать цену.
+PRICE_WINDOW = 600
 
 VALID_MATCH_STATUSES = frozenset({MATCH_FITS, MATCH_PARTIAL, MATCH_NO, MATCH_UNKNOWN})
 
@@ -131,7 +139,7 @@ class Costs:
     # Счётчики бесплатных операций — для отчётности по себестоимости.
     page_fetch_count: int = 0
 
-    def merge(self, other: "Costs") -> None:
+    def merge(self, other: Costs) -> None:
         self.llm_usd += other.llm_usd
         self.tavily_usd += other.tavily_usd
         self.browser_usd += other.browser_usd
@@ -295,9 +303,23 @@ def find_contacts(text: str) -> tuple[str, str]:
             if len(digits) == 11:  # 7 + 10 цифр — казахстанский формат
                 phone = candidate
                 break
-    # Отсекаем мусор: email из картинки/метрики.
-    if email and (email.endswith((".png", ".jpg", ".webp")) or len(email) > 64):
-        email = ""
+    # Отсекаем мусор: email из картинки/метрики и «телефон@домен».
+    if email:
+        local, _, domain = email.partition("@")
+        # На страницах часто идёт «тел: 312-26-99info@company.kz» — почерк
+        # съедает хвост номера. Отрезаем телефонный префикс до первой буквы.
+        local = re.sub(r"^[\d\-\s()]{2,}(?=[A-Za-z])", "", local)
+        if (
+            not local
+            or email.endswith((".png", ".jpg", ".webp"))
+            or len(local) > 48
+            or len(domain) > 64
+            # Остаток не должен начинаться с длинного числового блока.
+            or re.match(r"^\d{5,}", local)
+        ):
+            email = ""
+        else:
+            email = f"{local}@{domain}"
     return email, phone
 
 
@@ -464,9 +486,31 @@ class SupplierAgent(Agent):
                 logger.warning("[supplier] Browser-Use init failed: {}", exc)
 
     # ── Шаг 1: поисковые запросы ──────────────────────────────────────
+    #: Шаблоны формулировок. Поисковая выдача зависит от формулировки
+    #: сильно: одна и та же позиция находится и по названию, и по
+    #: «оптом», и по казахскому термину. Один запрос сужает выдачу и
+    #: теряет поставщиков, поэтому пробуем несколько вариантов.
+    QUERY_TEMPLATES: tuple[str, ...] = (
+        "{title}",
+        "{title} купить Казахстан",
+        "{title} оптом поставщик",
+        "{title} цена прайс Казахстан",
+        "{title} производитель дилер",
+        "{title} сатып алушы Қазақстан",
+    )
+
     async def build_queries(
-        self, requirements: list[Requirement], *, budget_kzt: float | None = None
+        self,
+        requirements: list[Requirement],
+        *,
+        budget_kzt: float | None = None,
+        variants_per_item: int = 2,
     ) -> tuple[list[str], Costs]:
+        """Попросить LLM поисковые запросы и разнообразить шаблонами.
+
+        ``variants_per_item`` — сколько разных формулировок пробовать на
+        каждый пункт ТЗ. Больше вариантов — шире охват, но дороже.
+        """
         costs = Costs()
         if not requirements:
             return [], costs
@@ -482,13 +526,33 @@ class SupplierAgent(Agent):
             "на русском и казахском языках. Верни JSON {\"queries\": [...]}."
         )
         data = await self._chat_json(prompt, max_tokens=800)
-        queries = [str(q).strip() for q in (data.get("queries") or []) if str(q).strip()]
-        # Стоимость считаем приблизительно по среднему тарифу flash-моделей.
         costs.llm_usd += 0.0002
-        if not queries:
-            # Fallback: заголовки требований как запросы.
-            queries = [r.title for r in requirements[:3]]
-        return queries[:7], costs
+        llm_queries = [str(q).strip() for q in (data.get("queries") or []) if str(q).strip()]
+
+        base_terms = [r.title[:80] for r in requirements if r.title]
+        if not base_terms:
+            base_terms = [q[:80] for q in llm_queries] or [""]
+        base_terms = base_terms[:3]
+        if not base_terms or not base_terms[0]:
+            return llm_queries[:7], costs
+
+        variants: list[str] = []
+        # Сначала то, что придумала модель: это самые «умные» формулировки.
+        variants.extend(q for q in llm_queries if any(
+            _tokens_overlap(q, term) for term in base_terms
+        ))
+        # Затем шаблонные варианты по каждому пункту.
+        for term in base_terms:
+            for template in self.QUERY_TEMPLATES:
+                candidate = template.format(title=term).strip()
+                if candidate and candidate not in variants:
+                    variants.append(candidate)
+                if sum(1 for v in variants if _tokens_overlap(v, term)) >= variants_per_item + 2:
+                    break
+
+        # Лимит: по 3 формулировки на пункт, но не больше 10 запросов.
+        limit = max(3, min(10, variants_per_item * len(base_terms) + len(base_terms)))
+        return variants[:limit], costs
 
     # ── Шаг 2: Tavily ────────────────────────────────────────────────
     async def search_web(
@@ -613,7 +677,7 @@ class SupplierAgent(Agent):
 
     # ── Шаг 3a: бесплатное чтение страниц (Jina → Tavily) ─────────
     async def enrich_with_pages(
-        self, candidates: list[SupplierCandidate], *, top_n: int = 5
+        self, candidates: list[SupplierCandidate], *, top_n: int = 10
     ) -> Costs:
         """Прочитать страницы поставщиков и достать контакты/цену.
 
@@ -641,7 +705,7 @@ class SupplierAgent(Agent):
 
     def _apply_page_text(self, candidate: SupplierCandidate, text: str) -> None:
         """Разобрать текст страницы: контакты, цена, наличие, город."""
-        from app.agents.product_search import _parse_price
+        from app.agents.supplier_agent import find_contacts
 
         email, phone = find_contacts(text)
         if email and not candidate.email:
@@ -652,14 +716,11 @@ class SupplierAgent(Agent):
             candidate.sources["phone"] = candidate.url
 
         if candidate.price_kzt is None:
-            # Ищем цену рядом со словом «тг»/«₸», чтобы не взять первую
-            # попавшуюся цифру (год выпуска, количество и т.п.).
-            price = None
-            for match in re.finditer(r"([\d][\d\s]{1,11})\s*(?:₸|тг|KZT)", text):
-                parsed = _parse_price(match.group(1))
-                if parsed and parsed > 0:
-                    price = parsed
-                    break
+            # Цену берём ТОЛЬКО рядом с названием товара. На каталоге
+            # из десяти позиций первая цена на странице почти всегда
+            # принадлежит другому товару — и раньше агент приписывал
+            # поставщику чужую цену (например «123 ₸» за фильтр).
+            price = self._price_near_title(candidate.title, text)
             if price is not None:
                 candidate.price_kzt = price
                 candidate.sources["price"] = candidate.url
@@ -677,6 +738,41 @@ class SupplierAgent(Agent):
             )
             if match:
                 candidate.city = match.group(1)
+
+    @staticmethod
+    def _price_near_title(title: str, text: str) -> float | None:
+        """Найти цену рядом с названием товара.
+
+        Возвращает ``None``, если название не найдено или рядом нет цены:
+        честное «не знаю» лучше чужой цены.
+        """
+        if not title or not text:
+            return None
+        from app.agents.product_search import _parse_price
+
+        needle = re.sub(r"\s+", " ", title.strip().lower())
+        # Длинные названия обрезаем: в каталоге заголовок может обрываться.
+        needles = [needle] if len(needle) <= 60 else [needle[:60], needle[:40]]
+        haystack = text.lower()
+        pos = -1
+        for candidate_needle in needles:
+            pos = haystack.find(candidate_needle)
+            if pos != -1:
+                break
+        if pos == -1:
+            return None
+        window = text[pos : pos + PRICE_WINDOW]
+        # Обрезаем по началу следующей карточки: цена соседнего товара
+        # не должна приписываться нашему поставщику.
+        next_card = re.search(r"\n\s*#{1,3}\s", window[1:])
+        if next_card:
+            window = window[: next_card.start() + 1]
+        best: float | None = None
+        for match in re.finditer(r"([\d][\d\s]{1,11})\s*(?:₸|тг|KZT)", window):
+            parsed = _parse_price(match.group(1))
+            if parsed and parsed > 0 and (best is None or parsed > best):
+                best = parsed
+        return best
 
     # ── Шаг 3b: Browser-Use — платный запасной вариант ────────────
     async def enrich_with_browser(
@@ -834,7 +930,7 @@ class SupplierAgent(Agent):
         budget_kzt: float | None = None,
         blocked: set[str] | None = None,
         enrich_browser: bool = True,
-        page_fetch_top_n: int = 5,
+        page_fetch_top_n: int = 10,
     ) -> list[SupplierCandidate]:
         """Точка входа агента (контракт Agent.run).
 
@@ -874,7 +970,8 @@ class SupplierAgent(Agent):
         budget_kzt: float | None = None,
         blocked: set[str] | None = None,
         enrich_browser: bool = True,
-        page_fetch_top_n: int = 5,
+        page_fetch_top_n: int = 10,
+        query_variants: int = 2,
     ) -> tuple[list[SupplierCandidate], Costs, dict[str, Any]]:
         """Полный конвейер F1+F2. Возвращает кандидатов, расходы и метаданные."""
         requirements = dedupe_requirements(requirements)
@@ -884,7 +981,9 @@ class SupplierAgent(Agent):
         if not requirements:
             return [], total, meta
 
-        queries, costs = await self.build_queries(requirements, budget_kzt=budget_kzt)
+        queries, costs = await self.build_queries(
+            requirements, budget_kzt=budget_kzt, variants_per_item=query_variants
+        )
         total.merge(costs)
         meta["queries"] = queries
         if not queries:

@@ -706,6 +706,7 @@ async def analyze_lot_url(
     used_this_month = int(quota.get("used_this_month") or quota.get("used") or 0)
 
     from app.schemas.lot import LotCreate
+    from app.services.orchestrator import QuotaExceeded
 
     reservation = None
     lot_create = LotCreate(source_url=url, source_id=source_id or "0")
@@ -729,6 +730,19 @@ async def analyze_lot_url(
         await db_repo.confirm_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
     except db_repo.QuotaLimitExceeded as exc:
         logger.warning("[analyze] quota exceeded user=%s", user.id)
+        raise HTTPException(status_code=429, detail="QUOTA_EXCEEDED") from exc
+    except QuotaExceeded as exc:
+        # Оркестратор дублирует проверку квоты и бросает своё исключение.
+        # Без этой ветки исчерпанная квота отдавала 500 вместо 429, и фронт
+        # не понимал, что это лимит, а не поломка сервиса.
+        logger.warning("[analyze] quota exceeded (orchestrator) user=%s", user.id)
+        if reservation:
+            try:
+                await db_repo.release_user_quota(
+                    db, user.id, reservation_key=reservation["reservation_key"]
+                )
+            except Exception:  # noqa: BLE001 — освобождение не должно мешать ответу
+                pass
         raise HTTPException(status_code=429, detail="QUOTA_EXCEEDED") from exc
     except Exception:
         logger.exception("[analyze] orchestrator failed")

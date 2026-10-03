@@ -5,7 +5,7 @@ from __future__ import annotations
 import traceback
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -23,6 +23,7 @@ from app.api import (
     health,
     lots,
     products,
+    sandbox,
     suppliers,
     tenders,
 )
@@ -37,7 +38,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         try:
             response = await call_next(request)
-        except Exception as exc:
+        except HTTPException:
+            # Ожидаемый ответ приложения (401/403/404…): его должен
+            # обработать сам FastAPI. Глотать его нельзя — иначе штатная
+            # проверка прав превратится в 500.
+            raise
+        except Exception as exc:  # noqa: BLE001 - последний рубеж
             # Необработанное исключение не должно теряться: пересылаем
             # владельцу и отдаём клиенту безопасный ответ без деталей.
             from app.services.error_reporter import get_reporter, scrub
@@ -123,6 +129,8 @@ def create_app(*, test_mode: bool = False) -> FastAPI:
     app.include_router(browser_actions.router, prefix="/api")
     # Сбор ошибок от клиента и тест канала уведомлений.
     app.include_router(errors.router, prefix="/api")
+    # Песочница агента: прогон на реальных данных со следом и фильтрами.
+    app.include_router(sandbox.router, prefix="/api")
     # Supplier Agent: поиск поставщиков, одобрения, исходящие, персонализация.
     app.include_router(suppliers.router, prefix="/api")
     app.include_router(approvals.router, prefix="/api")

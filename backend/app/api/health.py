@@ -34,13 +34,21 @@ def _qdrant_is_available() -> bool:
         return False
 
 
-async def _embed_ok(llm) -> bool:
-    """Запасная проверка эмбеддингов для провайдеров без метода."""
+async def _rag_embeddings_ok() -> tuple[bool, str]:
+    """Проверить эмбеддер RAG и наличие проиндексированных документов."""
     try:
-        await llm.embed("ping")
-        return True
+        from app.rag import RAGStore
+
+        store = RAGStore("law_kz")
+        embedder = store._get_embedder()
+        if embedder is None:
+            return False, "embedder unavailable"
+        hits = await store.search("государственные закупки", top_k=1)
+        if not hits:
+            return False, "индекс law_kz пуст — юридическая проверка работать не будет"
+        return True, "ok"
     except Exception:
-        return False
+        return False, "unavailable"
 
 
 @router.get("/health")
@@ -79,17 +87,17 @@ async def health(settings: Settings = Depends(get_settings)) -> dict:
         checks["llm"] = "llm unavailable"
         status = "degraded"
 
-    # Эмбеддинги нужны только для RAG. Их отсутствие не ломает анализ
-    # лотов, поэтому показываем отдельно и НЕ роняем статус: иначе
-    # провайдер без embed-поддержки всегда выглядит как авария.
+    # Эмбеддинги проверяем у того провайдера, который реально использует
+    # RAG. Проверять llm.embed() здесь бессмысленно: при alemLLM без
+    # поддержки embed поиск по закону всё равно работает, потому что
+    # индекс обслуживает локальный эмбеддер.
     try:
-        embeddings_ok = await asyncio.wait_for(
-            getattr(llm, "supports_embeddings", lambda: _embed_ok(llm))(),
-            timeout=10.0,
+        embeddings_ok, detail = await asyncio.wait_for(
+            _rag_embeddings_ok(), timeout=15.0
         )
-        checks["embeddings"] = "ok" if embeddings_ok else "not supported by provider"
+        checks["embeddings"] = "ok" if embeddings_ok else (detail or "unavailable")
     except Exception:
-        checks["embeddings"] = "not supported by provider"
+        checks["embeddings"] = "unavailable"
 
     return {
         "status": status,

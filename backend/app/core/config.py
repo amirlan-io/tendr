@@ -10,7 +10,27 @@ from urllib.parse import urlsplit
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+def _find_env_file() -> Path:
+    """Ищет .env вверх по дереву от расположения пакета.
+
+    Раньше здесь был жёсткий ``parents[2]``, но он указывал на каталог
+    ``backend/``, а не на корень проекта: файл не читался, и приложение
+    стартовало с настройками по умолчанию (LLM_API_KEY пуст). Из-за этого
+    приходилось вручную передавать переменные окружения при запуске.
+    Теперь ищем ближайший .env вверх: работает и для ``backend/app/...``,
+    и для любого другого расположения пакета.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / ".env"
+        if candidate.is_file():
+            return candidate
+    # Фолбэк — ожидаемое расположение в структуре репозитория.
+    return here.parents[3] / ".env" if len(here.parents) > 3 else here.parents[2] / ".env"
+
+
+_BACKEND_ENV_FILE = _find_env_file()
 
 
 def _normalize_csv(value: str) -> list[str]:
