@@ -56,6 +56,9 @@ def _candidate_payload(row) -> dict[str, Any]:
             "warranty": card.get("warranty", ""),
             "sources": card.get("sources", {}),
             "is_middleman": card.get("is_middleman", False),
+            # direct / aggregator / classifieds / unknown — UI показывает
+            # прямых поставщиков отдельно от площадок-посредников.
+            "domain_kind": card.get("domain_kind", "unknown"),
         },
         "requirement_matches": match.get("requirement_matches", []),
         "warnings": match.get("warnings", []),

@@ -1,4 +1,5 @@
 import { getAccessToken } from "./supabase";
+import { reportApiError } from "./monitoring/errorReporter";
 
 /**
  * Хелпер для client_id.
@@ -250,7 +251,7 @@ function extractErrorCode(body: unknown): string | undefined {
   return undefined;
 }
 
-async function throwSafeApiError(resp: Response): Promise<never> {
+async function throwSafeApiError(resp: Response, path = ""): Promise<never> {
   const status = resp.status;
   // Дожидаемся тела ответа, но НИКОГДА не показываем его пользователю:
   // внутренние detail/stack/ключи/заголовки не должны утекать в UI.
@@ -267,6 +268,13 @@ async function throwSafeApiError(resp: Response): Promise<never> {
     code = extractErrorCode(JSON.parse(raw));
   } catch {
     code = undefined;
+  }
+  // Нештатный ответ сервера — сообщаем владельцу, чтобы не искать причину
+  // вручную. Штатные коды (401/403/404/409/422/429) репортер отбрасывает.
+  try {
+    if (path) reportApiError(status, path, code ?? "");
+  } catch {
+    /* репортер не должен влиять на поток запроса */
   }
   if (code !== undefined && code in ERROR_CODE_MESSAGES) {
     throw new ApiError(status, ERROR_CODE_MESSAGES[code], code);
@@ -301,10 +309,11 @@ export async function api<T = unknown>(
     resp = await fetch(path, { ...init, headers });
   } catch {
     // Сеть недоступна / CORS / DNS — без деталей наружу.
+    reportApiError(0, path, "network");
     throw new ApiError(0, "Нет соединения с сервером. Проверьте интернет и попробуйте снова.");
   }
   if (!resp.ok) {
-    await throwSafeApiError(resp);
+    await throwSafeApiError(resp, path);
   }
   if (isJsonContentType(resp)) {
     return (await resp.json()) as T;
@@ -350,10 +359,11 @@ export async function adminApi<T = unknown>(
   try {
     resp = await fetch(path, { ...init, headers });
   } catch {
+    reportApiError(0, path, "network");
     throw new ApiError(0, "Нет соединения с сервером. Проверьте интернет и попробуйте снова.");
   }
   if (!resp.ok) {
-    await throwSafeApiError(resp);
+    await throwSafeApiError(resp, path);
   }
   if (isJsonContentType(resp)) {
     return (await resp.json()) as T;
@@ -379,10 +389,11 @@ export async function downloadBlob(path: string, filename: string): Promise<void
   try {
     resp = await fetch(path, { headers: await getApiHeaders() });
   } catch {
+    reportApiError(0, path, "network");
     throw new ApiError(0, "Нет соединения с сервером. Проверьте интернет и попробуйте снова.");
   }
   if (!resp.ok) {
-    await throwSafeApiError(resp);
+    await throwSafeApiError(resp, path);
   }
   const blob = await resp.blob();
   const objectUrl = URL.createObjectURL(blob);
