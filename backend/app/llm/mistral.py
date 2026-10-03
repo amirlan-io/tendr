@@ -137,6 +137,7 @@ class MistralProvider(LLMProvider):
 
 # Фабрика
 _provider: LLMProvider | None = None
+_assistant_provider: LLMProvider | None = None
 
 
 def _wrap_with_failover(primary: LLMProvider, secondary: LLMProvider) -> LLMProvider:
@@ -212,8 +213,42 @@ def get_llm() -> LLMProvider:
     return _provider
 
 
+def get_assistant_llm() -> LLMProvider:
+    """Return the Qwen/Alem provider dedicated to the interactive AI chat.
+
+    Existing installations with Mistral as the primary provider keep the Qwen
+    key in ``LLM_API_KEY_FALLBACK``. The chat uses that key directly, while the
+    document-analysis pipeline can retain its current primary/failover setup.
+    """
+    global _assistant_provider
+    if _assistant_provider is not None:
+        return _assistant_provider
+
+    s = get_settings()
+    qwen_key = s.llm_api_key_fallback if s.llm_provider == "mistral" else s.llm_api_key
+    if not qwen_key:
+        _assistant_provider = get_llm()
+        return _assistant_provider
+
+    from app.llm.openai_compat import OpenAICompatProvider
+
+    _assistant_provider = OpenAICompatProvider(
+        api_key=qwen_key,
+        base_url=s.alem_base_url,
+        model=s.alem_model,
+        embed_model=s.llm_embedding_model,
+        disable_thinking=True,
+    )
+    logger.info("AI chat provider initialized: qwen model={}", s.alem_model)
+    return _assistant_provider
+
+
 async def close_llm() -> None:
-    global _provider
+    global _provider, _assistant_provider
+    assistant = _assistant_provider
+    if assistant is not None and assistant is not _provider and hasattr(assistant, "close"):
+        await assistant.close()
+    _assistant_provider = None
     if _provider is not None and hasattr(_provider, "close"):
         await _provider.close()
     _provider = None

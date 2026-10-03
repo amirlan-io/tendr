@@ -7,7 +7,7 @@ import type {
 
 export const DASHBOARD_NAV: NavItem[] = [
   { to: "/dashboard", label: "Обзор", description: "Рабочий стол", icon: "home" },
-  { to: "/dashboard/analyze", label: "AI-анализ", description: "Проверить закупку", icon: "spark" },
+  { to: "/dashboard/analyze", label: "AI-чат", description: "Разобрать закупку", icon: "spark" },
   { to: "/dashboard/lots", label: "Поиск лотов", description: "Найти возможности", icon: "lots" },
     { to: "/dashboard/suppliers", label: "Поставщики", description: "Кто поставит под лот", icon: "suppliers" },
     { to: "/dashboard/sandbox", label: "Песочница", description: "Проверка агента вживую", icon: "spark" },

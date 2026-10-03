@@ -368,7 +368,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
       });
       setMessages((current) => [...current, chatMessage("assistant", response.answer)]);
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : "AI-аналитик временно недоступен. Попробуйте ещё раз.");
+      setError(e instanceof ApiError ? e.message : "AI-чат временно недоступен. Попробуйте ещё раз.");
     } finally {
       setChatBusy(false);
     }
@@ -496,7 +496,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
           <header className="relative flex items-center justify-between gap-4 border-b border-white/[0.065] px-5 py-4 sm:px-7">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.1] text-emerald-300"><Sparkles size={18} /></span>
-              <div><h1 className="text-sm font-semibold text-white">AI‑аналитик Tendr</h1><p className="mt-0.5 text-[11px] text-white/35">Работает с реальными данными лота и вашим контекстом</p></div>
+              <div><h1 className="text-sm font-semibold text-white">AI‑чат Tendr</h1><p className="mt-0.5 text-[11px] text-white/35">Работает с реальными данными лота и вашим контекстом</p></div>
             </div>
             <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.07] px-3 text-xs text-white/42 transition hover:bg-white/[0.05] hover:text-white"><RotateCcw size={14} /> <span className="hidden sm:inline">Новый диалог</span></button>
           </header>

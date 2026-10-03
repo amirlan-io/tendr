@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -79,3 +80,30 @@ async def test_healthcheck_prefers_chat_over_embed() -> None:
     provider = _Fake(chat_ok=True, embed_ok=True)
     assert await provider.healthcheck() is True
     assert provider.chat_calls, "healthcheck должен проверять chat"
+
+
+@pytest.mark.asyncio
+async def test_ai_chat_uses_qwen_key_and_normalizes_full_endpoint(monkeypatch) -> None:
+    from app.llm import mistral as provider_module
+    from app.llm.openai_compat import OpenAICompatProvider
+
+    settings = SimpleNamespace(
+        llm_provider="mistral",
+        llm_api_key="mistral-key",
+        llm_api_key_fallback="qwen-key",
+        alem_base_url="https://llm.alem.ai/v1/chat/completions",
+        alem_model="qwen3-8",
+        llm_embedding_model="mistral-embed",
+    )
+    monkeypatch.setattr(provider_module, "get_settings", lambda: settings)
+    provider_module._assistant_provider = None
+
+    provider = provider_module.get_assistant_llm()
+    try:
+        assert isinstance(provider, OpenAICompatProvider)
+        assert provider._api_key == "qwen-key"
+        assert provider._base_url == "https://llm.alem.ai/v1"
+        assert provider._model == "qwen3-8"
+    finally:
+        await provider.close()
+        provider_module._assistant_provider = None

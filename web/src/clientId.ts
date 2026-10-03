@@ -76,7 +76,7 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   ANALYSIS_FAILED: "Не удалось выполнить анализ. Попробуйте позже.",
   ANALYSIS_NOT_READY: "Анализ ещё выполняется. Дождитесь завершения и задайте вопрос снова.",
   ANALYSIS_JOB_NOT_FOUND: "Сохранённый анализ не найден. Запустите новый разбор.",
-  ASSISTANT_UNAVAILABLE: "AI-аналитик временно недоступен. Попробуйте позже.",
+  ASSISTANT_UNAVAILABLE: "AI-чат временно недоступен. Попробуйте позже.",
   FILE_PROCESSING_FAILED: "Не удалось обработать файл. Попробуйте позже.",
   BILLING_NOT_CONFIGURED: "Оплата ещё не настроена владельцем проекта.",
   BILLING_PROVIDER_ERROR: "Платёжный сервис временно недоступен. Попробуйте позже.",

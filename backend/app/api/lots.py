@@ -30,7 +30,7 @@ from app.core.config import get_settings
 from app.db import get_db
 from app.db import repo as db_repo
 from app.db.models import Analysis, AnalysisJob, Lot, LotPartnership, User
-from app.llm import Message, get_llm
+from app.llm import Message, get_assistant_llm
 from app.schemas.lot import (
     LotItem,
     LotSearchRequest,
@@ -707,7 +707,7 @@ async def chat_with_tender_assistant(
         messages.append(Message(role=item.role, content=item.content))
     messages.append(Message(role="user", content=payload.message.strip()))
     try:
-        response = await get_llm().chat(messages, temperature=0.15, max_tokens=1800)
+        response = await get_assistant_llm().chat(messages, temperature=0.15, max_tokens=1800)
     except Exception as exc:
         logger.warning("Tender assistant failed for job %s: %s", payload.job_id, exc)
         raise HTTPException(status_code=503, detail="ASSISTANT_UNAVAILABLE") from exc

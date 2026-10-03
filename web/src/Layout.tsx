@@ -57,7 +57,7 @@ export function Layout({
             {user ? (
               <>
                 <NavLink to="/dashboard">Обзор</NavLink>
-                <NavLink to="/analyze">AI-ассистент</NavLink>
+                <NavLink to="/analyze">AI-чат</NavLink>
                 <NavLink to="/history">Мои закупки</NavLink>
                 <NavLink to="/b2g">Документы</NavLink>
               </>
