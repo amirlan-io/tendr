@@ -34,6 +34,15 @@ def _qdrant_is_available() -> bool:
         return False
 
 
+async def _embed_ok(llm) -> bool:
+    """Запасная проверка эмбеддингов для провайдеров без метода."""
+    try:
+        await llm.embed("ping")
+        return True
+    except Exception:
+        return False
+
+
 @router.get("/health")
 async def health(settings: Settings = Depends(get_settings)) -> dict:
     checks: dict[str, str] = {}
@@ -62,13 +71,25 @@ async def health(settings: Settings = Depends(get_settings)) -> dict:
 
     llm = get_llm()
     try:
-        llm_ok = await asyncio.wait_for(llm.healthcheck(), timeout=5.0)
+        llm_ok = await asyncio.wait_for(llm.healthcheck(), timeout=15.0)
         checks["llm"] = "ok" if llm_ok else "llm unavailable"
         if not llm_ok:
             status = "degraded"
     except Exception:
         checks["llm"] = "llm unavailable"
         status = "degraded"
+
+    # Эмбеддинги нужны только для RAG. Их отсутствие не ломает анализ
+    # лотов, поэтому показываем отдельно и НЕ роняем статус: иначе
+    # провайдер без embed-поддержки всегда выглядит как авария.
+    try:
+        embeddings_ok = await asyncio.wait_for(
+            getattr(llm, "supports_embeddings", lambda: _embed_ok(llm))(),
+            timeout=10.0,
+        )
+        checks["embeddings"] = "ok" if embeddings_ok else "not supported by provider"
+    except Exception:
+        checks["embeddings"] = "not supported by provider"
 
     return {
         "status": status,
