@@ -245,6 +245,37 @@ def looks_like_manufacturer(text: str) -> bool:
     return any(hint in lowered for hint in _DIRECT_HINTS)
 
 
+_STOP_WORDS = frozenset(
+    {
+        "для", "или", "не", "от", "под", "при", "так", "это", "как", "на",
+        "в", "с", "по", "из", "а", "и", "же", "ли", "у", "к", "о", "об",
+    }
+)
+
+
+def _tokens_overlap(query: str, title: str) -> bool:
+    """Есть ли значимое пересечение слов между запросом и пунктом ТЗ."""
+    def _tokens(text: str) -> set[str]:
+        words = re.findall(r"[а-яёa-z]{4,}", (text or "").lower())
+        return {w for w in words if w not in _STOP_WORDS}
+
+    q, t = _tokens(query), _tokens(title)
+    return bool(q & t)
+
+
+def _dedupe_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Убрать повторы по URL, сохранив порядок."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for item in results:
+        url = str(item.get("url") or "")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        out.append(item)
+    return out
+
+
 def find_contacts(text: str) -> tuple[str, str]:
     """Достать email и телефон из текста страницы.
 
@@ -819,6 +850,23 @@ class SupplierAgent(Agent):
         )
         return candidates
 
+    def _queries_by_requirement(
+        self, requirements: list[Requirement], shared: list[str]
+    ) -> list[list[str]]:
+        """Разложить запросы по пунктам ТЗ.
+
+        Если запросов меньше, чем пунктов, добираем поиском по названию
+        пункта — так ни одна позиция лота не останется без поставщиков.
+        """
+        groups: list[list[str]] = []
+        for req in requirements[:5]:
+            own = [q for q in shared if _tokens_overlap(q, req.title)]
+            if own:
+                groups.append(own[:2])
+                continue
+            groups.append([req.title[:120]])
+        return groups
+
     async def find_suppliers(
         self,
         requirements: list[Requirement],
@@ -842,8 +890,23 @@ class SupplierAgent(Agent):
         if not queries:
             return [], total, meta
 
-        results, costs = await self.search_web(queries)
-        total.merge(costs)
+        # Лот часто мультипозиционный. Если искать по всем запросам разом,
+        # позиционный товар «съедает» лимит: на живом прогоне лота
+        # «фильтр + регулятор давления» все 20 мест ушли поставщикам
+        # фильтров, и по регулятору не осталось никого.
+        # Поэтому каждый пункт ТЗ получает свою квоту результатов.
+        per_item_queries = self._queries_by_requirement(requirements, queries)
+        results: list[dict[str, Any]] = []
+        if len(per_item_queries) > 1:
+            per_item_quota = max(3, 20 // len(per_item_queries))
+            for item_queries in per_item_queries:
+                found, costs = await self.search_web(item_queries, max_results=per_item_quota)
+                total.merge(costs)
+                results.extend(found)
+            results = _dedupe_results(results)[:20]
+        else:
+            results, costs = await self.search_web(queries)
+            total.merge(costs)
 
         # Вторая фаза: сайты производителей и дилеров в открытом вебе.
         manufacturer_results, costs = await self.search_manufacturers(requirements)
