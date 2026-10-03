@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     admin_telegram_ids: str = ""  # CSV
 
     # === goszakup.gov.kz ===
-    goszakup_api_url: str = "https://ows.goszakup.gov.kz/v2"
+    goszakup_api_url: str = "https://ows.goszakup.gov.kz/v3"
     goszakup_api_token: str = ""
     goszakup_public_base_url: str = "https://goszakup.gov.kz"
 

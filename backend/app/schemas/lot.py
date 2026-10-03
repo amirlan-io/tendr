@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_serializer, model_validator
@@ -54,6 +54,10 @@ class LotSearchRequest(BaseModel):
     platform: str = Field(default="", description="Площадка (пусто = все)")
     category: Literal["", "товар", "работа", "услуга"] = Field(default="")
     procurement_method: str = Field(default="")
+    procurement_method_ids: list[int] = Field(
+        default_factory=list,
+        description="Официальные ID способов закупки из V3",
+    )
     customer_bin: str = Field(
         default="",
         max_length=12,
@@ -65,7 +69,12 @@ class LotSearchRequest(BaseModel):
     )
     min_amount_kzt: float = Field(default=0)
     max_amount_kzt: float = Field(default=0)
-    status: str = Field(default="all", description="all / published / active")
+    status: Literal["active", "published", "offers", "archive", "all"] = Field(
+        default="active",
+        description="По умолчанию только лоты, в которых ещё можно участвовать",
+    )
+    published_from: date | None = Field(default=None, description="Дата публикации от")
+    published_to: date | None = Field(default=None, description="Дата публикации до")
     only_urgent: bool = Field(default=False, description="Только < 3 дней до дедлайна")
     only_with_amount: bool = Field(
         default=False, description="Только лоты с указанной суммой"
@@ -85,6 +94,7 @@ class LotSearchRequest(BaseModel):
         description="Сколько первых лотов анализировать через AI.",
     )
     limit: int = Field(default=50, ge=1, le=200)
+    cursor: int | None = Field(default=None, ge=1, description="Курсор V3 для следующей страницы")
 
 
 class LotSearchResult(BaseModel):
@@ -94,6 +104,12 @@ class LotSearchResult(BaseModel):
     total: int
     source: str  # "zakup.gov.kz" или "mock"
     is_mock: bool = False  # True если данные демо (пока нет реального токена)
+    next_cursor: int | None = None
+    has_more: bool = False
+    total_is_exact: bool = True
+    fetched_at: datetime | None = None
+    last_updated_at: datetime | None = None
+    scope: Literal["active", "published", "offers", "archive", "all"] = "active"
 
 
 class PartnershipRequest(BaseModel):
@@ -472,6 +488,12 @@ class LegalCheckItem(BaseModel):
     rule_id: str | None = None
     rule_title: str | None = None
     law_reference: str | None = None
+    # Ссылки на источник нормы и цитату для прозрачной проверки
+    article: str | None = None
+    source: str | None = None
+    quote: str | None = None
+    citation_url: str | None = None
+    legal_text_revision: str | None = None
 
 
 class LegalCheckResult(BaseModel):
@@ -492,6 +514,7 @@ class LegalCheckResult(BaseModel):
     complaint_draft: str | dict | None = None  # черновик жалобы
     summary: str = ""
     can_complain_to_counting_committee: bool = False
+    corpus_revision: str | None = None
 
 
 # ═════ B2G (workspace) ═════
