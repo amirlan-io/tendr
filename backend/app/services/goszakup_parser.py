@@ -98,10 +98,18 @@ class GoszakupParser:
 
         if self._api_token:
             try:
-                return await self._fetch_lot_via_api(str(lookup_key))
+                parsed = await self._fetch_lot_via_api(str(lookup_key))
             except Exception as e:
                 logger.warning("API fetch failed for {}, fallback to HTML: {}", lookup_key, e)
-        return await self._fetch_lot_html(str(lookup_key))
+            else:
+                # Каноническая ссылка вычислена из входного reference — на
+                # GraphQL-пути её больше негде взять, а без неё UI не может
+                # дать переход на исходное объявление.
+                _attach_source_url(parsed, reference)
+                return parsed
+        parsed = await self._fetch_lot_html(str(lookup_key))
+        _attach_source_url(parsed, reference)
+        return parsed
 
     @staticmethod
     def parse_reference(value: str) -> GoszakupReference:
@@ -1092,6 +1100,36 @@ class GoszakupParser:
             raw_html=html,
             extra={"source_url": source_url},
         )
+
+
+def _attach_source_url(parsed: ParsedLot, reference: GoszakupReference) -> None:
+    """Сохраняет каноническую ссылку на объявление в extra лота.
+
+    HTML-путь кладёт source_url сам, GraphQL — нет. Без этого ссылки
+    «Открыть на Госзакупках» на странице анализа не появляются.
+    Значение из extra не перетираем: парсер HTML знает URL фактического
+    редиректа, он точнее.
+    """
+    if parsed.extra.get("source_url"):
+        return
+    if reference.source_url:
+        parsed.extra["source_url"] = reference.source_url
+
+
+def build_lot_url(lot_id_or_url: str | None) -> str | None:
+    """Каноническая ссылка на goszakup по ID/ссылке либо None.
+
+    Мягкая версия parse_reference: не бросает исключение на мусорном вводе,
+    потому что используется в UI-слое (история, песочница), где ID может
+    оказаться чем угодно.
+    """
+    if not lot_id_or_url:
+        return None
+    try:
+        reference = GoszakupParser.parse_reference(str(lot_id_or_url))
+    except ValueError:
+        return None
+    return reference.source_url
 
 
 _parser: GoszakupParser | None = None

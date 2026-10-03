@@ -23,6 +23,8 @@ export type SavedLot = {
   region?: string;
   deadlineDate?: string | null;
   sourceUrl?: string | null;
+  /** Номер объявления на площадке — нужен для перехода на оригинал. */
+  sourceId?: string | null;
   savedAt: string;
 };
 
@@ -45,6 +47,9 @@ export type ActivityItem = {
   status: string;
   createdAt: string;
   to: string;
+  /** Ссылка на оригинал объявления: даёт доступ к источнику из списка. */
+  sourceUrl?: string | null;
+  lotId?: string | null;
 };
 
 export type DeadlineItem = {
@@ -55,6 +60,8 @@ export type DeadlineItem = {
   daysLeft: number;
   urgency: "overdue" | "urgent" | "soon" | "normal";
   to: string;
+  sourceUrl?: string | null;
+  lotId?: string | null;
 };
 
 export type ProfileForm = {

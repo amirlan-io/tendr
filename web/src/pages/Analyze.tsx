@@ -7,6 +7,7 @@ import { useT } from "../i18n";
 import { api, ApiError, downloadBlob, isQuotaExceededError } from "../clientId";
 import { pushHistory } from "../historyStore";
 import { trackDocumentDownload } from "../dashboard/dashboard.data";
+import { resolveLotSourceUrl } from "../dashboard/components/LotSourceLink";
 
 type Requirement = {
   code: string;
@@ -38,6 +39,7 @@ type LotAnalysis = {
   method: string;
   deadline?: string;
   budget_kzt?: number;
+  source_url?: string | null;
   requirements: Requirement[];
   documents_required: string[];
   summary: string;
@@ -504,6 +506,10 @@ function ResultView({
   const t = useT();
   const lot = result.lot;
   const legal = result.legal;
+  // Ссылка приходит с backend и проходит строгий allowlist: недоверенный
+  // хост или http:// приведёт к null. Если её нет, строим из lot_id —
+  // иначе кнопка пропадала бы на загрузках, где source_url пуст.
+  const lotSourceUrl = resolveLotSourceUrl(lot.source_url, lot.lot_id);
   const draft = legal?.complaint_draft;
   const draftDict =
     typeof draft === "object" && draft !== null
@@ -538,6 +544,17 @@ function ResultView({
             ? ` · ${t("analyze.summary.deadline")} ${lot.deadline}`
             : ""}
         </div>
+        {lotSourceUrl && (
+          <a
+            href={lotSourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium transition hover:border-white/25 hover:bg-white/[0.04]"
+            style={{ color: "var(--accent)" }}
+          >
+            Открыть лот на Госзакупках ↗
+          </a>
+        )}
         {lot.summary && (
           <p className="text-[var(--text-muted)] leading-relaxed">
             {lot.summary}

@@ -33,6 +33,8 @@ function toDeadlines(savedLots: ReturnType<typeof useLocalCabinet>["savedLots"])
         daysLeft,
         urgency,
         to: "/dashboard/lots",
+        sourceUrl: l.sourceUrl,
+        lotId: l.sourceId,
       };
     })
     .sort((a, b) => a.daysLeft - b.daysLeft)
@@ -65,6 +67,8 @@ export function OverviewPage() {
       status: i.overall_risk === "high" ? "Высокий риск" : i.overall_risk === "medium" ? "Средний риск" : "Проверено",
       createdAt: formatDate(i.created_at),
       to: "/dashboard/history",
+      sourceUrl: i.url,
+      lotId: i.lot_id,
     })),
     ...savedLots.slice(0, 2).map((l) => ({
       id: `s-${l.id}`,
@@ -74,6 +78,8 @@ export function OverviewPage() {
       status: "Сохранён",
       createdAt: formatDate(l.savedAt),
       to: "/dashboard/lots",
+      sourceUrl: l.sourceUrl,
+      lotId: l.sourceId,
     })),
     ...documents.slice(0, 2).map((d) => ({
       id: `d-${d.id}`,

@@ -9,7 +9,6 @@ import {
 import { Link } from "react-router-dom";
 import {
   ArrowDownUp,
-  ArrowUpRight,
   Bookmark,
   BriefcaseBusiness,
   Building2,
@@ -29,6 +28,7 @@ import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { api, ApiError, getOrCreateClientId } from "../clientId";
 import { escapeCsvCell } from "../security/csv";
 import { getSafeExternalUrl } from "../security/externalUrl";
+import { LotSourceIconButton } from "../dashboard/components/LotSourceLink";
 import { isLotSaved, removeSavedLot, saveLot } from "../dashboard/dashboard.data";
 
 type Lot = {
@@ -912,6 +912,7 @@ function LotResultCard({
       region: lot.region,
       deadlineDate: lot.deadline_date ?? null,
       sourceUrl: safeSourceUrl,
+      sourceId: lot.source_id,
       savedAt: new Date().toISOString(),
     });
     setSaved(true);
@@ -997,16 +998,7 @@ function LotResultCard({
             <BriefcaseBusiness className="h-3.5 w-3.5" />
           </button>
           {safeSourceUrl && (
-            <a
-              href={safeSourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Открыть лот ${lot.source_id} на Госзакупках`}
-              title="Открыть источник"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
-            >
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </a>
+            <LotSourceIconButton sourceUrl={safeSourceUrl} lotId={lot.source_id} />
           )}
         </div>
 

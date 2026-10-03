@@ -32,6 +32,7 @@ from app.core.supabase_auth import SupabaseUser, require_supabase_user, supabase
 from app.db import get_db
 from app.db import repo as db_repo
 from app.db import supplier_repo as srepo
+from app.services.goszakup_parser import build_lot_url
 from app.services.personalization import CompanyContext, build_company_block
 
 router = APIRouter(prefix="/sandbox", tags=["sandbox"])
@@ -144,6 +145,7 @@ async def run_supplier_sandbox(
 
     return {
         "lot_id": payload.lot_id,
+        "lot_url": build_lot_url(payload.lot_id),
         "requirements": [
             {"code": r.code, "title": r.title, "mandatory": r.is_mandatory}
             for r in requirements

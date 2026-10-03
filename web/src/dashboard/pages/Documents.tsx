@@ -4,6 +4,7 @@ import { ApiError, downloadBlob } from "../../clientId";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
 import { removeDocument } from "../dashboard.data";
+import { LotSourceLink } from "../components/LotSourceLink";
 import { useHistoryList, useLocalCabinet } from "../hooks/useDashboardData";
 import { DashboardIcon } from "../DashboardIcon";
 
@@ -145,6 +146,12 @@ export function DocumentsPage() {
                     >
                       Открыть анализ
                     </Link>
+                    <LotSourceLink
+                      sourceUrl={item.url}
+                      lotId={item.lot_id}
+                      label="Лот ↗"
+                      className="inline-flex min-h-11 items-center rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-xs font-medium text-white/70 transition hover:border-white/20 hover:text-white"
+                    />
                   </div>
                 </li>
               );
