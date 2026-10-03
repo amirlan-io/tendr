@@ -16,10 +16,13 @@ import {
   createDraft,
   decideApproval,
   explainBlock,
+  fetchOutreachCapabilities,
   fetchLotRequirements,
   fetchShortlist,
   friendlyError,
   searchSuppliers,
+  sendApprovedEmail,
+  placeApprovedCall,
   sendSupplierFeedback,
 } from "../suppliers.api";
 import type {
@@ -28,6 +31,7 @@ import type {
   DraftResponse,
   EmailDraft,
   LotRequirements,
+  OutreachCapabilities,
   SupplierCandidate,
 } from "../suppliers.types";
 import { SupplierCandidateCard } from "../components/SupplierCandidateCard";
@@ -52,10 +56,12 @@ export function SuppliersPage() {
   const [approval, setApproval] = useState<Approval | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [lotInfo, setLotInfo] = useState<LotRequirements | null>(null);
+  const [capabilities, setCapabilities] = useState<OutreachCapabilities | null>(null);
 
   useEffect(() => {
     const lot = new URLSearchParams(window.location.search).get("lot_id");
     if (lot) setLotId(lot);
+    void fetchOutreachCapabilities().then(setCapabilities).catch(() => setCapabilities(null));
   }, []);
 
   const runSearch = useCallback(async () => {
@@ -136,12 +142,12 @@ export function SuppliersPage() {
     }
   };
 
-  const onDraft = async (candidate: SupplierCandidate) => {
+  const onDraft = async (candidate: SupplierCandidate, kind: "email" | "call") => {
     setBusyId(candidate.id);
     setError(null);
     setNotice(null);
     try {
-      const res = await createDraft(candidate.id, "email");
+      const res = await createDraft(candidate.id, kind);
       setDraft(res);
       setApproval({
         id: res.approval_id,
@@ -156,6 +162,29 @@ export function SuppliersPage() {
         supplier: candidate.supplier,
         lot_id: candidate.lot_id,
       });
+    } catch (e) {
+      setError(explainBlock(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onSend = async () => {
+    if (!approval || !draft) return;
+    setBusyId(approval.candidate_id ?? -1);
+    setError(null);
+    try {
+      const response = approval.kind === "email"
+        ? await sendApprovedEmail(
+            approval.id,
+            isEmailDraft(draft.draft) ? draft.draft.subject || "Запрос по поставке" : "Запрос по поставке",
+          )
+        : await placeApprovedCall(approval.id);
+      setNotice(
+        approval.kind === "email"
+          ? `Письмо отправлено. Задание №${response.job_id}.`
+          : `Звонок поставлен в очередь. Задание №${response.job_id}.`,
+      );
     } catch (e) {
       setError(explainBlock(e));
     } finally {
@@ -194,6 +223,15 @@ export function SuppliersPage() {
           Письма и звонки возможны только после вашего одобрения.
         </p>
       </header>
+
+      <section className="grid gap-3 sm:grid-cols-2" aria-label="Статус каналов связи">
+        <div className={`rounded-xl border px-4 py-3 text-sm ${capabilities?.email?.available ? "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200" : "border-white/10 bg-white/[0.025] text-white/45"}`}>
+          Почта: {capabilities?.email?.available ? "SMTP подключён" : "автоотправка не настроена — доступен ручной режим"}
+        </div>
+        <div className={`rounded-xl border px-4 py-3 text-sm ${capabilities?.call?.available ? "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200" : "border-white/10 bg-white/[0.025] text-white/45"}`}>
+          Звонки: {capabilities?.call?.available ? "Leximo подключён" : "Leximo не настроен — доступен ручной звонок"}
+        </div>
+      </section>
 
       <form
         className="flex flex-col gap-2 sm:flex-row"
@@ -280,7 +318,7 @@ export function SuppliersPage() {
               candidate={c}
               busy={busyId === c.id}
               onFeedback={(fits) => void onFeedback(c, fits)}
-              onDraft={() => void onDraft(c)}
+              onDraft={(kind) => void onDraft(c, kind)}
             />
           ))}
         </section>
@@ -291,7 +329,9 @@ export function SuppliersPage() {
           approval={approval}
           draft={draft}
           busy={busyId === (approval.candidate_id ?? -1)}
+          capabilities={capabilities}
           onDecision={onDecision}
+          onSend={() => void onSend()}
           onClose={() => {
             setDraft(null);
             setApproval(null);
@@ -306,16 +346,22 @@ function DraftReview({
   approval,
   draft,
   busy,
+  capabilities,
   onDecision,
+  onSend,
   onClose,
 }: {
   approval: Approval;
   draft: DraftResponse;
   busy: boolean;
+  capabilities: OutreachCapabilities | null;
   onDecision: (decision: "approved" | "rejected") => void;
+  onSend: () => void;
   onClose: () => void;
 }) {
   const decided = approval.status !== "pending";
+  const emailDraft = isEmailDraft(draft.draft) ? draft.draft : null;
+  const callPlan = isCallPlan(draft.draft) ? draft.draft : null;
   const priceLabel =
     draft.price_action === "accept"
       ? "Цена в допуске — можно соглашаться"
@@ -331,7 +377,9 @@ function DraftReview({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-medium text-white/90">Черновик письма</h2>
+          <h2 className="text-base font-medium text-white/90">
+            {approval.kind === "email" ? "Черновик письма" : "План звонка"}
+          </h2>
           <p className="mt-1 text-xs text-white/40">{approval.supplier}</p>
         </div>
         <button
@@ -348,12 +396,22 @@ function DraftReview({
         {priceLabel}
       </p>
 
-      {isEmailDraft(draft.draft) && (
+      {emailDraft && (
         <div className="space-y-2">
-          <p className="text-xs text-white/40">Тема: {draft.draft.subject}</p>
+          <p className="text-xs text-white/40">Тема: {emailDraft.subject}</p>
           <p className="whitespace-pre-wrap rounded-lg border border-white/[0.07] bg-black/20 p-4 text-sm leading-6 text-white/75">
-            {draft.draft.body || "Черновик пуст — агент не смог подготовить текст."}
+            {emailDraft.body || "Черновик пуст — агент не смог подготовить текст."}
           </p>
+        </div>
+      )}
+
+      {callPlan && (
+        <div className="space-y-3 rounded-lg border border-white/[0.07] bg-black/20 p-4 text-sm text-white/70">
+          <p><span className="text-white/35">Цель:</span> {callPlan.goal || "Уточнить условия поставки"}</p>
+          {callPlan.questions?.length > 0 && (
+            <div><p className="text-white/35">Вопросы:</p><ol className="mt-1 list-decimal space-y-1 pl-5">{callPlan.questions.map((question) => <li key={question}>{question}</li>)}</ol></div>
+          )}
+          <p className="text-xs text-amber-200/75">AI обязан представиться и не имеет права соглашаться на цену или принимать обязательства.</p>
         </div>
       )}
 
@@ -363,12 +421,36 @@ function DraftReview({
         </p>
       )}
 
-      {decided ? (
-        <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/60">
-          {approval.status === "approved"
-            ? "Одобрено. Письмо можно отправить отдельным действием."
-            : "Отклонено — отправка невозможна."}
-        </p>
+      {decided ? approval.status === "approved" ? (
+        <div className="space-y-3 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.05] p-4">
+          <p className="text-sm text-emerald-100">Одобрено вами. Только теперь доступно действие связи.</p>
+          <div className="flex flex-wrap gap-2">
+            {(approval.kind === "email" ? capabilities?.email?.available : capabilities?.call?.available) && (
+              <button type="button" onClick={onSend} disabled={busy} className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#03110b] transition hover:bg-emerald-300 disabled:opacity-50">
+                {busy ? "Выполняем…" : approval.kind === "email" ? "Отправить письмо" : "Запустить звонок через Leximo"}
+              </button>
+            )}
+            {approval.kind === "email" && approval.recipient?.email && emailDraft && (
+              <a
+                href={`mailto:${encodeURIComponent(approval.recipient.email)}?subject=${encodeURIComponent(emailDraft.subject)}&body=${encodeURIComponent(emailDraft.body)}`}
+                className="rounded-lg border border-white/12 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.05]"
+              >
+                Открыть в моей почте
+              </a>
+            )}
+            {approval.kind === "call" && approval.recipient?.phone && (
+              <a href={`tel:${approval.recipient.phone.replace(/[^+0-9]/g, "")}`} className="rounded-lg border border-white/12 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.05]">Позвонить вручную</a>
+            )}
+            {emailDraft && (
+              <button type="button" onClick={() => void navigator.clipboard.writeText(emailDraft.body)} className="rounded-lg border border-white/12 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.05]">Скопировать текст</button>
+            )}
+          </div>
+          {!(approval.kind === "email" ? capabilities?.email?.available : capabilities?.call?.available) && (
+            <p className="text-xs text-white/40">Автоматический провайдер не настроен. Используйте ручную кнопку выше — Tendr не будет изображать отправку, которой не было.</p>
+          )}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/60">Отклонено — поставщику ничего не отправлено.</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           <button

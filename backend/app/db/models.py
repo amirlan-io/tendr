@@ -150,6 +150,36 @@ class Analysis(Base):
     )
 
 
+class AnalysisJob(Base):
+    """Долгий анализ, который можно восстановить после перезагрузки страницы."""
+
+    __tablename__ = "analysis_jobs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # url / upload
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    stage: Mapped[str] = mapped_column(String(160), default="Задание создано")
+    input_json: Mapped[dict] = mapped_column(JSONType, default=dict)
+    result_json: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    analysis_id: Mapped[int | None] = mapped_column(
+        ForeignKey("analyses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    reservation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_analysis_jobs_user_created", "user_id", "created_at"),
+        Index("ix_analysis_jobs_user_status", "user_id", "status"),
+    )
+
+
 class Subscription(Base):
     """Подписка пользователя."""
 

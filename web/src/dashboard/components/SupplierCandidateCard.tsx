@@ -18,7 +18,7 @@ import {
 type Props = {
   candidate: SupplierCandidate;
   onFeedback?: (fits: boolean) => void;
-  onDraft?: () => void;
+  onDraft?: (kind: "email" | "call") => void;
   busy?: boolean;
 };
 
@@ -167,11 +167,21 @@ export function SupplierCandidateCard({ candidate, onFeedback, onDraft, busy }: 
           {onDraft && (
             <button
               type="button"
-              onClick={onDraft}
+              onClick={() => onDraft("email")}
               disabled={busy}
               className="ml-auto rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/60 transition hover:bg-white/[0.05] disabled:opacity-50"
             >
               Подготовить письмо
+            </button>
+          )}
+          {onDraft && card.phone && (
+            <button
+              type="button"
+              onClick={() => onDraft("call")}
+              disabled={busy}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/60 transition hover:bg-white/[0.05] disabled:opacity-50"
+            >
+              Подготовить звонок
             </button>
           )}
           {card.url && (

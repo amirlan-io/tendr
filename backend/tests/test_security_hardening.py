@@ -101,7 +101,8 @@ def test_alembic_single_head_and_quota_migration_is_isolated() -> None:
     assert len(heads) == 1
     # Голова сдвинулась на миграцию Supplier Agent; важно лишь, что она одна
     # (никаких ветвлений) и наследует предыдущую ревизию.
-    assert heads == ["a7c31e9d5b21"]
+    assert heads == ["e4a91f0b2c77"]
+    assert script.get_revision("e4a91f0b2c77").down_revision == "a7c31e9d5b21"
     assert script.get_revision("a7c31e9d5b21").down_revision == "d19b5a2f3b91"
 
     revision = script.get_revision("d19b5a2f3b91")
@@ -564,7 +565,6 @@ def test_validate_upload_file_rejects_empty_file() -> None:
 
 
 def test_validate_upload_file_rejects_oversize_chunked() -> None:
-    settings = type("Settings", (), {"max_upload_bytes": 64})()
     async def _read_chunks():
         file = UploadFile(filename="big.txt", file=io.BytesIO(b"x" * 128))
         payload = await lots_api.read_upload_file_safely(file, max_bytes=64)
@@ -605,7 +605,6 @@ def test_validate_upload_file_rejects_invalid_extension_mime_or_signature() -> N
 
 
 def test_validate_upload_file_rejects_zip_bomb_and_path_traversal() -> None:
-    settings = type("Settings", (), {"max_upload_bytes": 10 * 1024 * 1024})()
     payload = b"PK\x03\x04"
     with pytest.raises(lots_api.UploadValidationError):
         lots_api._validate_zip_container(payload)

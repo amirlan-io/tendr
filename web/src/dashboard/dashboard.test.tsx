@@ -201,16 +201,15 @@ describe("Пустые состояния и тарифы", () => {
     expect(screen.getByText("Дедлайнов нет")).toBeInTheDocument();
   });
 
-  it("тарифы Plus/Pro/Ultra отображаются с отключённой покупкой", async () => {
+  it("тарифы Plus/Pro/Ultra честно показывают, что оплата не настроена", async () => {
     authAs(authedUser);
     renderApp("/dashboard/billing");
     expect(await screen.findByLabelText("Тариф Plus")).toBeInTheDocument();
     expect(screen.getByLabelText("Тариф Pro")).toBeInTheDocument();
     expect(screen.getByLabelText("Тариф Ultra")).toBeInTheDocument();
-    for (const name of ["Plus", "Pro", "Ultra"]) {
-      const btn = screen.getByRole("button", { name: `Выбрать ${name}` });
+    for (const btn of await screen.findAllByRole("button", { name: "Оплата не настроена" })) {
       expect(btn).toBeDisabled();
     }
-    expect(screen.getByText(/Оплата тарифов будет доступна после запуска/)).toBeInTheDocument();
+    expect(screen.getByText(/Если кнопка неактивна, владельцу проекта нужно добавить Stripe-ключи/)).toBeInTheDocument();
   });
 });

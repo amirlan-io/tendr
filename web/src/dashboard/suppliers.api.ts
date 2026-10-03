@@ -24,6 +24,7 @@ import type {
   SupplierLists,
   SupplierSearchResponse,
   LotRequirements,
+  OutreachCapabilities,
 } from "./suppliers.types";
 
 /** Поиск поставщиков по лоту (F1+F2). Долгий запрос — 60–180 сек. */
@@ -120,6 +121,10 @@ export async function placeApprovedCall(approvalId: number): Promise<{ job_id: n
     method: "POST",
     body: JSON.stringify({ approval_id: approvalId }),
   });
+}
+
+export async function fetchOutreachCapabilities(): Promise<OutreachCapabilities> {
+  return api<OutreachCapabilities>("/api/outreach/capabilities");
 }
 
 export async function fetchPricePolicy(): Promise<PricePolicy> {

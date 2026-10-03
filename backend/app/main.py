@@ -31,6 +31,7 @@ from app.core.logging import setup_logging
 from app.llm import close_llm, get_llm
 from app.services.discovery import close_discovery, get_discovery
 from app.services.goszakup_parser import close_parser, get_parser
+from app.services.analysis_jobs import recover_analysis_jobs, shutdown_analysis_jobs
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -68,6 +69,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             or request.url.path.startswith("/api/suppliers")
             or request.url.path.startswith("/api/approvals")
             or request.url.path.startswith("/api/outreach")
+            or request.url.path.startswith("/api/lots/analysis-jobs")
+            or request.url.path.startswith("/api/lots/assistant")
         ):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -79,7 +82,9 @@ async def lifespan(app: FastAPI):
     get_llm()
     get_parser()
     get_discovery()
+    await recover_analysis_jobs()
     yield
+    await shutdown_analysis_jobs()
     await close_llm()
     await close_parser()
     await close_discovery()

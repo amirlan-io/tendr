@@ -92,6 +92,7 @@ class Settings(BaseSettings):
 
     # === Security ===
     max_upload_bytes: int = 20 * 1024 * 1024
+    analysis_job_storage_dir: str = ""
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     allowed_frontend_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
@@ -112,6 +113,26 @@ class Settings(BaseSettings):
     # === Freemium ===
     free_tier_applications_per_month: int = 3
     pilot_free_tier_applications_per_month: int = 999
+
+    # === Billing (Stripe Checkout) ===
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_plus: str = ""
+    stripe_price_pro: str = ""
+    stripe_price_ultra: str = ""
+    billing_success_url: str = "http://localhost:5173/dashboard/billing?payment=success"
+    billing_cancel_url: str = "http://localhost:5173/dashboard/billing?payment=cancelled"
+
+    # === Supplier outreach ===
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_starttls: bool = True
+    smtp_use_ssl: bool = False
+    leximo_api_token: str = ""
+    leximo_agent_id: str = ""
 
     # === Наблюдаемость ===
     sentry_dsn: str = ""

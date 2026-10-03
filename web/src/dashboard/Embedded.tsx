@@ -20,10 +20,12 @@ export function EmbedProvider({ children }: { children: ReactNode }) {
 export function LayoutOrEmbed({
   embedded,
   children,
+  plainBackground = false,
 }: {
   embedded: boolean;
   children: ReactNode;
+  plainBackground?: boolean;
 }) {
   if (embedded) return <>{children}</>;
-  return <Layout>{children}</Layout>;
+  return <Layout plainBackground={plainBackground}>{children}</Layout>;
 }

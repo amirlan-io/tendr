@@ -65,13 +65,43 @@ afterEach(() => {
 describe("AnalyzePage: скачивание через downloadBlob", () => {
   function mockApi(downloadStatus: number) {
     const calls: string[] = [];
+    let jobCreated = false;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: unknown) => {
+      vi.fn(async (url: unknown, init?: RequestInit) => {
         const u = String(url);
         calls.push(u);
-        if (u === "/api/lots/analyze") {
-          return new Response(JSON.stringify(ANALYSIS), {
+        if (u === "/api/lots/analysis-jobs/active") {
+          return new Response("null", {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (u === "/api/lots/analysis-jobs" && init?.method === "POST") {
+          jobCreated = true;
+          return new Response(JSON.stringify({
+            id: "job-1",
+            kind: "url",
+            status: "queued",
+            progress: 3,
+            stage: "Задание сохранено",
+            input_label: "https://goszakup.gov.kz/ru/announce/show/17266377",
+            result: null,
+          }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (u === "/api/lots/analysis-jobs/job-1" && jobCreated) {
+          return new Response(JSON.stringify({
+            id: "job-1",
+            kind: "url",
+            status: "completed",
+            progress: 100,
+            stage: "Разбор готов",
+            input_label: "https://goszakup.gov.kz/ru/announce/show/17266377",
+            result: ANALYSIS,
+          }), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           });
@@ -95,7 +125,9 @@ describe("AnalyzePage: скачивание через downloadBlob", () => {
   async function runAnalysis() {
     renderPage();
     await userEvent.type(screen.getByLabelText("Анализ лота"), "https://goszakup.gov.kz/ru/announce/show/17266377");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Анализировать" })).toBeEnabled());
     await userEvent.click(screen.getByRole("button", { name: "Анализировать" }));
+    await userEvent.click(await screen.findByText("Открыть полный разбор и скачать документы"));
     expect(await screen.findByText("Скачать отчёт DOCX")).toBeInTheDocument();
   }
 
@@ -124,5 +156,45 @@ describe("AnalyzePage: скачивание через downloadBlob", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toBeInTheDocument();
     expect(alert.textContent).not.toContain("Not found");
+  });
+});
+
+describe("AnalyzePage: диалог с AI-аналитиком", () => {
+  it("отправляет обычный вопрос в чат и показывает ответ", async () => {
+    let chatBody: Record<string, unknown> | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown, init?: RequestInit) => {
+        const path = String(url);
+        if (path === "/api/lots/analysis-jobs/active") {
+          return new Response("null", {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (path === "/api/lots/assistant/chat") {
+          chatBody = JSON.parse(String(init?.body || "{}"));
+          return new Response(JSON.stringify({ answer: "Пришлите ссылку или ID лота с Госзакупок." }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    renderPage();
+    await userEvent.type(screen.getByLabelText("Анализ лота"), "Как со мной работать?");
+    await userEvent.click(screen.getByRole("button", { name: "Анализировать" }));
+
+    expect(await screen.findByText("Пришлите ссылку или ID лота с Госзакупок.")).toBeInTheDocument();
+    expect(chatBody).toMatchObject({
+      message: "Как со мной работать?",
+      job_id: null,
+      history: [],
+    });
   });
 });

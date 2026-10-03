@@ -590,6 +590,10 @@ class CustomerScore(BaseModel):
     avg_risk: str | None = None
     source: str = "unknown"
     notes: str = ""
+    is_estimate: bool = True
+    evidence_count: int = 0
+    method: str = "internal_analyses"
+    disclaimer: str = "Оценка основана на внутренних анализах Tendr и не подтверждает надёжность заказчика."
 
 
 class MarginEstimate(BaseModel):
@@ -598,6 +602,10 @@ class MarginEstimate(BaseModel):
     estimated_margin_pct: float = 0.0  # процент маржи
     category: str = ""
     confidence: str = "low"  # low / medium / high
+    is_estimate: bool = True
+    method: str = "category_baseline"
+    assumptions: list[str] = Field(default_factory=list)
+    disclaimer: str = "Ориентир по категории, а не расчёт вашей фактической прибыли."
 
 
 # ═════ Deep Search Result ═════

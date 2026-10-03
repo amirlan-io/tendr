@@ -4,7 +4,13 @@ import { useT } from "./i18n";
 import { useAuth } from "./auth/AuthContext";
 import { LavaBackground } from "./components/LavaBackground";
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({
+  children,
+  plainBackground = false,
+}: {
+  children: React.ReactNode;
+  plainBackground?: boolean;
+}) {
   const t = useT();
   const { user, loading, signOut } = useAuth();
   const { pathname, hash } = useLocation();
@@ -21,8 +27,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [pathname, hash]);
 
   return (
-    <div className="site-shell min-h-screen bg-[var(--bg)] text-[var(--text)]">
-      <LavaBackground />
+    <div className={`site-shell min-h-screen text-[var(--text)] ${plainBackground ? "bg-[#070707]" : "bg-[var(--bg)]"}`}>
+      {!plainBackground && <LavaBackground />}
       <header
         className="sticky top-0 z-50 border-b backdrop-blur-xl"
         style={{

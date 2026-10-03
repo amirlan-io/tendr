@@ -188,6 +188,13 @@ export interface CostSummary {
   total_usd: number;
 }
 
+export interface OutreachCapabilities {
+  email: { available: boolean; provider: string | null };
+  call: { available: boolean; provider: string | null };
+  requires_approval: boolean;
+  manual_fallback: boolean;
+}
+
 /** Человекочитаемые подписи статусов сверки (F2: объяснение первично). */
 export const MATCH_STATUS_LABEL: Record<MatchStatus, string> = {
   fits: "Подходит",

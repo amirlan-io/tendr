@@ -17,7 +17,7 @@ from app.core.supabase_auth import SupabaseUser, require_supabase_user, supabase
 from app.db import get_db
 from app.db import repo as db_repo
 from app.db import supplier_repo as srepo
-from app.services.outreach import OutreachNotAllowed, OutreachService
+from app.services.outreach import OutreachNotAllowed, OutreachService, outreach_capabilities
 from app.services.personalization import contacts_from_profile
 
 router = APIRouter(tags=["approvals"])
@@ -45,6 +45,8 @@ _BLOCK_REASONS: dict[str, int] = {
     "CALL_FAILED": 502,
     "EMAIL_DISABLED_PENDING_LEGAL": 503,
     "CALL_DISABLED_PENDING_LEGAL": 503,
+    "EMAIL_PROVIDER_NOT_CONFIGURED": 503,
+    "CALL_PROVIDER_NOT_CONFIGURED": 503,
 }
 
 
@@ -172,6 +174,14 @@ async def list_approvals(
 class SendEmailRequest(BaseModel):
     approval_id: int = Field(..., gt=0)
     subject: str = Field(..., min_length=1, max_length=200)
+
+
+@outreach_router.get("/capabilities")
+async def get_outreach_capabilities(
+    _auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+) -> dict[str, Any]:
+    """Tell the UI which real providers are configured; no simulated sends."""
+    return outreach_capabilities()
 
 
 @outreach_router.post("/email")

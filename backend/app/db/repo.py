@@ -10,7 +10,7 @@ from typing import Any
 import uuid
 
 from loguru import logger
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.client_id import validate_client_id
@@ -20,6 +20,17 @@ from app.db.models import Analysis, Payment, QuotaReservation, Subscription, Use
 
 class QuotaLimitExceeded(RuntimeError):
     """Внутреннее исключение при исчерпании квоты."""
+
+
+PLAN_LIMITS: dict[str, tuple[int, int]] = {
+    "free": (3, 3),
+    "plus": (150, 20),
+    "pro": (400, 60),
+    "ultra": (1200, 150),
+    "pilot": (999, 999),
+    # Старое название подписки сохраняем для обратной совместимости.
+    "monthly": (999, 60),
+}
 
 
 def _normalize_utc(dt: datetime | None) -> datetime:
@@ -68,6 +79,78 @@ async def _current_reserved_amount(
     )
     result = await session.execute(stmt)
     return int(result.scalar() or 0)
+
+
+async def _usage_in_rolling_window(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    now: datetime,
+    hours: int = 5,
+) -> tuple[int, int]:
+    since = (now - timedelta(hours=hours)).replace(tzinfo=None)
+    now_naive = now.replace(tzinfo=None)
+    analysis_result = await session.execute(
+        select(func.count(Analysis.id)).where(
+            Analysis.user_id == user_id,
+            Analysis.created_at >= since,
+        )
+    )
+    confirmed_result = await session.execute(
+        select(func.coalesce(func.sum(QuotaReservation.amount), 0)).where(
+            QuotaReservation.user_id == user_id,
+            QuotaReservation.status == "confirmed",
+            QuotaReservation.confirmed_at >= since,
+        )
+    )
+    reserved_result = await session.execute(
+        select(func.coalesce(func.sum(QuotaReservation.amount), 0)).where(
+            QuotaReservation.user_id == user_id,
+            QuotaReservation.status == "reserved",
+            QuotaReservation.reserved_at >= since,
+            QuotaReservation.expires_at > now_naive,
+        )
+    )
+    # Analysis history is de-duplicated by lot_id, whereas quota consumption is
+    # per run.  max() keeps old rows (created before the reservation ledger)
+    # compatible without charging modern runs twice.
+    used = max(
+        int(analysis_result.scalar() or 0),
+        int(confirmed_result.scalar() or 0),
+    )
+    return used, int(reserved_result.scalar() or 0)
+
+
+async def _resolve_user_plan_limits(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    now: datetime | None = None,
+) -> tuple[str, int, int]:
+    user = await session.get(User, user_id)
+    if not user:
+        return "free", *PLAN_LIMITS["free"]
+    if user.is_pilot:
+        return "pilot", *PLAN_LIMITS["pilot"]
+
+    now_naive = _normalize_utc(now).replace(tzinfo=None)
+    row = await session.execute(
+        select(Subscription)
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.is_active.is_(True),
+            Subscription.starts_at <= now_naive,
+            or_(Subscription.expires_at.is_(None), Subscription.expires_at > now_naive),
+        )
+        .order_by(Subscription.starts_at.desc())
+        .limit(1)
+    )
+    subscription = row.scalar_one_or_none()
+    if subscription:
+        plan = subscription.plan.lower()
+        default_monthly, burst = PLAN_LIMITS.get(plan, (subscription.monthly_limit, 60))
+        return plan, int(subscription.monthly_limit or default_monthly), burst
+    return "free", int(get_settings().free_tier_applications_per_month), PLAN_LIMITS["free"][1]
 
 
 async def cleanup_expired_quota_reservations(
@@ -133,6 +216,12 @@ async def reserve_user_quota(
         )
         if used_this_month + reserved_this_month + amount > effective_limit:
             raise QuotaLimitExceeded(f"Quota limit exceeded for user {user_id}")
+        _, _, burst_limit = await _resolve_user_plan_limits(session, user_id, now=now)
+        used_in_window, reserved_in_window = await _usage_in_rolling_window(
+            session, user_id, now=now
+        )
+        if used_in_window + reserved_in_window + amount > burst_limit:
+            raise QuotaLimitExceeded(f"Five-hour quota exceeded for user {user_id}")
 
         reservation = QuotaReservation(
             user_id=user_id,
@@ -239,16 +328,8 @@ async def release_user_quota(
 
 
 async def _resolve_user_limit(session: AsyncSession, user_id: int) -> int:
-    user = await session.get(User, user_id)
-    if not user:
-        return 3
-
-    settings = get_settings()
-    if user.is_pilot:
-        return int(settings.pilot_free_tier_applications_per_month)
-    if user.is_subscribed and user.subscription_expires_at and user.subscription_expires_at > datetime.now(timezone.utc):
-        return 999
-    return int(settings.free_tier_applications_per_month)
+    _, monthly, _ = await _resolve_user_plan_limits(session, user_id)
+    return monthly
 
 
 
@@ -307,7 +388,15 @@ async def count_analyses_this_month(
         and_(Analysis.user_id == user_id, Analysis.created_at >= start_of_month)
     )
     result = await session.execute(stmt)
-    return result.scalar_one() or 0
+    history_count = int(result.scalar_one() or 0)
+    confirmed = await session.execute(
+        select(func.coalesce(func.sum(QuotaReservation.amount), 0)).where(
+            QuotaReservation.user_id == user_id,
+            QuotaReservation.status == "confirmed",
+            QuotaReservation.confirmed_at >= start_of_month,
+        )
+    )
+    return max(history_count, int(confirmed.scalar_one() or 0))
 
 
 async def save_analysis(
@@ -402,12 +491,51 @@ async def get_user_quota(
             "subscription_expires_at": None,
             "monthly_limit": default,
             "month_key": month_key,
+            "plan": "free",
+            "window_hours": 5,
+            "window_limit": 3,
+            "used_last_5_hours": 0,
+            "reserved_last_5_hours": 0,
+            "remaining_last_5_hours": 3,
+            "window_resets_at": None,
         }
 
-    effective_limit = limit if limit is not None else await _resolve_user_limit(session, user_id)
+    plan, plan_monthly_limit, burst_limit = await _resolve_user_plan_limits(
+        session, user_id, now=now
+    )
+    effective_limit = limit if limit is not None else plan_monthly_limit
     used = await count_analyses_this_month(session, user_id, now_override=now)
     reserved = await _current_reserved_amount(session, user_id, now=now, month_key=month_key)
     remaining = max(0, effective_limit - used - reserved)
+    used_in_window, reserved_in_window = await _usage_in_rolling_window(
+        session, user_id, now=now
+    )
+    window_remaining = max(0, burst_limit - used_in_window - reserved_in_window)
+    oldest_analysis = await session.execute(
+        select(func.min(Analysis.created_at))
+        .where(
+            Analysis.user_id == user_id,
+            Analysis.created_at >= (now - timedelta(hours=5)).replace(tzinfo=None),
+        )
+    )
+    oldest_confirmation = await session.execute(
+        select(func.min(QuotaReservation.confirmed_at)).where(
+            QuotaReservation.user_id == user_id,
+            QuotaReservation.status == "confirmed",
+            QuotaReservation.confirmed_at >= (now - timedelta(hours=5)).replace(tzinfo=None),
+        )
+    )
+    candidates = [
+        value
+        for value in (oldest_analysis.scalar_one_or_none(), oldest_confirmation.scalar_one_or_none())
+        if value is not None
+    ]
+    oldest_used_at = min(candidates) if candidates else None
+    window_resets_at = (
+        _normalize_utc(oldest_used_at + timedelta(hours=5)).isoformat()
+        if oldest_used_at
+        else None
+    )
 
     return {
         "limit": effective_limit,
@@ -422,6 +550,13 @@ async def get_user_quota(
         else None,
         "monthly_limit": effective_limit,
         "month_key": month_key,
+        "plan": plan,
+        "window_hours": 5,
+        "window_limit": burst_limit,
+        "used_last_5_hours": used_in_window,
+        "reserved_last_5_hours": reserved_in_window,
+        "remaining_last_5_hours": window_remaining,
+        "window_resets_at": window_resets_at,
     }
 
 

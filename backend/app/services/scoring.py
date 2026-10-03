@@ -11,16 +11,16 @@
 
 from __future__ import annotations
 
-import re
-from collections import defaultdict
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Analysis
 
-# Категории и их типичная маржа (%) — на основе рынка KZ
+# Внутренние стартовые ориентиры продукта. Это не рыночная статистика и не
+# обещание прибыли: пользователь должен заменить их своими себестоимостью,
+# логистикой, налогами и накладными расходами.
 CATEGORY_MARGIN: dict[str, float] = {
     "it": 22.0,
     "компьютер": 18.0,
@@ -65,6 +65,13 @@ def estimate_margin_pct(title: str, description: str = "") -> dict[str, Any]:
         "category": category,
         "estimated_margin_pct": margin,
         "confidence": "low" if category == "other" else "medium",
+        "is_estimate": True,
+        "method": "category_baseline",
+        "assumptions": [
+            "Использован внутренний ориентир по категории",
+            "Не учтены ваша закупочная цена, логистика, налоги и накладные расходы",
+        ],
+        "disclaimer": "Ориентир по категории, а не расчёт вашей фактической прибыли.",
     }
 
 
@@ -82,6 +89,10 @@ async def get_customer_score(session: AsyncSession, customer_name: str) -> dict[
             "trust_label": "unknown",
             "total_lots": 0,
             "source": "no_data",
+            "is_estimate": True,
+            "evidence_count": 0,
+            "method": "internal_analyses",
+            "disclaimer": "Данных для оценки нет; надёжность заказчика не проверена.",
         }
 
     # Ищем в нашей БД
@@ -96,6 +107,10 @@ async def get_customer_score(session: AsyncSession, customer_name: str) -> dict[
             "trust_label": "no_data",
             "total_lots": 0,
             "source": "local_db",
+            "is_estimate": True,
+            "evidence_count": 0,
+            "method": "internal_analyses",
+            "disclaimer": "Внутренних анализов по заказчику пока нет; надёжность не проверена.",
         }
 
     # Простая эвристика: чем больше анализов по заказчику, тем надёжнее
@@ -135,6 +150,13 @@ async def get_customer_score(session: AsyncSession, customer_name: str) -> dict[
         "total_lots": total,
         "avg_risk": ("low" if avg_risk < 0.5 else "medium" if avg_risk < 1.5 else "high"),
         "source": "local_db",
+        "is_estimate": True,
+        "evidence_count": total,
+        "method": "internal_analyses",
+        "disclaimer": (
+            f"Оценка рассчитана только по {total} внутренним анализам Tendr "
+            "и не подтверждает платёжную дисциплину или надёжность заказчика."
+        ),
     }
 
 

@@ -23,7 +23,17 @@ function toQuota(raw: unknown): QuotaInfo | null {
   const limit = o["monthly_limit"] ?? o["limit"];
   const used = o["used_this_month"] ?? o["used"];
   if (typeof limit !== "number" || typeof used !== "number") return null;
-  return { limit, used, isPilot: o["is_pilot"] === true };
+  return {
+    limit,
+    used,
+    isPilot: o["is_pilot"] === true,
+    plan: typeof o["plan"] === "string" ? o["plan"] : "free",
+    windowHours: typeof o["window_hours"] === "number" ? o["window_hours"] : 5,
+    windowLimit: typeof o["window_limit"] === "number" ? o["window_limit"] : 3,
+    usedInWindow: typeof o["used_last_5_hours"] === "number" ? o["used_last_5_hours"] : 0,
+    remainingInWindow: typeof o["remaining_last_5_hours"] === "number" ? o["remaining_last_5_hours"] : 0,
+    windowResetsAt: typeof o["window_resets_at"] === "string" ? o["window_resets_at"] : null,
+  };
 }
 
 /**

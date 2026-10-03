@@ -10,20 +10,27 @@
 * ``trusted`` — уважает дневной лимит и стоп-слова;
 * стоп-лист поставщика — блокирует любое действие;
 * звонки — только в рабочее время Казахстана;
-* email/call провайдеры вынесены в адаптеры и отключены по умолчанию,
-  пока юрист не подтвердит обработку ПДн (ТЗ §4).
+* email/call провайдеры вынесены в адаптеры и включаются только явной
+  серверной конфигурацией; без неё UI предлагает ручной безопасный режим.
 """
 
 from __future__ import annotations
 
+import asyncio
+import smtplib
+import ssl
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
+from email.message import EmailMessage
+from email.utils import make_msgid
 from typing import Any, Protocol
 
+import httpx
 from loguru import logger
 
 from app.agents.outreach_agent import (
     MODE_MANUAL,
+    KZ_TZ,
     CompanyContacts,
     effective_mode,
     is_working_hours_kz,
@@ -31,6 +38,7 @@ from app.agents.outreach_agent import (
     validate_draft_for_send,
 )
 from app.db import supplier_repo as repo
+from app.core.config import get_settings
 from app.services.price_policy import PriceAction, decline_text
 
 
@@ -39,7 +47,7 @@ class OutreachNotAllowed(RuntimeError):
 
 
 class EmailProvider(Protocol):
-    """Абстракция отправки письма (SMTP/OAuth-адаптер подставляется позже)."""
+    """Абстракция отправки письма через настроенный серверный адаптер."""
 
     async def send(
         self, *, to_email: str, subject: str, body: str, reply_to: str | None
@@ -47,7 +55,7 @@ class EmailProvider(Protocol):
 
 
 class CallProvider(Protocol):
-    """Абстракция телефонного звонка (Leximo MCP-адаптер подставляется позже)."""
+    """Абстракция телефонного звонка через настроенный серверный адаптер."""
 
     async def place_call(
         self, *, to_phone: str, scenario: dict[str, Any], metadata: dict[str, str]
@@ -79,6 +87,134 @@ class DisabledCallProvider:
 
 
 @dataclass(slots=True)
+class SmtpEmailProvider:
+    host: str
+    port: int
+    username: str
+    password: str
+    from_email: str
+    starttls: bool = True
+    use_ssl: bool = False
+
+    async def send(
+        self, *, to_email: str, subject: str, body: str, reply_to: str | None
+    ) -> dict[str, Any]:
+        message = EmailMessage()
+        message["From"] = self.from_email
+        message["To"] = to_email
+        message["Subject"] = subject
+        message["Message-ID"] = make_msgid(domain=self.from_email.partition("@")[2] or None)
+        if reply_to:
+            message["Reply-To"] = reply_to
+        message.set_content(body)
+
+        def _send() -> None:
+            context = ssl.create_default_context()
+            connection = (
+                smtplib.SMTP_SSL(self.host, self.port, timeout=20, context=context)
+                if self.use_ssl
+                else smtplib.SMTP(self.host, self.port, timeout=20)
+            )
+            with connection as smtp:
+                if self.starttls and not self.use_ssl:
+                    smtp.starttls(context=context)
+                if self.username:
+                    smtp.login(self.username, self.password)
+                smtp.send_message(message)
+
+        await asyncio.to_thread(_send)
+        return {"status": "sent", "id": str(message["Message-ID"]), "cost_usd": 0.0}
+
+
+@dataclass(slots=True)
+class LeximoCallProvider:
+    """Leximo Calls REST adapter based on their official open-source MCP client."""
+
+    api_token: str
+    agent_id: str
+    base_url: str = "https://concierge.leximo.ai"
+
+    async def place_call(
+        self, *, to_phone: str, scenario: dict[str, Any], metadata: dict[str, str]
+    ) -> dict[str, Any]:
+        questions = scenario.get("questions") or []
+        red_lines = scenario.get("red_lines") or []
+        task_parts = [str(scenario.get("goal") or scenario.get("introduction") or "Уточнить условия поставки")]
+        if questions:
+            task_parts.append("Вопросы: " + "; ".join(map(str, questions)))
+        if red_lines:
+            task_parts.append("Ограничения: " + "; ".join(map(str, red_lines)))
+        task_parts.append("Не соглашаться на цену и не принимать юридических обязательств.")
+        scheduled = datetime.now(KZ_TZ) + timedelta(minutes=2)
+        payload = {
+            "agentId": self.agent_id,
+            "name": metadata.get("supplier") or "Поставщик по тендеру",
+            "datetime": scheduled.isoformat(),
+            "timezone": "Asia/Almaty",
+            "phoneNumber": to_phone,
+            "languageCode": "ru",
+            "task": "\n".join(task_parts)[:4000],
+            "notifications": True,
+            "emailUpdates": True,
+        }
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                f"{self.base_url}/api/assignment",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {self.api_token}",
+                    "Content-Type": "application/json",
+                    "X-Source": "tendr",
+                },
+            )
+        if response.status_code >= 400:
+            raise RuntimeError(f"Leximo API returned HTTP {response.status_code}")
+        data = response.json()
+        assignment = data.get("data") if isinstance(data.get("data"), dict) else data
+        assignment_id = str(assignment.get("id") or assignment.get("_id") or "")
+        if not assignment_id:
+            raise RuntimeError("Leximo API response has no assignment id")
+        return {"status": "queued", "id": assignment_id, "cost_usd": 0.0}
+
+
+def outreach_capabilities() -> dict[str, Any]:
+    settings = get_settings()
+    email_ready = bool(settings.smtp_host and settings.smtp_from_email)
+    call_ready = bool(settings.leximo_api_token and settings.leximo_agent_id)
+    return {
+        "email": {"available": email_ready, "provider": "smtp" if email_ready else None},
+        "call": {"available": call_ready, "provider": "leximo" if call_ready else None},
+        "requires_approval": True,
+        "manual_fallback": True,
+    }
+
+
+def configured_email_provider() -> EmailProvider:
+    settings = get_settings()
+    if not outreach_capabilities()["email"]["available"]:
+        return DisabledEmailProvider("EMAIL_PROVIDER_NOT_CONFIGURED")
+    return SmtpEmailProvider(
+        host=settings.smtp_host,
+        port=settings.smtp_port,
+        username=settings.smtp_username,
+        password=settings.smtp_password,
+        from_email=settings.smtp_from_email,
+        starttls=settings.smtp_starttls,
+        use_ssl=settings.smtp_use_ssl,
+    )
+
+
+def configured_call_provider() -> CallProvider:
+    settings = get_settings()
+    if not outreach_capabilities()["call"]["available"]:
+        return DisabledCallProvider("CALL_PROVIDER_NOT_CONFIGURED")
+    return LeximoCallProvider(
+        api_token=settings.leximo_api_token,
+        agent_id=settings.leximo_agent_id,
+    )
+
+
+@dataclass(slots=True)
 class SendResult:
     job_id: int
     status: str
@@ -99,8 +235,8 @@ class OutreachService:
         daily_call_limit: int = 5,
         daily_call_budget_usd: float = 5.0,
     ) -> None:
-        self._email = email_provider or DisabledEmailProvider()
-        self._call = call_provider or DisabledCallProvider()
+        self._email = email_provider or configured_email_provider()
+        self._call = call_provider or configured_call_provider()
         self.daily_email_limit = daily_email_limit
         self.daily_call_limit = daily_call_limit
         self.daily_call_budget_usd = daily_call_budget_usd
@@ -291,7 +427,11 @@ class OutreachService:
             result = await self._call.place_call(
                 to_phone=phone,
                 scenario=approval.plan_json or {},
-                metadata={"user_id": str(user_id), "approval_id": str(approval_id)},
+                metadata={
+                    "user_id": str(user_id),
+                    "approval_id": str(approval_id),
+                    "supplier": candidate.supplier if candidate is not None else "",
+                },
             )
         except OutreachNotAllowed:
             await repo.log_action(
@@ -352,7 +492,10 @@ class OutreachService:
 __all__ = [
     "DisabledCallProvider",
     "DisabledEmailProvider",
+    "LeximoCallProvider",
     "OutreachNotAllowed",
     "OutreachService",
+    "SmtpEmailProvider",
     "SendResult",
+    "outreach_capabilities",
 ]

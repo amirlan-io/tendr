@@ -206,6 +206,10 @@ class LotOrchestrator:
     @staticmethod
     def _make_recommendation(*, risk: str, trust: float, margin_pct: float) -> str:
         """Эвристика: участвовать / review / skip."""
+        # Неизвестный/неполный юридический результат нельзя превращать в
+        # зелёную рекомендацию только из-за хорошей оценочной маржи.
+        if risk not in {"low", "medium", "high"}:
+            return "review"
         if risk == "high" and trust < 40:
             return "skip"
         if risk == "high" or trust < 30:

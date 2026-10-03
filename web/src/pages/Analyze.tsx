@@ -1,12 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Link } from "react-router-dom";
-import { Layout } from "../Layout";
+import {
+  ChevronDown,
+  ExternalLink,
+  FileCheck2,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { useT } from "../i18n";
 import { api, ApiError, downloadBlob, isQuotaExceededError } from "../clientId";
 import { pushHistory } from "../historyStore";
 import { trackDocumentDownload } from "../dashboard/dashboard.data";
+import {
+  AssistantBubble,
+  TendrChatComposer,
+  UserBubble,
+} from "../components/ui/tendr-ai-chat";
 
 type Requirement = {
   code: string;
@@ -23,12 +33,16 @@ type CustomerScore = {
   total_lots: number;
   avg_risk?: string;
   source: string;
+  evidence_count?: number;
+  disclaimer?: string;
 };
 
 type MarginEstimate = {
   category: string;
   estimated_margin_pct: number;
   confidence: string;
+  assumptions?: string[];
+  disclaimer?: string;
 };
 
 type LotAnalysis = {
@@ -38,6 +52,9 @@ type LotAnalysis = {
   method: string;
   deadline?: string;
   budget_kzt?: number;
+  amount_kzt?: number;
+  technical_specification?: string;
+  qualification_requirements?: string[];
   requirements: Requirement[];
   documents_required: string[];
   summary: string;
@@ -72,6 +89,28 @@ type AnalysisResponse = {
   created_at?: string;
 };
 
+type AnalysisJob = {
+  id: string;
+  kind: "url" | "upload";
+  status: "queued" | "running" | "completed" | "failed";
+  progress: number;
+  stage: string;
+  input_label: string;
+  result?: AnalysisResponse | null;
+  error_code?: string | null;
+};
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  analysisJobId?: string;
+};
+
+const ACTIVE_JOB_KEY = "tendr_active_analysis_job:v1";
+const LAST_JOB_KEY = "tendr_last_analysis_job:v1";
+const CHAT_STORAGE_KEY = "tendr_ai_analyst_chat:v1";
+
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_EXTS = [".pdf", ".docx", ".txt", ".csv", ".xls", ".xlsx"] as const;
 
@@ -94,6 +133,39 @@ function validateFileClientSide(f: File): string | null {
   return null;
 }
 
+function loadChatMessages(): ChatMessage[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string")
+      .slice(-30);
+  } catch {
+    return [];
+  }
+}
+
+function chatMessage(role: ChatMessage["role"], content: string, analysisJobId?: string): ChatMessage {
+  const randomPart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : Math.random().toString(16).slice(2);
+  return {
+    id: `${Date.now()}-${randomPart}`,
+    role,
+    content,
+    analysisJobId,
+  };
+}
+
+function extractLotReference(message: string): string | null {
+  const urlMatch = message.match(/https?:\/\/[^\s]+/i);
+  if (urlMatch && /goszakup\.gov\.kz/i.test(urlMatch[0])) {
+    return urlMatch[0].replace(/[),.;!?]+$/, "");
+  }
+  const idMatch = message.match(/(?:лот|закупк\w*|объявлен\w*)\s*(?:№|#|id\s*)?([0-9]{5,})/i);
+  return idMatch?.[1] || (/^[0-9]{5,}$/.test(message.trim()) ? message.trim() : null);
+}
+
 export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useT();
   const [searchParams] = useSearchParams();
@@ -104,75 +176,209 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [quota, setQuota] = useState(false);
   const [autoTitle, setAutoTitle] = useState<string>("");
+  const [job, setJob] = useState<AnalysisJob | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>(loadChatMessages);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [restoreChecked, setRestoreChecked] = useState(false);
   const [lastRequest, setLastRequest] = useState<
     { kind: "url"; url: string } | { kind: "file"; name: string } | null
   >(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const lastFileRef = useRef<File | null>(null);
+  const autoStartedRef = useRef(false);
+  const completedJobsRef = useRef(new Set<string>());
+  const conversationEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-30)));
+    if (typeof conversationEndRef.current?.scrollIntoView === "function") {
+      conversationEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [messages, loading, chatBusy, result]);
+
+  function applyCompletedJob(done: AnalysisJob) {
+    if (!done.result) {
+      setError("Результат анализа не найден. Запустите анализ ещё раз.");
+      setLoading(false);
+      return;
+    }
+    setResult(done.result);
+    setLoading(false);
+    setLastRequest(null);
+    lastFileRef.current = null;
+    localStorage.removeItem(ACTIVE_JOB_KEY);
+    localStorage.setItem(LAST_JOB_KEY, done.id);
+    if (!completedJobsRef.current.has(done.id) && done.result.lot?.lot_id) {
+      completedJobsRef.current.add(done.id);
+      setMessages((current) => current.some((message) => message.analysisJobId === done.id)
+        ? current
+        : [
+            ...current,
+            chatMessage(
+              "assistant",
+              done.result?.incomplete
+                ? "Я собрал доступные данные, но часть сведений не удалось подтвердить. Ниже показал, что найдено и что нужно перепроверить в первоисточнике."
+                : "Готово — я собрал данные закупки, требования ТЗ, документы и риски. Полный разбор ниже. Можете задать любой уточняющий вопрос по этому лоту.",
+              done.id,
+            ),
+          ]);
+      pushHistory({
+        lot_id: done.result.lot.lot_id,
+        title: done.result.lot.title || done.input_label,
+        url: done.kind === "url" ? done.input_label : undefined,
+        customer: done.result.lot.customer || "",
+        method: done.result.lot.method || "",
+        n_requirements: done.result.lot.requirements?.length || 0,
+        n_red_flags: done.result.lot.red_flags?.length || 0,
+        overall_risk: done.result.legal?.overall_risk,
+        created_at: new Date().toISOString(),
+      });
+    }
+  }
+
+  // Восстанавливаем незавершённый анализ после обновления страницы.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const savedId = localStorage.getItem(ACTIVE_JOB_KEY);
+        let restored = savedId
+          ? await api<AnalysisJob>(`/api/lots/analysis-jobs/${savedId}`)
+          : await api<AnalysisJob | null>("/api/lots/analysis-jobs/active");
+        const lastId = localStorage.getItem(LAST_JOB_KEY);
+        if (!restored && lastId) {
+          restored = await api<AnalysisJob>(`/api/lots/analysis-jobs/${lastId}`);
+        }
+        if (cancelled || !restored) return;
+        setJob(restored);
+        if (restored.status === "completed") applyCompletedJob(restored);
+        else if (restored.status === "failed") {
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          setError("Предыдущий анализ не завершился. Запустите его ещё раз.");
+        } else {
+          localStorage.setItem(ACTIVE_JOB_KEY, restored.id);
+          setLoading(true);
+        }
+      } catch {
+        localStorage.removeItem(ACTIVE_JOB_KEY);
+      } finally {
+        if (!cancelled) setRestoreChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Сервер выполняет работу независимо от вкладки; UI только читает состояние.
+  useEffect(() => {
+    if (!job || !["queued", "running"].includes(job.status)) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const fresh = await api<AnalysisJob>(`/api/lots/analysis-jobs/${job.id}`);
+        if (cancelled) return;
+        setJob(fresh);
+        if (fresh.status === "completed") applyCompletedJob(fresh);
+        if (fresh.status === "failed") {
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          setLoading(false);
+          setError(
+            fresh.error_code === "UPLOAD_EXPIRED"
+              ? "Загруженный файл больше недоступен. Выберите файл ещё раз."
+              : "Не удалось завершить анализ. Проверьте данные и повторите попытку.",
+          );
+        }
+      } catch {
+        // Краткий сетевой сбой не отменяет серверное задание.
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [job?.id, job?.status]);
+
+  async function startAnalysis(input: { url?: string; file?: File }) {
+    setError(null);
+    setResult(null);
+    setQuota(false);
+    setLoading(true);
+    try {
+      let created: AnalysisJob;
+      if (input.file) {
+        const fd = new FormData();
+        fd.append("file", input.file);
+        created = await api<AnalysisJob>("/api/lots/analysis-jobs/upload", {
+          method: "POST",
+          body: fd,
+        });
+      } else {
+        created = await api<AnalysisJob>("/api/lots/analysis-jobs", {
+          method: "POST",
+          body: JSON.stringify({ url: input.url }),
+        });
+      }
+      localStorage.setItem(ACTIVE_JOB_KEY, created.id);
+      setJob(created);
+      setFile(null);
+      if (fileInput.current) fileInput.current.value = "";
+    } catch (e: unknown) {
+      setLoading(false);
+      if (isQuotaExceededError(e)) setQuota(true);
+      else setError(e instanceof ApiError ? e.message : "Ошибка анализа. Попробуйте снова.");
+    }
+  }
 
   // Автозапуск анализа, если в URL есть ?lot_url=...
   // Срабатывает когда пользователь нажимает "🤖 AI-анализ" в каталоге лотов.
   useEffect(() => {
     const lotUrl = searchParams.get("lot_url");
     const lotTitle = searchParams.get("lot_title");
-    if (lotUrl && !loading && !result) {
+    if (restoreChecked && lotUrl && !loading && !result && !job && !autoStartedRef.current) {
+      autoStartedRef.current = true;
       setUrl(lotUrl);
       if (lotTitle) setAutoTitle(lotTitle);
-      // Авто-сабмит через 100мс (чтобы state обновился)
-      const t = setTimeout(() => {
-        const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-        // Не вызываем submit() — формируем запрос напрямую чтобы не было race condition
-        (async () => {
-          setError(null);
-          setResult(null);
-          setQuota(false);
-          setLoading(true);
-          try {
-            const resp = await api<AnalysisResponse>(
-              "/api/lots/analyze",
-              {
-                method: "POST",
-                body: JSON.stringify({ url: lotUrl }),
-              }
-            );
-            setResult(resp);
-            if (resp?.lot?.lot_id) {
-              pushHistory({
-                lot_id: resp.lot.lot_id,
-                title: lotTitle || resp.lot.title || lotUrl,
-                url: lotUrl,
-                customer: resp.lot.customer || "",
-                method: resp.lot.method || "",
-                n_requirements: resp.lot.requirements?.length || 0,
-                n_red_flags: resp.lot.red_flags?.length || 0,
-                overall_risk: resp.legal?.overall_risk,
-                created_at: new Date().toISOString(),
-              });
-            }
-          } catch (e: unknown) {
-            // Квота — только по стабильному коду QUOTA_EXCEEDED.
-            // Показываем только безопасное сообщение, без сырого Error/JSON backend.
-            if (isQuotaExceededError(e)) {
-              setQuota(true);
-            } else {
-              setError(e instanceof ApiError ? e.message : "Ошибка анализа. Попробуйте снова.");
-            }
-          } finally {
-            setLoading(false);
-          }
-        })();
-      }, 100);
-      return () => clearTimeout(t);
+      setMessages((current) => [
+        ...current,
+        chatMessage("user", `Разбери этот лот и собери требования ТЗ: ${lotTitle || lotUrl}`),
+      ]);
+      void startAnalysis({ url: lotUrl });
     }
-  }, [searchParams]);
+  }, [restoreChecked, searchParams, loading, result, job]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (loading) return;
+  async function sendChatMessage(message: string) {
+    const cleanMessage = message.trim();
+    if (!cleanMessage || chatBusy) return;
+    const history = messages.slice(-10).map(({ role, content }) => ({ role, content }));
+    setMessages((current) => [...current, chatMessage("user", cleanMessage)]);
+    setUrl("");
     setError(null);
-    setResult(null);
+    setChatBusy(true);
+    try {
+      const response = await api<{ answer: string }>("/api/lots/assistant/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          message: cleanMessage,
+          job_id: job?.status === "completed" ? job.id : null,
+          history,
+        }),
+      });
+      setMessages((current) => [...current, chatMessage("assistant", response.answer)]);
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : "AI-аналитик временно недоступен. Попробуйте ещё раз.");
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (loading || chatBusy) return;
+    setError(null);
     setQuota(false);
-    // Клиентская валидация файла до отправки (backend-лимиты не меняем).
     if (file) {
       const fileProblem = validateFileClientSide(file);
       if (fileProblem) {
@@ -185,82 +391,44 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
       }
       lastFileRef.current = file;
       setLastRequest({ kind: "file", name: file.name });
-    } else if (url.trim()) {
-      setLastRequest({ kind: "url", url: url.trim() });
+      setMessages((current) => [
+        ...current,
+        chatMessage("user", url.trim() || `Разбери документацию «${file.name}» и собери требования ТЗ.`),
+      ]);
+      setUrl("");
+      await startAnalysis({ file });
+      return;
     }
-    setLoading(true);
-    let ok = false;
-    try {
-      let resp: AnalysisResponse;
-      if (file) {
-        const fd = new FormData();
-        fd.append("file", file);
-        resp = await api<AnalysisResponse>("/api/lots/analyze-upload", {
-          method: "POST",
-          body: fd,
-        });
-      } else if (url.trim()) {
-        resp = await api<AnalysisResponse>("/api/lots/analyze", {
-          method: "POST",
-          body: JSON.stringify({
-            url: url.trim(),
-          }),
-        });
-      } else {
-        throw new Error(t("analyze.empty"));
-      }
-
-      setResult(resp);
-      setLastRequest(null);
-      lastFileRef.current = null;
-      ok = true;
-
-      if (!resp.incomplete) {
-        pushHistory({
-          lot_id: resp.lot.lot_id,
-          title: resp.lot.title,
-          customer: resp.lot.customer,
-          method: resp.lot.method,
-          overall_risk: resp.legal?.overall_risk,
-          n_requirements: resp.lot.requirements?.length || 0,
-          n_red_flags: resp.lot.red_flags?.length || 0,
-          created_at: new Date().toISOString(),
-        });
-      }
-    } catch (e: unknown) {
-      // Безопасные сообщения из ApiError; сырой backend-JSON пользователю не показываем.
-      // Квота — только по стабильному коду QUOTA_EXCEEDED, не по тексту.
-      if (isQuotaExceededError(e)) {
-        setQuota(true);
-      } else {
-        setError(e instanceof ApiError ? e.message : "Произошла ошибка. Попробуйте снова.");
-      }
-    } finally {
-      setLoading(false);
-      // Файл очищаем только при успехе — чтобы работала кнопка «повторить».
-      if (ok) {
-        setFile(null);
-        if (fileInput.current) fileInput.current.value = "";
-      }
+    const message = url.trim();
+    if (!message) {
+      setError(t("analyze.empty"));
+      return;
     }
+    const reference = extractLotReference(message);
+    if (reference) {
+      setLastRequest({ kind: "url", url: reference });
+      setMessages((current) => [...current, chatMessage("user", message)]);
+      setUrl("");
+      await startAnalysis({ url: reference });
+      return;
+    }
+    await sendChatMessage(message);
   }
 
   function retry() {
     // Повтор последнего запроса без потери контекста.
     if (loading) return;
-    if (lastRequest?.kind === "file" && lastFileRef.current) {
-      setFile(lastFileRef.current);
-    }
-    if (lastRequest?.kind === "url") {
-      setUrl(lastRequest.url);
-    }
     setError(null);
     setQuota(false);
-    // Даём state обновиться и повторяем submit.
-    setTimeout(() => {
-      const fake = { preventDefault: () => {} } as React.FormEvent;
-      void submit(fake);
-    }, 0);
+    setJob(null);
+    localStorage.removeItem(ACTIVE_JOB_KEY);
+    if (lastRequest?.kind === "file" && lastFileRef.current) {
+      setFile(lastFileRef.current);
+      void startAnalysis({ file: lastFileRef.current });
+    } else if (lastRequest?.kind === "url") {
+      setUrl(lastRequest.url);
+      void startAnalysis({ url: lastRequest.url });
+    }
   }
 
   function reset() {
@@ -271,6 +439,11 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     setFile(null);
     setLastRequest(null);
     lastFileRef.current = null;
+    setJob(null);
+    setMessages([]);
+    localStorage.removeItem(CHAT_STORAGE_KEY);
+    localStorage.removeItem(LAST_JOB_KEY);
+    localStorage.removeItem(ACTIVE_JOB_KEY);
   }
 
   function downloadDocx(kind: "complaint" | "report") {
@@ -309,186 +482,159 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
       );
   }
 
+  const resultNeedsReview = Boolean(
+    result && (result.incomplete || !result.legal || result.legal.overall_risk === "needs_review"),
+  );
+  const sourceUrl = job?.kind === "url" && /^https?:\/\//i.test(job.input_label)
+    ? job.input_label
+    : undefined;
+
   return (
-    <LayoutOrEmbed embedded={embedded}>
-      <div className="page-container py-12 sm:py-16">
-        <div className="mx-auto max-w-5xl">
-        <Link
-          to="/"
-          className="text-sm text-[var(--text-muted)] transition hover:text-[var(--text)]"
-        >
-          {t("common.back")}
-        </Link>
-        <div className="mt-8 max-w-2xl">
-          <p className="section-kicker">AI-анализ закупки</p>
-          <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">Разберите лот перед участием</h1>
-          <p className="mt-5 text-lg leading-8 text-[var(--text-muted)]">Добавьте ссылку, ID лота или документацию. Tendr соберёт требования, риски и следующий шаг в одном отчёте.</p>
-        </div>
+    <LayoutOrEmbed embedded={embedded} plainBackground>
+      <div className={`${embedded ? "" : "page-container py-8 sm:py-10"} bg-[#070707]`}>
+        <section className="relative mx-auto flex min-h-[calc(100vh-150px)] max-w-[1120px] flex-col overflow-hidden rounded-[28px] border border-white/[0.075] bg-[#090909] shadow-[0_30px_100px_-55px_rgba(0,0,0,1)]">
+          <header className="relative flex items-center justify-between gap-4 border-b border-white/[0.065] px-5 py-4 sm:px-7">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.1] text-emerald-300"><Sparkles size={18} /></span>
+              <div><h1 className="text-sm font-semibold text-white">AI‑аналитик Tendr</h1><p className="mt-0.5 text-[11px] text-white/35">Работает с реальными данными лота и вашим контекстом</p></div>
+            </div>
+            <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.07] px-3 text-xs text-white/42 transition hover:bg-white/[0.05] hover:text-white"><RotateCcw size={14} /> <span className="hidden sm:inline">Новый диалог</span></button>
+          </header>
 
-        {autoTitle && (
-          <div className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] px-5 py-4 text-sm">
-            <div className="mb-1 font-medium text-emerald-300">
-              Лот выбран из каталога
-            </div>
-            <div className="text-[var(--text-muted)]">
-              <b>{autoTitle}</b>
-            </div>
-            <div className="text-xs text-slate-500 mt-1">{url}</div>
-          </div>
-        )}
+          <div className="relative flex-1 overflow-y-auto px-4 py-8 sm:px-8">
+            <div className="mx-auto max-w-[940px] space-y-7">
+              {autoTitle && <div className="mx-auto w-fit rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-1.5 text-xs text-emerald-200/75">Выбран из каталога: {autoTitle}</div>}
+              {messages.map((message) => message.role === "user" ? <UserBubble key={message.id}>{message.content}</UserBubble> : <AssistantBubble key={message.id}><div className="whitespace-pre-wrap text-sm leading-7 text-white/68">{message.content}</div>{message.analysisJobId === job?.id && result ? <div className="mt-4"><AnalysisSnapshot result={result} needsReview={resultNeedsReview} sourceUrl={sourceUrl} onReset={reset} onDownload={downloadDocx} /></div> : null}</AssistantBubble>)}
 
-        {loading && (
-          <div
-            role="status"
-            aria-busy="true"
-            aria-label="Идёт AI-анализ"
-            className="mt-8 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] px-5 py-4 text-sm"
-          >  <div className="mb-3 font-medium text-emerald-300">
-              Анализируем документацию
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-              <div
-                className="h-full animate-pulse bg-emerald-400"
-                style={{ width: "60%" }}
-              />
-            </div>
-            <div className="mt-2 text-xs text-[var(--text-muted)]">
-              Собираем требования и проверяем возможные риски. Это может занять до полутора минут.
+              {loading && <AssistantBubble><div role="status" aria-busy="true" aria-label="Идёт AI-анализ" className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.045] p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm font-medium text-emerald-200">{job?.stage || "Запускаю анализ"}</p><p className="mt-1 text-xs text-white/35">Можно обновить страницу — задача сохранена на сервере.</p></div><span className="text-xs tabular-nums text-emerald-300">{job?.progress ?? 3}%</span></div><div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-700" style={{ width: `${Math.max(3, job?.progress ?? 3)}%` }} /></div></div></AssistantBubble>}
+
+              {chatBusy && <AssistantBubble><div className="flex items-center gap-2 text-sm text-white/42"><span className="flex gap-1"><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-.2s]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-.1s]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300" /></span>Проверяю сохранённый разбор…</div></AssistantBubble>}
+
+              {quota && <div role="alert" className="ml-11 rounded-xl border border-amber-400/15 bg-amber-400/[0.055] px-4 py-3 text-sm text-amber-100/75">{t("analyze.quota.text")} <button type="button" onClick={retry} className="ml-2 font-medium text-amber-300 hover:text-amber-200">Повторить</button></div>}
+              {error && <div role="alert" className="ml-11 rounded-xl border border-red-400/15 bg-red-400/[0.055] px-4 py-3 text-sm text-red-200/80">{error}</div>}
+              <div ref={conversationEndRef} />
             </div>
           </div>
-        )}
 
-        <form onSubmit={submit} className="mt-10 rounded-[28px] border border-white/[0.09] bg-[#0c1215]/90 p-5 shadow-[0_24px_80px_-40px_rgba(0,0,0,.9)] sm:p-7">
-          <label htmlFor="lot-reference" className="mb-3 block text-sm font-medium">Ссылка или ID лота</label>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              id="lot-reference"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder={t("analyze.placeholder")}
-              aria-label={t("analyze.title")}
-              className="min-h-14 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 text-[var(--text)] placeholder:text-[var(--text-subtle)] focus:border-emerald-400/50 focus:outline-none focus:ring-4 focus:ring-emerald-400/10"
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              disabled={loading || (!url.trim() && !file)}
-              className="button-primary min-w-40 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {loading ? t("analyze.submitting") : t("analyze.submit")}
-            </button>
-          </div>
-          <div className="my-5 flex items-center gap-4 text-xs uppercase tracking-[0.14em] text-[var(--text-subtle)]"><span className="h-px flex-1 bg-white/[0.07]" /><span>или загрузите документацию</span><span className="h-px flex-1 bg-white/[0.07]" /></div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              ref={fileInput}
-              type="file"
-              accept=".pdf,.docx,.txt,.csv,.xls,.xlsx"
-              aria-label={t("analyze.file.label")}
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="sr-only"
-              disabled={loading}
-            />
-            <button type="button" onClick={() => fileInput.current?.click()} disabled={loading} className="button-secondary min-w-44">Выбрать файл</button>
-            {file ? (
-              <div className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-4 py-3 text-sm">
-                <div className="min-w-0"><p className="truncate font-medium text-emerald-100">{file.name}</p><p className="mt-0.5 text-xs text-[var(--text-muted)]">{(file.size / 1024 / 1024).toFixed(2)} МБ</p></div>
-                <button type="button" aria-label="Убрать выбранный файл" onClick={() => { setFile(null); if (fileInput.current) fileInput.current.value = ""; }} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-lg text-[var(--text-muted)] hover:bg-white/10 hover:text-white">×</button>
-              </div>
-            ) : <p className="text-sm text-[var(--text-muted)]">PDF, DOCX, TXT, CSV или Excel · до 20 МБ</p>}
-          </div>
-        </form>
-
-        {quota && (
-          <div
-            className="px-4 py-3 rounded-lg border mb-4"
-            style={{
-              backgroundColor: "var(--bg-elevated)",
-              borderColor: "var(--border)",
-              borderLeftWidth: "3px",
-              borderLeftColor: "#f59e0b",
-            }}
-          >
-            <div className="font-semibold mb-1" style={{ color: "#f59e0b" }}>
-              {t("analyze.quota.title")}
+          <footer className="relative border-t border-white/[0.055] bg-[#090909] px-4 py-4 sm:px-8 sm:py-5">
+            <div className="mx-auto max-w-[940px]">
+              <form onSubmit={submit}>
+                <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.csv,.xls,.xlsx" aria-label={t("analyze.file.label")} onChange={(event) => setFile(event.target.files?.[0] || null)} className="sr-only" disabled={loading || chatBusy} />
+                <TendrChatComposer value={url} onChange={setUrl} onSubmit={() => void submit()} onAttach={() => fileInput.current?.click()} onRemoveFile={() => { setFile(null); if (fileInput.current) fileInput.current.value = ""; }} file={file} disabled={loading || chatBusy} />
+              </form>
+              <p className="mt-2 text-center text-[10px] text-white/22">AI может ошибаться. Важные требования сверяйте с документацией на Госзакупках.</p>
             </div>
-            <div className="text-sm text-[var(--text-muted)]">
-              {t("analyze.quota.text")}
-            </div>
-            <button
-              type="button"
-              onClick={retry}
-              disabled={loading}
-              className="mt-2 px-4 py-1.5 rounded-lg text-sm font-medium border transition disabled:opacity-50"
-            >
-              ↻ Попробовать снова
-            </button>
-          </div>
-        )}
-
-        {error && (
-          <div
-            role="alert"
-            className="px-4 py-3 rounded-lg border mb-4"
-            style={{
-              backgroundColor: "var(--bg-elevated)",
-              borderColor: "var(--border)",
-              borderLeftWidth: "3px",
-              borderLeftColor: "#ef4444",
-            }}
-          >
-            <div className="font-semibold mb-1" style={{ color: "#ef4444" }}>
-              {t("analyze.error.title")}
-            </div>
-            <div className="text-sm text-[var(--text-muted)] whitespace-pre-wrap">
-              {error}
-            </div>
-            <button
-              type="button"
-              onClick={retry}
-              disabled={loading}
-              className="mt-2 px-4 py-1.5 rounded-lg text-sm font-medium border transition disabled:opacity-50"
-            >
-              ↻ Попробовать снова
-            </button>
-          </div>
-        )}
-
-        {result?.incomplete && (
-          <div
-            className="px-4 py-4 rounded-lg border mb-4"
-            style={{
-              backgroundColor: "var(--bg-elevated)",
-              borderColor: "var(--border)",
-              borderLeftWidth: "3px",
-              borderLeftColor: "#f59e0b",
-            }}
-          >
-            <div className="font-semibold mb-2" style={{ color: "#f59e0b" }}>
-              ⚠ {t("analyze.incomplete.title")}
-            </div>
-            <div className="text-sm mb-1 text-[var(--text-muted)]">
-              <span className="font-medium text-[var(--text)]">
-                {t("analyze.incomplete.reason_label")}
-              </span>{" "}
-              {result.incomplete_reason}
-            </div>
-            <div className="text-sm mt-2 text-[var(--text-muted)]">
-              {t("analyze.incomplete.help")}
-            </div>
-          </div>
-        )}
-
-        {result && !result.incomplete && (
-          <ResultView
-            result={result}
-            onReset={reset}
-            onDownload={downloadDocx}
-          />
-        )}
-        </div>
+          </footer>
+        </section>
       </div>
     </LayoutOrEmbed>
+  );
+}
+
+function AnalysisSnapshot({ result, needsReview, sourceUrl, onReset, onDownload }: { result: AnalysisResponse; needsReview: boolean; sourceUrl?: string; onReset: () => void; onDownload: (kind: "complaint" | "report") => void }) {
+  const lot = result.lot;
+  const budget = lot.budget_kzt ?? lot.amount_kzt;
+  const risk = result.legal?.overall_risk || "needs_review";
+  return (
+    <div className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#111314]">
+      <div className="border-b border-white/[0.06] p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><div className="mb-2 flex flex-wrap gap-2"><span className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.07] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-emerald-300">Лот {lot.lot_id}</span><span className={`rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider ${needsReview ? "border-amber-400/20 bg-amber-400/[0.06] text-amber-300" : "border-white/[0.08] text-white/40"}`}>{riskLabel(risk)}</span></div><h3 className="max-w-3xl text-xl font-medium leading-7 tracking-[-.025em] text-white">{lot.title}</h3><p className="mt-2 text-sm text-white/42">{lot.customer || "Заказчик не указан"}{lot.deadline ? ` · подача до ${lot.deadline}` : ""}</p></div>{budget ? <p className="shrink-0 text-lg font-medium text-white">{budget.toLocaleString("ru-RU")} ₸</p> : null}</div>
+        {lot.summary && <p className="mt-4 max-w-3xl text-sm leading-6 text-white/55">{lot.summary}</p>}
+        {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 text-xs text-emerald-300/75 transition hover:text-emerald-200">Открыть первоисточник на Госзакупках <ExternalLink size={13} /></a>}
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-white/[0.06] border-b border-white/[0.06]"><div className="p-4 sm:px-6"><p className="text-xl font-medium text-white">{lot.requirements?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">требований</p></div><div className="p-4 sm:px-6"><p className="text-xl font-medium text-white">{lot.documents_required?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">документов</p></div><div className="p-4 sm:px-6"><p className={`text-xl font-medium ${lot.red_flags?.length ? "text-amber-300" : "text-emerald-300"}`}>{lot.red_flags?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">рисков</p></div></div>
+      <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
+        <div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-300/75">Что требуется</p><ul className="mt-3 space-y-2.5">{lot.requirements?.length ? lot.requirements.slice(0, 5).map((item, index) => <li key={`${item.code}-${index}`} className="flex gap-2.5 text-sm leading-5 text-white/58"><span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-emerald-400/20 text-[8px] text-emerald-300">✓</span><span>{item.title}{item.is_mandatory ? <b className="ml-1 font-medium text-amber-300/75">обязательно</b> : null}</span></li>) : <li className="text-sm text-white/35">Требования в сохранённом разборе не найдены.</li>}</ul></div>
+        <div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-300/75">Документы</p><ul className="mt-3 space-y-2.5">{lot.documents_required?.length ? lot.documents_required.slice(0, 5).map((item, index) => <li key={`${item}-${index}`} className="flex gap-2.5 text-sm leading-5 text-white/58"><FileCheck2 size={14} className="mt-0.5 shrink-0 text-white/30" /><span>{item}</span></li>) : <li className="text-sm text-white/35">Список документов не найден.</li>}</ul></div>
+      </div>
+      {needsReview && <div className="mx-5 mb-5 rounded-xl border border-amber-400/15 bg-amber-400/[0.05] px-4 py-3 text-xs leading-5 text-amber-100/65 sm:mx-6">Часть данных требует ручной проверки: {result.incomplete_reason || "не все сведения удалось однозначно подтвердить"}.</div>}
+      <details className="group border-t border-white/[0.06]"><summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-xs font-medium text-white/50 transition hover:bg-white/[0.025] hover:text-white sm:px-6">Открыть полный разбор и скачать документы <ChevronDown size={15} className="transition group-open:rotate-180" /></summary><div className="border-t border-white/[0.05] bg-black/15 p-5 sm:p-6"><ResultView result={result} onReset={onReset} onDownload={onDownload} /></div></details>
+    </div>
+  );
+}
+
+function riskTone(risk?: string) {
+  if (risk === "high") return { color: "#ef4444", background: "rgba(239, 68, 68, 0.1)" };
+  if (risk === "medium") return { color: "#f59e0b", background: "rgba(245, 158, 11, 0.1)" };
+  if (risk === "low") return { color: "#10b981", background: "rgba(16, 185, 129, 0.1)" };
+  return { color: "#fbbf24", background: "rgba(251, 191, 36, 0.1)" };
+}
+
+function riskLabel(risk?: string) {
+  if (risk === "high") return "Высокий";
+  if (risk === "medium") return "Средний";
+  if (risk === "low") return "Низкий";
+  return "Не определён — нужна проверка";
+}
+
+function ProfitCalculator({ budget, lotId }: { budget: number; lotId: string }) {
+  const storageKey = `tendr_margin_inputs:${lotId}`;
+  const [cost, setCost] = useState("");
+  const [logistics, setLogistics] = useState("");
+  const [taxes, setTaxes] = useState("");
+  const [overhead, setOverhead] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+      if (saved) {
+        setCost(saved.cost || "");
+        setLogistics(saved.logistics || "");
+        setTaxes(saved.taxes || "");
+        setOverhead(saved.overhead || "");
+      }
+    } catch {
+      // Повреждённые локальные данные просто игнорируются.
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify({ cost, logistics, taxes, overhead }));
+  }, [storageKey, cost, logistics, taxes, overhead]);
+
+  const calculation = useMemo(() => {
+    const values = [cost, logistics, taxes, overhead].map((value) => Number(value) || 0);
+    const totalCosts = values.reduce((sum, value) => sum + value, 0);
+    const profit = budget - totalCosts;
+    return { totalCosts, profit, margin: budget > 0 ? (profit / budget) * 100 : 0 };
+  }, [budget, cost, logistics, taxes, overhead]);
+  const hasInputs = [cost, logistics, taxes, overhead].some((value) => value.trim());
+
+  return (
+    <section className="rounded-lg border border-white/10 bg-[var(--bg-elevated)] p-5">
+      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-emerald-300">Калькулятор фактической маржи</p>
+          <h3 className="mt-1 text-lg font-semibold">Подставьте свои расходы</h3>
+        </div>
+        <p className="text-sm text-[var(--text-muted)]">Бюджет: {budget.toLocaleString("ru-RU")} ₸</p>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          ["Себестоимость", cost, setCost],
+          ["Логистика", logistics, setLogistics],
+          ["Налоги", taxes, setTaxes],
+          ["Прочие расходы", overhead, setOverhead],
+        ].map(([label, value, setter]) => (
+          <label key={label as string} className="text-xs text-[var(--text-muted)]">
+            {label as string}, ₸
+            <input
+              inputMode="decimal"
+              value={value as string}
+              onChange={(event) => (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value.replace(/[^0-9.]/g, ""))}
+              placeholder="0"
+              className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-[var(--text)] outline-none focus:border-emerald-400/50"
+            />
+          </label>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-3 rounded-xl border border-white/[0.07] bg-black/20 p-4 sm:grid-cols-3">
+        <div><p className="text-xs text-[var(--text-subtle)]">Всего расходов</p><p className="mt-1 font-semibold">{calculation.totalCosts.toLocaleString("ru-RU")} ₸</p></div>
+        <div><p className="text-xs text-[var(--text-subtle)]">Расчётная прибыль</p><p className={`mt-1 font-semibold ${calculation.profit < 0 ? "text-red-400" : "text-emerald-300"}`}>{hasInputs ? `${calculation.profit.toLocaleString("ru-RU")} ₸` : "—"}</p></div>
+        <div><p className="text-xs text-[var(--text-subtle)]">Ваша маржа</p><p className={`mt-1 font-semibold ${calculation.margin < 0 ? "text-red-400" : "text-emerald-300"}`}>{hasInputs ? `${calculation.margin.toFixed(1)}%` : "—"}</p></div>
+      </div>
+      <p className="mt-3 text-xs text-[var(--text-subtle)]">Расчёт хранится только в этом браузере и зависит от введённых вами затрат.</p>
+    </section>
   );
 }
 
@@ -504,6 +650,11 @@ function ResultView({
   const t = useT();
   const lot = result.lot;
   const legal = result.legal;
+  const overallRisk = legal?.overall_risk || "needs_review";
+  const riskStyle = riskTone(overallRisk);
+  const recommendation =
+    result.incomplete || overallRisk === "needs_review" ? "review" : lot.recommendation;
+  const lotBudget = lot.budget_kzt ?? lot.amount_kzt;
   const draft = legal?.complaint_draft;
   const draftDict =
     typeof draft === "object" && draft !== null
@@ -520,12 +671,7 @@ function ResultView({
           backgroundColor: "var(--bg-elevated)",
           borderColor: "var(--border)",
           borderLeftWidth: "3px",
-          borderLeftColor:
-            legal?.overall_risk === "high"
-              ? "#ef4444"
-              : legal?.overall_risk === "medium"
-                ? "#f59e0b"
-                : "#10b981",
+          borderLeftColor: riskStyle.color,
         }}
       >
         <h2 className="text-xl font-semibold mb-2 tracking-tight">
@@ -533,7 +679,7 @@ function ResultView({
         </h2>
         <div className="text-sm text-[var(--text-muted)] mb-3">
           {lot.customer}
-          {lot.budget_kzt ? ` · ${lot.budget_kzt.toLocaleString()} ₸` : ""}
+          {lotBudget ? ` · ${lotBudget.toLocaleString()} ₸` : ""}
           {lot.deadline
             ? ` · ${t("analyze.summary.deadline")} ${lot.deadline}`
             : ""}
@@ -551,31 +697,21 @@ function ResultView({
             <span
               className="px-2.5 py-1 rounded-md font-medium"
               style={{
-                backgroundColor:
-                  legal.overall_risk === "high"
-                    ? "rgba(239, 68, 68, 0.1)"
-                    : legal.overall_risk === "medium"
-                      ? "rgba(245, 158, 11, 0.1)"
-                      : "rgba(16, 185, 129, 0.1)",
-                color:
-                  legal.overall_risk === "high"
-                    ? "#ef4444"
-                    : legal.overall_risk === "medium"
-                      ? "#f59e0b"
-                      : "#10b981",
+                backgroundColor: riskStyle.background,
+                color: riskStyle.color,
               }}
             >
-              {legal.overall_risk}
+              {riskLabel(legal.overall_risk)}
             </span>
           </div>
         )}
       </section>
 
       {/* Рекомендация AI + скоринг заказчика + маржинальность */}
-      {(lot.recommendation || lot.customer_score || lot.margin_estimate) && (
+      {(recommendation || lot.customer_score || lot.margin_estimate) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Рекомендация */}
-          {lot.recommendation && (
+          {recommendation && (
             <div
               className="rounded-lg border p-4"
               style={{
@@ -590,21 +726,21 @@ function ResultView({
                 className="text-lg font-semibold flex items-center gap-2"
                 style={{
                   color:
-                    lot.recommendation === "participate"
+                    recommendation === "participate"
                       ? "#10b981"
-                      : lot.recommendation === "skip"
+                      : recommendation === "skip"
                         ? "#ef4444"
                         : "#f59e0b",
                 }}
               >
                 <span>
-                  {lot.recommendation === "participate"
+                  {recommendation === "participate"
                     ? "✓"
-                    : lot.recommendation === "skip"
+                    : recommendation === "skip"
                       ? "✕"
                       : "!"}
                 </span>
-                {t(`analyze.recommendation.${lot.recommendation}`)}
+                {t(`analyze.recommendation.${recommendation}`)}
               </div>
             </div>
           )}
@@ -619,7 +755,7 @@ function ResultView({
               }}
             >
               <div className="text-xs font-medium text-[var(--text-muted)] mb-2 uppercase tracking-wider">
-                {t("analyze.score.title")}
+                Оценка по внутренним анализам
               </div>
               <div className="flex items-baseline gap-2 mb-1">
                 <span
@@ -644,10 +780,12 @@ function ResultView({
               </div>
               {lot.customer_score.total_lots > 0 && (
                 <div className="text-xs text-[var(--text-subtle)]">
-                  {t("analyze.score.lots_analyzed")}{" "}
-                  {lot.customer_score.total_lots}
+                  Основание: {lot.customer_score.evidence_count ?? lot.customer_score.total_lots} анализов Tendr
                 </div>
               )}
+              <p className="mt-2 text-xs leading-5 text-amber-300/80">
+                {lot.customer_score.disclaimer || "Это приблизительная внутренняя оценка, а не проверенная надёжность заказчика."}
+              </p>
             </div>
           )}
 
@@ -661,11 +799,11 @@ function ResultView({
               }}
             >
               <div className="text-xs font-medium text-[var(--text-muted)] mb-2 uppercase tracking-wider">
-                {t("analyze.margin.title")}
+                Ориентир маржи по категории
               </div>
               <div
                 className="text-2xl font-bold mb-1"
-                style={{ color: "#10b981" }}
+                style={{ color: "#fbbf24" }}
               >
                 {lot.margin_estimate.estimated_margin_pct.toFixed(0)}%
               </div>
@@ -677,10 +815,15 @@ function ResultView({
                   "analyze.margin.confidence." + lot.margin_estimate.confidence,
                 )}
               </div>
+              <p className="mt-2 text-xs leading-5 text-amber-300/80">
+                {lot.margin_estimate.disclaimer || "Это приблизительный ориентир, а не проверенная прибыль."}
+              </p>
             </div>
           )}
         </div>
       )}
+
+      {lotBudget && lotBudget > 0 && <ProfitCalculator budget={lotBudget} lotId={lot.lot_id} />}
 
       {lot.red_flags?.length > 0 && (
         <section

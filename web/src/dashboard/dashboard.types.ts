@@ -13,6 +13,12 @@ export type QuotaInfo = {
   limit: number;
   used: number;
   isPilot: boolean;
+  plan: string;
+  windowHours: number;
+  windowLimit: number;
+  usedInWindow: number;
+  remainingInWindow: number;
+  windowResetsAt: string | null;
 };
 
 export type SavedLot = {
