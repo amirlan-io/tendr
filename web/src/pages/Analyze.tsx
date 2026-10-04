@@ -17,6 +17,7 @@ import {
   TendrChatComposer,
   UserBubble,
 } from "../components/ui/tendr-ai-chat";
+import { resolveLotSourceUrl } from "../dashboard/components/LotSourceLink";
 
 type Requirement = {
   code: string;
@@ -55,6 +56,7 @@ type LotAnalysis = {
   amount_kzt?: number;
   technical_specification?: string;
   qualification_requirements?: string[];
+  source_url?: string | null;
   requirements: Requirement[];
   documents_required: string[];
   summary: string;
@@ -485,9 +487,8 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const resultNeedsReview = Boolean(
     result && (result.incomplete || !result.legal || result.legal.overall_risk === "needs_review"),
   );
-  const sourceUrl = job?.kind === "url" && /^https?:\/\//i.test(job.input_label)
-    ? job.input_label
-    : undefined;
+  const sourceUrl = resolveLotSourceUrl(result?.lot.source_url, result?.lot.lot_id)
+    ?? (job?.kind === "url" && /^https?:\/\//i.test(job.input_label) ? job.input_label : undefined);
 
   return (
     <LayoutOrEmbed embedded={embedded} plainBackground>
@@ -655,6 +656,10 @@ function ResultView({
   const recommendation =
     result.incomplete || overallRisk === "needs_review" ? "review" : lot.recommendation;
   const lotBudget = lot.budget_kzt ?? lot.amount_kzt;
+  // Ссылка приходит с backend и проходит строгий allowlist: недоверенный
+  // хост или http:// приведёт к null. Если её нет, строим из lot_id —
+  // иначе кнопка пропадала бы на загрузках, где source_url пуст.
+  const lotSourceUrl = resolveLotSourceUrl(lot.source_url, lot.lot_id);
   const draft = legal?.complaint_draft;
   const draftDict =
     typeof draft === "object" && draft !== null
@@ -684,6 +689,17 @@ function ResultView({
             ? ` · ${t("analyze.summary.deadline")} ${lot.deadline}`
             : ""}
         </div>
+        {lotSourceUrl && (
+          <a
+            href={lotSourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium transition hover:border-white/25 hover:bg-white/[0.04]"
+            style={{ color: "var(--accent)" }}
+          >
+            Открыть лот на Госзакупках ↗
+          </a>
+        )}
         {lot.summary && (
           <p className="text-[var(--text-muted)] leading-relaxed">
             {lot.summary}

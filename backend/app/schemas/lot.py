@@ -424,6 +424,9 @@ class LotAnalysis(BaseModel):
     lot_id: str
     title: str
     customer: str = ""
+    # Ссылка на исходное объявление на goszakup. UI даёт по ней переход
+    # на оригинал — без неё результат анализа «замкнут» на нашу страницу.
+    source_url: str | None = None
     amount_kzt: float | None = None
     currency: str = "KZT"
     deadline: str | None = None

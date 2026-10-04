@@ -5,6 +5,7 @@ import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { useT } from "../i18n";
 import { clearHistory, type HistoryItem as LocalItem } from "../historyStore";
 import { useHistoryList } from "../dashboard/hooks/useDashboardData";
+import { LotSourceLink } from "../dashboard/components/LotSourceLink";
 
 export function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useT();
@@ -152,12 +153,18 @@ function HistoryCard({ item, embedded }: { item: LocalItem; embedded: boolean })
           {item.url && (
             <Link
               to={`${embedded ? "/dashboard" : ""}/analyze?lot_url=${encodeURIComponent(item.url)}`}
-              className="mt-2 inline-block text-xs font-medium"
+              className="mt-2 mr-3 inline-block text-xs font-medium"
               style={{ color: "var(--accent)" }}
             >
               Открыть анализ →
             </Link>
           )}
+          <LotSourceLink
+            sourceUrl={item.url}
+            lotId={item.lot_id}
+            label="Лот на Госзакупках ↗"
+            className="mt-2 inline-block text-xs font-medium"
+          />
         </div>
         <div
           className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${riskColor}`}

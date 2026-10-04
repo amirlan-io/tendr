@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../../clientId";
+import { LotSourceLink } from "../components/LotSourceLink";
 
 type MatchStatus = "fits" | "partial" | "no" | "unknown";
 
@@ -38,6 +39,7 @@ interface SandboxCandidate {
 
 interface SandboxResult {
   lot_id: string;
+  lot_url?: string | null;
   requirements: Array<{ code: string; title: string; mandatory: boolean }>;
   trace: {
     queries: string[];
@@ -83,6 +85,11 @@ export function SandboxPage() {
     const lot = new URLSearchParams(window.location.search).get("lot_id");
     if (lot) setLotId(lot);
   }, []);
+
+  // Ссылка строится на лету из введённого ID, чтобы до прогона агента
+  // тоже было видно, о каком лоте речь. Невалидный ввод не даёт ссылки,
+  // и кнопка не рендерится.
+  const sourceLotUrl = lotId.trim();
 
   const run = useCallback(async () => {
     if (!lotId.trim()) {
@@ -137,13 +144,18 @@ export function SandboxPage() {
       </header>
 
       <section className="space-y-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <input
             value={lotId}
             onChange={(e) => setLotId(e.target.value)}
             placeholder="ID лота, например 17726443"
             aria-label="ID лота"
             className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-emerald-400/40"
+          />
+          <LotSourceLink
+            sourceUrl={result?.lot_url ?? null}
+            lotId={sourceLotUrl}
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-white/70 transition hover:border-white/25 hover:text-white"
           />
           <button
             type="button"

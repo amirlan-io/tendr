@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { ActivityItem } from "../dashboard.types";
 import { EmptyState } from "./EmptyState";
+import { resolveLotSourceUrl } from "./LotSourceLink";
 
 const KIND_LABEL: Record<ActivityItem["kind"], string> = {
   analysis: "Анализ",
@@ -35,11 +36,13 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
         />
       ) : (
         <ul className="divide-y divide-white/[0.06]">
-          {items.map((item) => (
-            <li key={item.id}>
+          {items.map((item) => {
+            const lotUrl = resolveLotSourceUrl(item.sourceUrl, item.lotId);
+            return (
+            <li key={item.id} className="flex items-stretch">
               <Link
                 to={item.to}
-                className="grid gap-2 px-5 py-4 transition hover:bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 sm:grid-cols-[1fr_auto] sm:items-center sm:px-6"
+                className="grid flex-1 gap-2 px-5 py-4 transition hover:bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 sm:grid-cols-[1fr_auto] sm:items-center sm:px-6"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-white/80">{item.title}</p>
@@ -54,8 +57,33 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
                   </span>
                 </div>
               </Link>
+              {lotUrl && (
+                <a
+                  href={lotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Открыть источник объявления ${item.lotId ?? ""}`}
+                  title="Открыть объявление на Госзакупках"
+                  className="flex shrink-0 items-center px-4 text-white/25 transition hover:text-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M7 17 17 7M9 7h8v8" />
+                  </svg>
+                </a>
+              )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </section>

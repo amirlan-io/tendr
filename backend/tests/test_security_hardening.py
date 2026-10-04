@@ -1038,6 +1038,53 @@ def test_history_route_returns_only_current_user_records() -> None:
     asyncio.run(_run())
 
 
+def test_lot_source_url_prefers_stored_link_and_falls_back_to_id() -> None:
+    """История должна отдавать ссылку на оригинал объявления.
+
+    Раньше поле url не возвращалось вовсе, и переход на сам лот
+    на goszakup был невозможен ни из истории, ни из документов.
+    """
+    stored = SimpleNamespace(
+        lot_id="17726443",
+        source_url="https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1",
+    )
+    assert (
+        lots_api._lot_source_url(stored, {})
+        == "https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1"
+    )
+
+    # Загруженный ТЗ: url — это `upload:имя.pdf`, ссылка строится из ID.
+    uploaded = SimpleNamespace(lot_id="17726443", source_url="upload:tz.pdf")
+    assert lots_api._lot_source_url(uploaded, {}) == (
+        "https://goszakup.gov.kz/ru/announce/index/17726443"
+    )
+
+    # Некорректные значения не должны превращаться в ссылку.
+    assert lots_api._lot_source_url(SimpleNamespace(lot_id="b2g-1", source_url=""), {}) is None
+    assert lots_api._lot_source_url(SimpleNamespace(lot_id="12345", source_url=None), {}) is None
+    assert lots_api._lot_source_url(SimpleNamespace(lot_id="17726443", source_url="http://x.kz"), {}) == (
+        "https://goszakup.gov.kz/ru/announce/index/17726443"
+    )
+
+
+def test_history_item_contains_source_url() -> None:
+    item = SimpleNamespace(
+        lot_id="17726443",
+        title="Фильтры",
+        customer="КГП",
+        method="tender",
+        overall_risk="high",
+        n_requirements=3,
+        n_red_flags=1,
+        source_url=None,
+        created_at=__import__("datetime").datetime(2024, 1, 2, 3, 4, 5),
+        result_json={"lot": {"title": "Фильтры"}, "legal": {"overall_risk": "high"}},
+    )
+    assert lots_api._safe_history_item(item)["url"] == (
+        "https://goszakup.gov.kz/ru/announce/index/17726443"
+    )
+
+
 def test_download_route_rejects_unknown_kind_and_missing_document() -> None:
     async def _run():
         fake_db = SimpleNamespace()

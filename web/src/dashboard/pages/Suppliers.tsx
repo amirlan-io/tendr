@@ -35,6 +35,7 @@ import type {
   SupplierCandidate,
 } from "../suppliers.types";
 import { SupplierCandidateCard } from "../components/SupplierCandidateCard";
+import { LotSourceLink } from "../components/LotSourceLink";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
 
@@ -247,6 +248,10 @@ export function SuppliersPage() {
           aria-label="ID лота"
           className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white placeholder:text-white/25 outline-none focus:border-emerald-400/40"
         />
+        <LotSourceLink
+          lotId={lotId.trim()}
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-white/10 px-4 text-sm text-white/70 transition hover:border-white/25 hover:text-white"
+        />
         <button
           type="submit"
           disabled={loading}
@@ -269,11 +274,16 @@ export function SuppliersPage() {
 
       {lotInfo && (
               <section className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
-                <p className="text-xs text-white/40">Требования ТЗ, по которым ищем:</p>
-                <p className="mt-1 text-sm font-medium text-white/80">{lotInfo.title || `Лот ${lotInfo.lot_id}`}</p>
-                {lotInfo.customer && (
-                  <p className="mt-0.5 text-xs text-white/35">{lotInfo.customer}</p>
-                )}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-white/40">Требования ТЗ, по которым ищем:</p>
+                    <p className="mt-1 text-sm font-medium text-white/80">{lotInfo.title || `Лот ${lotInfo.lot_id}`}</p>
+                    {lotInfo.customer && (
+                      <p className="mt-0.5 text-xs text-white/35">{lotInfo.customer}</p>
+                    )}
+                  </div>
+                  <LotSourceLink lotId={lotInfo.lot_id} />
+                </div>
                 <ul className="mt-3 flex flex-wrap gap-1.5">
                   {lotInfo.requirements.slice(0, 8).map((r) => (
                     <li

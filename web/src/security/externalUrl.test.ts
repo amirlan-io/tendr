@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildGoszakupUrl,
   getSafeExternalUrl,
   getSafeHttpsUrl,
   isSafeExternalUrl,
@@ -16,6 +17,20 @@ describe("getSafeExternalUrl", () => {
 
   it("разрешает zakup.gov.kz по https", () => {
     expect(isSafeExternalUrl("https://zakup.gov.kz/lot/1")).toBe(true);
+  });
+
+  it("разрешает v3bl.goszakup.gov.kz — парсер отдаёт ссылки на этот поддомен", () => {
+    expect(
+      isSafeExternalUrl("https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1"),
+    ).toBe(true);
+    expect(
+      getSafeExternalUrl("https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1"),
+    ).toBe("https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1");
+  });
+
+  it("разрешает www-поддомены goszakup/zakup", () => {
+    expect(isSafeExternalUrl("https://www.goszakup.gov.kz/ru")).toBe(true);
+    expect(isSafeExternalUrl("https://www.zakup.gov.kz/ru")).toBe(true);
   });
 
   it("отклоняет javascript: URL", () => {
@@ -40,6 +55,10 @@ describe("getSafeExternalUrl", () => {
     expect(isSafeExternalUrl("https://evil-goszakup.gov.kz/lot/1")).toBe(false);
     expect(isSafeExternalUrl("https://goszakup.gov.kz.evil.com/lot")).toBe(false);
     expect(isSafeExternalUrl("https://notzakup.gov.kz/")).toBe(false);
+    // Поддомен должен быть ровно из allowlist, любой другой — нет.
+    expect(isSafeExternalUrl("https://v3bl.goszakup.gov.kz.evil.com/ru")).toBe(false);
+    expect(isSafeExternalUrl("https://evilv3bl.goszakup.gov.kz/ru")).toBe(false);
+    expect(isSafeExternalUrl("https://gov.kz.evil.com/ru")).toBe(false);
   });
 
   it("отклоняет userinfo", () => {
@@ -69,5 +88,36 @@ describe("getSafeHttpsUrl (общая проверка для магазинов
     expect(isSafeHttpsUrl("http://kaspi.kz/")).toBe(false);
     expect(isSafeHttpsUrl("https://user@kaspi.kz/")).toBe(false);
     expect(getSafeHttpsUrl("file:///etc/passwd")).toBeNull();
+  });
+});
+
+describe("buildGoszakupUrl", () => {
+  it("строит ссылку на объявление по числовому ID", () => {
+    expect(buildGoszakupUrl("17726443")).toBe(
+      "https://goszakup.gov.kz/ru/announce/index/17726443",
+    );
+  });
+
+  it("сохраняет суффикс лота", () => {
+    expect(buildGoszakupUrl("17726443-1")).toBe(
+      "https://goszakup.gov.kz/ru/announce/index/17726443-1",
+    );
+  });
+
+  it("отклоняет не-числовой и слишком короткий ввод", () => {
+    expect(buildGoszakupUrl("abc")).toBeNull();
+    expect(buildGoszakupUrl("12345")).toBeNull();
+    expect(buildGoszakupUrl("17726443-1-extra")).toBeNull();
+    expect(buildGoszakupUrl("")).toBeNull();
+    expect(buildGoszakupUrl(null)).toBeNull();
+  });
+
+  it("не позволяет подмешать свою схему или хост", () => {
+    expect(buildGoszakupUrl("https://evil.com/17726443")).toBeNull();
+    expect(buildGoszakupUrl("17726443/../admin")).toBeNull();
+  });
+
+  it("результат проходит строгую проверку allowlist", () => {
+    expect(isSafeExternalUrl(buildGoszakupUrl("17726443"))).toBe(true);
   });
 });

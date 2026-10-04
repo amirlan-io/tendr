@@ -228,6 +228,25 @@ def _sanitize_csv_cell(value: object) -> str:
     return text
 
 
+def _lot_source_url(item: Analysis, lot: dict) -> str | None:
+    """Ссылка на оригинальное объявление для карточки истории.
+
+    Без неё «Открыть лот на Госзакупках» не рендерится, а история
+    выглядит обрезанной: пользователь не может вернуться к источнику.
+    Берём сохранённый source_url, при негодном значении (`upload:имя.pdf`)
+    строим ссылку из числового lot_id.
+    """
+    for candidate in (getattr(item, "source_url", None), lot.get("source_url")):
+        url = str(candidate or "").strip()
+        if url.startswith("https://"):
+            return url
+    # Загруженный файл — не лот на площадке, но у него всё равно есть ID.
+    match = re.fullmatch(r"(\d{6,})(-\d+)?", str(getattr(item, "lot_id", "") or "").strip())
+    if match:
+        return f"https://goszakup.gov.kz/ru/announce/index/{match.group(1)}"
+    return None
+
+
 def _safe_history_item(item: Analysis) -> dict:
     result = item.result_json or {}
     lot = result.get("lot") if isinstance(result, dict) else {}
@@ -246,6 +265,7 @@ def _safe_history_item(item: Analysis) -> dict:
         "overall_risk": str((legal.get("overall_risk") or item.overall_risk or "needs_review")).strip(),
         "n_requirements": int(item.n_requirements or len((lot.get("requirements") or []))),
         "n_red_flags": int(item.n_red_flags or len((lot.get("red_flags") or []))),
+        "url": _lot_source_url(item, lot),
         "created_at": created_at,
     }
 

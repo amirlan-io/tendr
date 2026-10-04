@@ -21,7 +21,12 @@ from app.schemas.lot import (
     ProcurementMethod,
 )
 from app.services.document_reader import extract_text
-from app.services.goszakup_parser import LotNotFoundError, ParsedLot, get_parser
+from app.services.goszakup_parser import (
+    LotNotFoundError,
+    ParsedLot,
+    build_lot_url,
+    get_parser,
+)
 from app.services.scoring import (
     estimate_margin_pct,
     get_customer_score,
@@ -67,6 +72,7 @@ class LotOrchestrator:
                 title=f"Лот {e.lot_id}",
                 customer="(лот не найден)",
                 method=ProcurementMethod.OTHER,
+                source_url=build_lot_url(lot_input.source_url or e.lot_id),
                 summary="",
                 red_flags=[],
                 requirements=[],
@@ -126,6 +132,7 @@ class LotOrchestrator:
                 title=parsed.title or f"Лот {parsed.lot_id}",
                 customer=parsed.customer_name or "(не удалось извлечь)",
                 method=parsed.method,
+                source_url=_resolve_source_url(parsed, lot_input),
                 summary="",
                 red_flags=[],
                 requirements=[],
@@ -167,6 +174,7 @@ class LotOrchestrator:
             analysis.customer = parsed.customer_name
         if parsed.method and (not analysis.procurement_method or analysis.procurement_method == "other"):
             analysis.procurement_method = parsed.method
+        analysis.source_url = _resolve_source_url(parsed, lot_input)
 
         # 3. Юридическая проверка
         legal: LegalCheckResult | None = None
@@ -202,6 +210,18 @@ class LotOrchestrator:
             legal=legal,
             created_at=datetime.utcnow(),
         )
+
+    @staticmethod
+    def _resolve_source_url(parsed: ParsedLot, lot_input: LotCreate) -> str | None:
+        """Ссылка на исходное объявление: сначала парсер, затем входной URL/ID.
+
+        Приоритет у extra парсера: он знает URL фактического редиректа,
+        а не то, что пользователь вставил.
+        """
+        parsed_url = (parsed.extra or {}).get("source_url")
+        if parsed_url:
+            return str(parsed_url)
+        return build_lot_url(lot_input.source_url or lot_input.source_id or parsed.lot_id)
 
     @staticmethod
     def _make_recommendation(*, risk: str, trust: float, margin_pct: float) -> str:

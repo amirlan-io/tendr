@@ -90,6 +90,66 @@ describe("HistoryPage: серверная история + честный offlin
     expect(await screen.findByText("Локальная копия")).toBeInTheDocument();
     expect(screen.getAllByText(/локальная копия/i).length).toBeGreaterThan(1);
   });
+
+  it("даёт переход на сам лот по source_url из ответа сервера", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                ...serverItem,
+                lot_id: "17726443",
+                url: "https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1",
+              },
+            ],
+            total: 1,
+            limit: 20,
+            offset: 0,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    renderWithRouter(<HistoryPage />);
+    const link = await screen.findByRole("link", { name: /лот на госзакупках/i });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1",
+    );
+  });
+
+  it("строит ссылку из lot_id, когда сервер не прислал url", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            items: [{ ...serverItem, lot_id: "17726443" }],
+            total: 1,
+            limit: 20,
+            offset: 0,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    renderWithRouter(<HistoryPage />);
+    const link = await screen.findByRole("link", { name: /лот на госзакупках/i });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://goszakup.gov.kz/ru/announce/index/17726443",
+    );
+  });
+
+  it("не показывает переход, когда номер лота не похож на объявление", async () => {
+    // Короткий/служебный ID не превращаем в ссылку: битых ссылок быть не должно.
+    mockHistory(true);
+    renderWithRouter(<HistoryPage />);
+    expect(await screen.findByText("Поставка мебели")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /лот на госзакупках/i })).toBeNull();
+  });
 });
 
 describe("LotsPage: честный mock/demo-режим", () => {
