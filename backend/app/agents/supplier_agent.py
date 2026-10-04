@@ -116,6 +116,16 @@ MATCH_UNKNOWN = "unknown"
 #: Сколько символов вокруг названия товара искать цену.
 PRICE_WINDOW = 600
 
+#: Цена с указанием валюты. «тенге» и «тң» обязательны: «тг» на реальных
+#: сайтах встречается реже, из-за чего цены не читались вообще.
+PRICE_RE = re.compile(r"([\d][\d\s]{1,11})\s*(?:₸|тг|тң|тенге|KZT)")
+
+#: Начало строки с ценой/наличием — признак карточки товара, а не описания.
+PRICE_MARKER_RE = re.compile(
+    r"(?:цена|стоимость|цена\s+за|от\s+[\d\s]+(?:₸|тг|тң|тенге|KZT))",
+    re.IGNORECASE,
+)
+
 VALID_MATCH_STATUSES = frozenset({MATCH_FITS, MATCH_PARTIAL, MATCH_NO, MATCH_UNKNOWN})
 
 
@@ -261,6 +271,38 @@ _STOP_WORDS = frozenset(
 )
 
 
+def requirement_text(req: Requirement) -> str:
+    """Полный текст пункта ТЗ: название + описание.
+
+    Documenter отдаёт короткий `name` («Регулятор давления») и подробный
+    `value` («...фланцевый, проход 80 мм, давление 60,3 Мпа»). Характеристики
+    лежат именно в значении, поэтому по одному названию агент искал
+    «регулятор давления» и приносил газовые и пневматические.
+    """
+    parts = [req.title or "", req.description or ""]
+    return " ".join(p for p in parts if p).strip()
+
+
+def _manufacturer_queries(requirements: list[Requirement]) -> list[str]:
+    """Запросы фазы поиска производителей.
+
+    Отдельная функция, чтобы след работы (trace.direct_queries) показывал
+    реальные запросы второй фазы, а не пустой список.
+    """
+    base_terms: list[str] = []
+    for req in requirements[:3]:
+        core = extract_search_term(req.title, max_words=6)
+        if core and core not in base_terms:
+            base_terms.append(core)
+    if not base_terms:
+        return []
+    queries: list[str] = []
+    for term in base_terms[:2]:
+        queries.append(f"{term} {_MANUFACTURER_QUERY_SUFFIXES[0]}")
+    queries.append(f"{base_terms[0]} {_MANUFACTURER_QUERY_SUFFIXES[1]}")
+    return queries[:3]
+
+
 def _tokens_overlap(query: str, title: str) -> bool:
     """Есть ли значимое пересечение слов между запросом и пунктом ТЗ."""
     def _tokens(text: str) -> set[str]:
@@ -269,6 +311,124 @@ def _tokens_overlap(query: str, title: str) -> bool:
 
     q, t = _tokens(query), _tokens(title)
     return bool(q & t)
+
+
+#: Слова-разделители, после которых в пункте ТЗ начинаются не название
+#: товара, а характеристики/требования к нему.
+_TERM_STOP_CHARS = (";", ",", " - ", " – ", " (", " [")
+
+#: Характеристики, которые полезно вынести в отдельный поисковый запрос,
+#: а не терять вместе с длинным названием.
+_TECH_HINTS = re.compile(
+    # Десятичная запятая обязательна: в ТЗ пишут «60,3 Мпа», а «\d+ мпа»
+    # такую запись пропускал, и характеристика терялась.
+    r"(\d+(?:[.,]\d+)?\s*(?:мпа|мм|см|кг|шт|бар|°с|кв|м³/ч|м3/ч|м³|м3|л/мин|об/мин))"
+    r"|\b(фланцев\w*|стальн\w*|нержавеющ\w*|оцинкован\w*|маслозащ\w*|"
+    r"водозащ\w*|промышленн\w*|строительн\w*|бытов\w*|автомобил\w*)",
+    re.IGNORECASE,
+)
+
+#: Предлоги, с которых ядро названия не начинается: «для ДВС» в поиске
+#: только мешает, а «Регулятор давления» находится без него.
+_TERM_LEADING_PREPOSITIONS = frozenset({"для", "с", "из", "на", "по", "к", "от", "при"})
+
+
+def extract_search_term(title: str, *, max_words: int = 4) -> str:
+    """Достать номенклатурное ядро из пункта ТЗ.
+
+    Пункт «Регулятор давления стальной, фланцевый, проход 80 мм, 60,3 Мпа»
+    в поиске нужен как «Регулятор давления»: полная строка в запросе даёт
+    мусорную выдачу и не находит ничего. Характеристики при этом не
+    теряются — они попадают в отдельный запрос через ``extract_tech_hints``.
+    """
+    if not title:
+        return ""
+    head = title
+    for sep in _TERM_STOP_CHARS:
+        idx = head.find(sep)
+        if idx > 0:
+            head = head[:idx]
+    head = head.strip(" -–—,")
+    if not head:
+        return ""
+    words = [w for w in head.split() if w]
+    # Убираем предлоги: «для ДВС», «с непосредственным впрыском» в поиске
+    # только мешают — «Топливный фильтр» находится, а полная строка нет.
+    # Убираем и ведущий, и внутренний, но не более одного предлога, чтобы
+    # «стол офисный регулируемый» не превратился в «стол офисный».
+    lead, tail = words[0], words[1:]
+    keep: list[str] = [lead]
+    for word in tail:
+        bare = word.lower().strip(",;")
+        if bare in _TERM_LEADING_PREPOSITIONS:
+            break
+        keep.append(word)
+    return " ".join(keep[:max_words]).strip()
+
+
+def _tokens_of(text: str) -> list[str]:
+    return re.findall(r"[а-яёa-z0-9]{3,}", (text or "").lower())
+
+
+def extract_tech_hints(title: str) -> str:
+    """Технические характеристики из пункта ТЗ — для точного запроса.
+
+    «60,3 Мпа» и «фланцевый» отделяют нужный товар от сотен похожих;
+    без них агент приносит газовые и пневматические регуляторы вместо
+    стального фланцевого.
+    """
+    if not title:
+        return ""
+    numeric: list[str] = []
+    words: list[str] = []
+    # Сравниваем только с ядром названия: «фланцевый» в характеристиках
+    # нужен, даже если где-то ещё в строке ТЗ встречается.
+    seen = set(_tokens_of(extract_search_term(title)))
+    for match in _TECH_HINTS.finditer(title):
+        value = (match.group(1) or match.group(2) or "").strip()
+        if not value or (set(_tokens_of(value)) & seen):
+            continue
+        if not _plausible_measurement(value):
+            continue
+        seen |= set(_tokens_of(value))
+        # Числовые характеристики («60,3 Мпа», «80 мм») важнее словесных:
+        # именно они отличают нужный товар от сотен похожих.
+        (numeric if match.group(1) else words).append(value)
+    return " ".join((numeric + words)[:4])
+
+
+#: Правдоподобные границы для единиц измерения. Закупщики опечатываются
+#: («4090°С» вместо «40–90°С»), и такое значение в поисковом запросе
+#: гарантированно не находит нужный товар.
+_MEASURE_LIMITS: tuple[tuple[str, float], ...] = (
+    ("°с", 300.0),
+    ("мпа", 100.0),
+    ("бар", 1000.0),
+    ("мм", 2000.0),
+    ("см", 2000.0),
+    ("м³", 500.0),
+    ("м3", 500.0),
+)
+
+
+def _plausible_measurement(value: str) -> bool:
+    """Не выглядит ли значение опечаткой в ТЗ.
+
+    Мы не правим данные заказчика — мы просто не тащим очевидный мусор в
+    поисковый запрос. Пользователь увидит исходное ТЗ в отчёте.
+    """
+    numbers = re.findall(r"\d+(?:[.,]\d+)?", value.replace(" ", ""))
+    if not numbers:
+        return True
+    try:
+        number = float(numbers[0].replace(",", "."))
+    except ValueError:
+        return True
+    lowered = value.lower().replace(" ", "")
+    for unit, limit in _MEASURE_LIMITS:
+        if lowered.endswith(unit):
+            return number <= limit
+    return True
 
 
 def _dedupe_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -505,11 +665,18 @@ class SupplierAgent(Agent):
         *,
         budget_kzt: float | None = None,
         variants_per_item: int = 2,
+        region_hint: str = "",
+        company_terms: Sequence[str] = (),
     ) -> tuple[list[str], Costs]:
         """Попросить LLM поисковые запросы и разнообразить шаблонами.
 
         ``variants_per_item`` — сколько разных формулировок пробовать на
         каждый пункт ТЗ. Больше вариантов — шире охват, но дороже.
+
+        Запросы строятся на номенклатурном ядре пункта ТЗ, а не на всей
+        строке: «Регулятор давления стальной, фланцевый, проход 80 мм» в
+        поиске не работает, «Регулятор давления» — работает. Характеристики
+        при этом не теряются, а уходят в отдельный точный запрос.
         """
         costs = Costs()
         if not requirements:
@@ -518,10 +685,15 @@ class SupplierAgent(Agent):
             f"- {r.title}" + (f" ({r.description[:200]})" if r.description else "")
             for r in requirements[:8]
         )
+        region_note = f"Регион поставки: {region_hint}\n" if region_hint else ""
+        company_note = ""
+        if company_terms:
+            company_note = f"Профиль компании, релевантный запросу: {', '.join(company_terms)}\n"
         prompt = (
             "Пункты ТЗ, по которым нужно найти поставщика:\n"
             f"{req_lines}\n\n"
-            f"Бюджет: {budget_kzt if budget_kzt else 'не указан'} тг\n\n"
+            f"Бюджет: {budget_kzt if budget_kzt else 'не указан'} тг\n"
+            f"{region_note}{company_note}\n"
             "Составь 3–7 поисковых запросов: товар + синонимы + ключевые характеристики, "
             "на русском и казахском языках. Верни JSON {\"queries\": [...]}."
         )
@@ -529,29 +701,77 @@ class SupplierAgent(Agent):
         costs.llm_usd += 0.0002
         llm_queries = [str(q).strip() for q in (data.get("queries") or []) if str(q).strip()]
 
-        base_terms = [r.title[:80] for r in requirements if r.title]
-        if not base_terms:
-            base_terms = [q[:80] for q in llm_queries] or [""]
-        base_terms = base_terms[:3]
-        if not base_terms or not base_terms[0]:
+        # Ядро названия вместо первых 80 символов пункта ТЗ.
+        cores: list[str] = []
+        for req in requirements:
+            core = extract_search_term(req.title)
+            if core and core not in cores:
+                cores.append(core)
+            if len(cores) >= 3:
+                break
+        if not cores:
+            cores = [extract_search_term(q, max_words=5) or q[:80] for q in llm_queries[:3]]
+        cores = [c for c in cores if c][:3]
+        if not cores or not cores[0]:
             return llm_queries[:7], costs
 
         variants: list[str] = []
         # Сначала то, что придумала модель: это самые «умные» формулировки.
         variants.extend(q for q in llm_queries if any(
-            _tokens_overlap(q, term) for term in base_terms
+            _tokens_overlap(q, term) for term in cores
         ))
-        # Затем шаблонные варианты по каждому пункту.
-        for term in base_terms:
+        # Затем шаблонные варианты по каждому пункту. Их ограничиваем так,
+        # чтобы в лимит поместились ещё точный запрос с характеристиками и
+        # региональный — без них технические пункты ТЗ не закрываются.
+        for term in cores:
             for template in self.QUERY_TEMPLATES:
                 candidate = template.format(title=term).strip()
                 if candidate and candidate not in variants:
                     variants.append(candidate)
-                if sum(1 for v in variants if _tokens_overlap(v, term)) >= variants_per_item + 2:
+                if sum(1 for v in variants if _tokens_overlap(v, term)) >= variants_per_item + 1:
                     break
 
-        # Лимит: по 3 формулировки на пункт, но не больше 10 запросов.
-        limit = max(3, min(10, variants_per_item * len(base_terms) + len(base_terms)))
+        # Точный запрос с характеристиками: без него «регулятор давления»
+        # возвращает газовые и пневматические, а нужен стальной фланцевый.
+        #
+        # Строим для НЕСКОЛЬКИХ пунктов, а не только для первого: в реальном
+        # прогоне так терялся регулятор «60,3 Мпа, 80 мм», потому что
+        # характеристики нашлись у первого пункта и цикл завершался.
+        def _hint_weight(req: Requirement) -> tuple[int, int]:
+            hints = extract_tech_hints(requirement_text(req))
+            # Числовые характеристики отличают нужный товар от сотен
+            # похожих, словесные — слабее.
+            numeric = len(re.findall(r"\d", hints))
+            return (1 if numeric else 0, numeric)
+
+        precise_targets = sorted(
+            [r for r in requirements if extract_tech_hints(requirement_text(r))],
+            key=_hint_weight,
+            reverse=True,
+        )[:2]
+        for req in precise_targets:
+            hints = extract_tech_hints(requirement_text(req))
+            core = extract_search_term(req.title)
+            if not hints or not core:
+                continue
+            precise = f"{core} {hints}"
+            if precise not in variants:
+                variants.append(precise)
+            if region_hint and f"{precise} {region_hint}" not in variants:
+                variants.append(f"{precise} {region_hint}")
+
+        # Регион лота в запросы: поставка в Казахстан из другой страны —
+        # это другая логистика и другая цена.
+        if region_hint:
+            for term in cores[:2]:
+                regional = f"{term} {region_hint}"
+                if regional not in variants:
+                    variants.append(regional)
+
+        # Лимит: не меньше шести запросов, иначе в выдачу не попадают ни
+        # точный запрос с характеристиками, ни региональный — а именно
+        # они закрывают технические пункты ТЗ.
+        limit = max(6, min(10, variants_per_item * len(cores) + len(cores) + 2))
         return variants[:limit], costs
 
     # ── Шаг 2: Tavily ────────────────────────────────────────────────
@@ -620,21 +840,10 @@ class SupplierAgent(Agent):
         if not self._tavily_client or not requirements:
             return [], costs
 
-        # Запросы строим из названия товара + подсказка «производитель/оптом».
-        base_terms: list[str] = []
-        for req in requirements[:3]:
-            title = re.sub(r"[^\w\s-]", " ", req.title).strip()
-            title = re.sub(r"\s+", " ", title)[:60]
-            if title:
-                base_terms.append(title)
-        if not base_terms:
+        # Запросы строим из номенклатурного ядра + подсказка «производитель/оптом».
+        queries = _manufacturer_queries(requirements)
+        if not queries:
             return [], costs
-
-        queries: list[str] = []
-        for term in base_terms[:2]:
-            queries.append(f"{term} {_MANUFACTURER_QUERY_SUFFIXES[0]}")
-        queries.append(f"{base_terms[0]} {_MANUFACTURER_QUERY_SUFFIXES[1]}")
-        queries = queries[:3]
 
         collected: list[dict[str, Any]] = []
         seen: set[str] = set()
@@ -677,7 +886,11 @@ class SupplierAgent(Agent):
 
     # ── Шаг 3a: бесплатное чтение страниц (Jina → Tavily) ─────────
     async def enrich_with_pages(
-        self, candidates: list[SupplierCandidate], *, top_n: int = 10
+        self,
+        candidates: list[SupplierCandidate],
+        *,
+        top_n: int = 10,
+        terms: Sequence[str] = (),
     ) -> Costs:
         """Прочитать страницы поставщиков и достать контакты/цену.
 
@@ -690,6 +903,10 @@ class SupplierAgent(Agent):
         for candidate in candidates[:top_n]:
             if not candidate.url:
                 continue
+            # Сначала микроразметка: цена в itemprop="price" надёжнее
+            # разбора видимого текста, потому что не зависит от вёрстки
+            # и не путает цену соседнего товара на странице-каталоге.
+            await self._apply_structured_prices(candidate, terms)
             page = await fetch_page(candidate.url)
             if not page.is_usable:
                 logger.info(
@@ -697,14 +914,87 @@ class SupplierAgent(Agent):
                     page.provider,
                     page.error or "empty",
                 )
-                candidate.warnings.append("Страницу поставщика не удалось прочитать.")
+                if page.error in {"captcha", "bot_check", "js_required", "access_denied"}:
+                    # Это анти-бот, а не пустая страница: платный браузер
+                    # тут единственный оставшийся путь.
+                    candidate.warnings.append(
+                        "Сайт закрыт анти-ботом — нужен браузерный режим."
+                    )
+                else:
+                    candidate.warnings.append("Страницу поставщика не удалось прочитать.")
                 continue
             costs.page_fetch_count += 1
-            self._apply_page_text(candidate, page.text)
+            self._apply_page_text(candidate, page.text, terms=terms)
         return costs
 
-    def _apply_page_text(self, candidate: SupplierCandidate, text: str) -> None:
-        """Разобрать текст страницы: контакты, цена, наличие, город."""
+    async def _apply_structured_prices(
+        self, candidate: SupplierCandidate, terms: Sequence[str]
+    ) -> None:
+        """Взять цену и наличие из микроразметки страницы.
+
+        Отдельный быстрый HTTP-запрос к самому сайту: разметка лежит в
+        HTML, который Jina Reader отдаёт уже как markdown и теряет.
+        """
+        if candidate.price_kzt is not None or not candidate.url:
+            return
+        from app.agents.page_fetcher import is_public_http_url
+        from app.agents.structured_data import extract_products, pick_price
+
+        if not is_public_http_url(candidate.url):
+            return
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(15.0, connect=8.0), follow_redirects=True
+            ) as client:
+                response = await client.get(
+                    candidate.url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; TendrBot/1.0)",
+                        "Accept-Language": "ru-KZ,ru;q=0.9",
+                    },
+                )
+            if response.status_code >= 400:
+                return
+            html = response.text
+        except Exception as exc:  # noqa: BLE001 — внешний сайт, тихо продолжаем
+            logger.debug("[supplier] не удалось взять микроразметку {}: {}", candidate.url, exc)
+            return
+
+        products = extract_products(html)
+        if not products:
+            return
+        # Сначала по ядрам из ТЗ, затем по названию карточки.
+        for term in list(terms) + [candidate.title]:
+            if not term:
+                continue
+            price = pick_price(products, term)
+            if price:
+                candidate.price_kzt = float(price)
+                candidate.sources["price"] = candidate.url
+                candidate.sources["price_source"] = "structured_data"
+                matched = next(
+                    (p for p in products if p.in_stock is not None), None
+                )
+                if matched is not None and candidate.in_stock is None:
+                    candidate.in_stock = matched.in_stock
+                return
+
+    def _apply_page_text(
+        self,
+        candidate: SupplierCandidate,
+        text: str,
+        *,
+        terms: Sequence[str] = (),
+    ) -> None:
+        """Разобрать текст страницы: контакты, цена, наличие, город.
+
+        ``terms`` — номенклатурные ядра из пунктов ТЗ. Цена ищется рядом с
+        ними, а не только рядом с заголовком карточки: на странице-каталоге
+        заголовок это рубрика («Топливные фильтры тонкой очистки»), а товары
+        с ценами идут ниже. Без этого каталоги всегда давали цену None.
+        """
         from app.agents.supplier_agent import find_contacts
 
         email, phone = find_contacts(text)
@@ -716,11 +1006,19 @@ class SupplierAgent(Agent):
             candidate.sources["phone"] = candidate.url
 
         if candidate.price_kzt is None:
-            # Цену берём ТОЛЬКО рядом с названием товара. На каталоге
-            # из десяти позиций первая цена на странице почти всегда
-            # принадлежит другому товару — и раньше агент приписывал
-            # поставщику чужую цену (например «123 ₸» за фильтр).
-            price = self._price_near_title(candidate.title, text)
+            # Цену берём ТОЛЬКО рядом с названием товара — того самого, который
+            # искали. На каталоге из десяти позиций первая цена на странице
+            # почти всегда принадлежит другому товару, и раньше агент
+            # приписывал поставщику чужую цену (например «123 ₸» за фильтр).
+            #
+            # Сначала ищем по номенклатурным ядрам из ТЗ: заголовок карточки
+            # на каталоге — это рубрика («Топливные фильтры тонкой очистки»),
+            # и цена рядом с ней принадлежит соседнему товару.
+            price = None
+            if terms:
+                price = self._price_near_terms(text, terms)
+            if price is None:
+                price = self._price_near_title(candidate.title, text)
             if price is not None:
                 candidate.price_kzt = price
                 candidate.sources["price"] = candidate.url
@@ -738,6 +1036,57 @@ class SupplierAgent(Agent):
             )
             if match:
                 candidate.city = match.group(1)
+
+    @classmethod
+    def _price_near_terms(cls, text: str, terms: Sequence[str]) -> float | None:
+        """Найти цену нужного товара на странице-каталоге.
+
+        Разбор построчный: цена берётся из строки, где названо искомое
+        слово, либо из следующей строки (на каталогах название и цена часто
+        разнесены). Так «Топливный фильтр — 107 000 тенге» даёт свою цену,
+        а не цену соседнего сепаратора за 1 176 000.
+
+        Тот же принцип честности, что в ``_price_near_title``: цена
+        принадлежит только тому, рядом с чем написано название искомого
+        товара. Отличие — название ищется в тексте страницы, а не среди
+        заголовков карточки (на каталоге заголовок это рубрика).
+        """
+        if not text or not terms:
+            return None
+        from app.agents.product_search import _parse_price
+
+        lines = [line.strip() for line in text.splitlines()]
+        lines = [line for line in lines if line]
+
+        def _price_in(chunk: str) -> float | None:
+            best: float | None = None
+            for match in PRICE_RE.finditer(chunk):
+                parsed = _parse_price(match.group(1))
+                if parsed and parsed > 0 and (best is None or parsed < best):
+                    best = parsed
+            return best
+
+        for term in terms:
+            needle = re.sub(r"\s+", " ", term.strip().lower())
+            if len(needle) < 4:
+                continue
+            for index, line in enumerate(lines):
+                hay = line.lower()
+                if needle not in hay:
+                    continue
+                # Цена в той же строке.
+                price = _price_in(line)
+                if price is not None:
+                    return price
+                # Или в следующих строках, пока не начался другой товар.
+                for follow in lines[index + 1 : index + 3]:
+                    price = _price_in(follow)
+                    if price is not None:
+                        return price
+                    # Новая строка-заголовок без цены — товар сменился.
+                    if len(follow) > 3 and not PRICE_MARKER_RE.search(follow):
+                        break
+        return None
 
     @staticmethod
     def _price_near_title(title: str, text: str) -> float | None:
@@ -768,7 +1117,7 @@ class SupplierAgent(Agent):
         if next_card:
             window = window[: next_card.start() + 1]
         best: float | None = None
-        for match in re.finditer(r"([\d][\d\s]{1,11})\s*(?:₸|тг|KZT)", window):
+        for match in PRICE_RE.finditer(window):
             parsed = _parse_price(match.group(1))
             if parsed and parsed > 0 and (best is None or parsed > best):
                 best = parsed
@@ -972,17 +1321,28 @@ class SupplierAgent(Agent):
         enrich_browser: bool = True,
         page_fetch_top_n: int = 10,
         query_variants: int = 2,
+        region_hint: str = "",
+        company_terms: Sequence[str] = (),
     ) -> tuple[list[SupplierCandidate], Costs, dict[str, Any]]:
         """Полный конвейер F1+F2. Возвращает кандидатов, расходы и метаданные."""
         requirements = dedupe_requirements(requirements)
         total = Costs()
-        meta: dict[str, Any] = {"queries": [], "candidates_count": 0, "blocked_filtered": 0}
+        meta: dict[str, Any] = {
+            "queries": [],
+            "direct_queries": [],
+            "candidates_count": 0,
+            "blocked_filtered": 0,
+        }
 
         if not requirements:
             return [], total, meta
 
         queries, costs = await self.build_queries(
-            requirements, budget_kzt=budget_kzt, variants_per_item=query_variants
+            requirements,
+            budget_kzt=budget_kzt,
+            variants_per_item=query_variants,
+            region_hint=region_hint,
+            company_terms=company_terms,
         )
         total.merge(costs)
         meta["queries"] = queries
@@ -1008,8 +1368,12 @@ class SupplierAgent(Agent):
             total.merge(costs)
 
         # Вторая фаза: сайты производителей и дилеров в открытом вебе.
+        manufacturer_queries = _manufacturer_queries(requirements)
         manufacturer_results, costs = await self.search_manufacturers(requirements)
         total.merge(costs)
+        # Запросы фазы должны быть видны в следе: без них нельзя понять,
+        # почему поставщиков нашлось столько, сколько нашлось.
+        meta["direct_queries"] = list(manufacturer_queries)
         known_urls = {str(item.get("url")) for item in results}
         for item in manufacturer_results:
             if item["url"] in known_urls:
@@ -1071,14 +1435,36 @@ class SupplierAgent(Agent):
 
         # Сначала бесплатное чтение страниц, потом (если нужно) платный браузер.
         if enrich_browser:
-            costs = await self.enrich_with_pages(candidates, top_n=page_fetch_top_n)
+            # Номенклатурные ядра из ТЗ нужны для поиска цены на странице:
+            # заголовок карточки — это рубрика каталога, а не товар.
+            # Именно короткое название: длинное описание («стальной,
+            # фланцевый, 80 мм, 60,3 Мпа») на странице каталога целиком
+            # не встречается, и поиск по нему ничего не найдёт.
+            search_terms = [
+                core
+                for core in dict.fromkeys(
+                    extract_search_term(r.title) for r in requirements
+                )
+                if core
+            ]
+            costs = await self.enrich_with_pages(
+                candidates, top_n=page_fetch_top_n, terms=search_terms
+            )
             total.merge(costs)
-            # Browser-Use нужен лишь там, где бесплатные источники не справились.
-            if enrich_browser and any(
-                "Страницу поставщика не удалось прочитать" in c.warnings
+            # Browser-Use нужен там, где бесплатные источники не справились:
+            # страница не прочиталась ИЛИ цена не нашлась. Раньше условие было
+            # только про непрочитанные страницы, поэтому при 12 успешно
+            # прочитанных каталогах без цены платный браузер не запускался
+            # ни разу — а именно там, где он нужен.
+            need_browser = [
+                c
                 for c in candidates[:page_fetch_top_n]
-            ):
-                costs = await self.enrich_with_browser(candidates, top_n=3)
+                if "Страницу поставщика не удалось прочитать" in c.warnings
+                or "Сайт закрыт анти-ботом" in c.warnings
+                or c.price_kzt is None
+            ]
+            if need_browser:
+                costs = await self.enrich_with_browser(need_browser, top_n=3)
                 total.merge(costs)
 
         costs = await self.match_requirements(candidates, requirements)

@@ -29,6 +29,7 @@ from app.api import (
 )
 from app.core.config import get_settings
 from app.core.logging import setup_logging
+from app.core.rate_limit import RateLimitMiddleware
 from app.llm import close_llm, get_llm
 from app.services.discovery import close_discovery, get_discovery
 from app.services.goszakup_parser import close_parser, get_parser
@@ -110,6 +111,9 @@ def create_app(*, test_mode: bool = False) -> FastAPI:
     )
 
     app.add_middleware(SecurityHeadersMiddleware)
+    # Лимит по IP на дорогостоящие эндпоинты: подделать его сменой
+    # заголовка нельзя, в отличие от клиентского ключа внутри /api/browser.
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_frontend_origins_list,

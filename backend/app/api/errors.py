@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.admin_auth import require_admin_key
 from app.core.supabase_auth import get_optional_supabase_user
 from app.db import get_db
 from app.services.error_reporter import get_reporter, scrub, scrub_payload
@@ -72,8 +73,14 @@ async def report_error(
 async def test_channel(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
+    _admin: None = Depends(require_admin_key),
 ) -> JSONResponse:
-    """Проверить, доходит ли уведомление. Без настоящей ошибки."""
+    """Проверить, доходит ли уведомление. Без настоящей ошибки.
+
+    Требует админ-ключа: эндпоинт отправляет сообщение в закрытый Telegram-канал,
+    а лимит отправок общий на инстанс, поэтому анонимные вызовы выжигали
+    канал и заглушали настоящие ошибки (аудит 2026-10-03, P2 abuse).
+    """
     reporter = get_reporter()
     configured = bool(reporter.enabled and reporter.bot_token and reporter.admin_ids)
     delivered = False

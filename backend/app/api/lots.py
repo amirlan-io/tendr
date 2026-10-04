@@ -5,6 +5,7 @@ P0: Конкуренция с ets-tender.kz и zakup.gov.kz.
 
 from __future__ import annotations
 
+import ast
 import io
 import json
 import logging
@@ -17,7 +18,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from pathlib import PurePosixPath
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import Response
@@ -205,18 +206,42 @@ def _get_api_token() -> str:
     return getattr(settings, "goszakup_api_token", "") or ""
 
 
+def _dump_red_flags(flags: list[Any] | None) -> str:
+    """Риски в JSON для колонки ai_red_flags.
+
+    Раньше здесь был `str(red_flags)`, а чтение ждало JSON — непустой список
+    превращался в пустой, и пользователь не видел найденных агентом рисков
+    (аудит 2026-10-03, P0 #4). Формат обязан совпадать с _parse_red_flags.
+    """
+    return json.dumps([str(x) for x in (flags or [])], ensure_ascii=False)[:5000]
+
+
 def _parse_red_flags(raw: str | None) -> list[str]:
-    """Парсит JSON-список red flags из БД."""
+    """Достать риски из колонки ai_red_flags.
+
+    Колонка исторически заполнялась двумя способами: `json.dumps` (текущий
+    формат) и `str(list)` (старый баг, из-за которого риски молча терялись).
+    Поэтому чтение терпимо к обоим: старые записи не должны оставаться
+    пустыми после исправления записи (аудит 2026-10-03, P0 #4).
+    """
     if not raw:
         return []
+    text = raw.strip()
+    # Текущий формат — JSON-массив.
     try:
-        import json
-
-        data = json.loads(raw)
+        data = json.loads(text)
         if isinstance(data, list):
             return [str(x) for x in data]
-    except Exception:
+    except (ValueError, TypeError):
         pass
+    # Старый формат — repr списка Python: ["a", "b"].
+    try:
+        data = ast.literal_eval(text)
+        if isinstance(data, (list, tuple)):
+            return [str(x) for x in data]
+    except (ValueError, SyntaxError, TypeError):
+        pass
+    logger.warning("[lots] не удалось разобрать ai_red_flags: префикс=%s", text[:80])
     return []
 
 
@@ -316,10 +341,59 @@ def _deadline_metadata(
 @router.post("/search", response_model=LotSearchResult)
 async def search_lots(
     req: LotSearchRequest,
+    client_id: str = Depends(require_client_id),
     db: AsyncSession = Depends(get_db),
 ) -> LotSearchResult:
-    """Поиск реальных лотов в официальном реестре zakup.gov.kz V3."""
+    """Поиск реальных лотов в официальном реестре zakup.gov.kz V3.
+
+    Идентичность обязательна: сам поиск по каталогу дешёвый, но запрос
+    создаёт записи в БД, а ветка with_ai дополнительно зовёт LLM по каждому
+    лоту. Без require_client_id и резервирования квоты любой анонимный
+    запрос тратил деньги проекта (аудит 2026-10-03, P0 #2).
+    """
     settings = get_settings()
+    user = await db_repo.get_or_create_user(db, web_client_id=client_id)
+
+    # Квота резервируется только на платную ветку: обычный поиск по каталогу
+    # остаётся бесплатным и без токена, иначе сломается публичная выдача.
+    reservation: dict | None = None
+    ai_requested = bool(req.with_ai and req.ai_limit > 0)
+    if ai_requested:
+        try:
+            reservation = await db_repo.reserve_user_quota(
+                db,
+                user.id,
+                operation_key=f"search-ai:{client_id}:{uuid.uuid4().hex}",
+                amount=req.ai_limit,
+                ttl_seconds=900,
+            )
+        except db_repo.QuotaLimitExceeded as exc:
+            raise HTTPException(status_code=429, detail="QUOTA_EXCEEDED") from exc
+
+    try:
+        return await _run_lot_search(req, db, settings, ai_requested=ai_requested)
+    except Exception:
+        # Любой сбой возвращает квоту: иначе неудачный запрос списывает её.
+        if reservation is not None:
+            try:
+                await db_repo.release_user_quota(
+                    db, user.id, reservation_key=reservation["reservation_key"]
+                )
+            except Exception:  # noqa: BLE001 — освобождение не должно маскировать исходную ошибку
+                logger.warning("[search] quota release failed user=%s", user.id)
+        raise
+    finally:
+        await db.close()
+
+
+async def _run_lot_search(
+    req: LotSearchRequest,
+    db: AsyncSession,
+    settings,
+    *,
+    ai_requested: bool,
+) -> LotSearchResult:
+    """Тело поиска. Квота зарезервирована вызывающим кодом."""
     api_token = _get_api_token()
     # Реальный токен — не mock-заглушка
     is_mock = not api_token or api_token.startswith("mock")
@@ -417,10 +491,9 @@ async def search_lots(
     for lot in saved_lots:
         await db.refresh(lot)
 
-    # AI-анализ (P0-3): Documenter + Legal — ОПЦИОНАЛЬНО (выкл по умолчанию)
-    # Включается флагом with_ai=true, ограничено ai_limit лотами
-    # По умолчанию OFF — анализ занимает 30-60 сек на лот и перегружает LLM
-    if req.with_ai and req.ai_limit > 0:
+    # AI-анализ (P0-3): Documenter + Legal — ОПЦИОНАЛЬНО (выкл по умолчанию).
+    # Квота на него зарезервирована в search_lots до вызова этой функции.
+    if ai_requested:
         analyzer = LotAnalyzer()
         lots_to_analyze = [
             lot for lot in saved_lots if not lot.ai_processed
@@ -449,7 +522,10 @@ async def search_lots(
                     lots_to_analyze, results
                 ):
                     lot.ai_summary = summary
-                    lot.ai_red_flags = str(red_flags)[:5000]  # JSON list
+                    # Именно JSON, а не str(): _parse_red_flags читает json.loads,
+                    # поэтому str(list) при чтении превращался в пустой список и
+                    # найденные риски исчезали из выдачи (аудит 2026-10-03, P0 #4).
+                    lot.ai_red_flags = _dump_red_flags(red_flags)
                     lot.ai_match_score = match_score
                     lot.ai_processed = True
                 await db.commit()
@@ -1256,24 +1332,39 @@ async def create_partnership(
 
 
 @router.get("/{lot_id}/partnerships")
-async def list_partnerships(lot_id: int, db: AsyncSession = Depends(get_db)) -> dict:
-    """Список заявок партнёрства по лоту (для организатора)."""
+async def list_partnerships(
+    lot_id: int,
+    client_id: str = Depends(require_client_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Список заявок партнёрства по лоту.
+
+    Раньше эндпоинт был полностью открыт и отдавал `contact` (почта/телефон)
+    по всем пользователям: перебор lot_id собирал контакты участников торгов.
+    Теперь нужна идентичность, а контакт виден только автору его заявки —
+    заказчик лота в Tendr не зарегистрирован.
+    """
     lot = await db.get(Lot, lot_id)
     if not lot:
         raise HTTPException(status_code=404, detail="Lot not found")
 
+    user = await db_repo.get_user_by_web_id(db, client_id)
     partnerships = await db.execute(select(LotPartnership).where(LotPartnership.lot_id == lot_id))
-    items = [
-        {
-            "id": p.id,
-            "role": p.role,
-            "message": p.message,
-            "contact": p.contact,
-            "status": p.status,
-            "created_at": p.created_at.isoformat(),
-        }
-        for p in partnerships.scalars().all()
-    ]
+    items = []
+    for p in partnerships.scalars().all():
+        is_own = user is not None and p.user_id == user.id
+        items.append(
+            {
+                "id": p.id,
+                "role": p.role,
+                # Сообщение и контакт — персональные данные участника торгов.
+                "message": p.message if is_own else None,
+                "contact": p.contact if is_own else None,
+                "has_contact": bool(p.contact),
+                "status": p.status,
+                "created_at": p.created_at.isoformat(),
+            }
+        )
     return {"lot_id": lot_id, "partnerships": items, "total": len(items)}
 
 

@@ -76,6 +76,8 @@ async def run_supplier_sandbox(
     user = await db_repo.get_or_create_user(session, web_client_id=identity)
 
     requirements = dedupe_requirements(payload.requirements[:25])
+    budget_kzt: float | None = None
+    analysis = None
     if not requirements:
         analysis = await db_repo.get_analysis_by_lot(session, user.id, payload.lot_id)
         requirements = dedupe_requirements(_requirements_from_analysis(analysis))
@@ -84,9 +86,14 @@ async def run_supplier_sandbox(
             status_code=400,
             detail="SANDBOX_REQUIREMENTS_MISSING",
         )
+    # Бюджет лота обязателен: без него агент не может отсеять поставщиков
+    # дороже закупки. Раньше сюда жёстко передавался None, и на лоте
+    # «фильтры + регулятор, 48 000 тг» бюджет просто не учитывался.
+    budget_kzt = _budget_from_analysis(analysis)
 
     # Персонализация: профиль компании подмешивается в контекст запросов.
     context_block = ""
+    company_terms: list[str] = []
     if payload.use_company_profile:
         profile_row = await srepo.get_or_create_company_profile(session, user.id)
         context = CompanyContext(
@@ -97,23 +104,30 @@ async def run_supplier_sandbox(
             budget_max_kzt=profile_row.budget_max_kzt,
         )
         context_block = build_company_block(context)
-        if payload.regions:
-            merged = list(dict.fromkeys([*payload.regions, *context.regions]))
-            payload = payload.model_copy(update={"regions": merged})
+        # Категории профиля идут в запросы: без этого персонализация была
+        # только текстом в trace, который ни на что не влиял.
+        company_terms = [c for c in context.categories if c][:5]
+        # Явный выбор пользователя по региону ПРИОРИТЕТНЕЕ регионов профиля:
+        # иначе фильтр «Астана» незаметно подмешивал «Алматы» из профиля и
+        # в trace.filters_applied возвращался список, которого не просил.
+        if not payload.regions:
+            payload = payload.model_copy(update={"regions": list(context.regions)})
 
     blocked = {row.supplier for row in await srepo.list_blocked(session, user.id)}
 
     agent = SupplierAgent()
     candidates, costs, meta = await agent.find_suppliers(
         requirements,
-        budget_kzt=None,
+        budget_kzt=budget_kzt,
         blocked=blocked,
         enrich_browser=payload.enrich_browser,
         query_variants=payload.query_variants,
         page_fetch_top_n=payload.page_fetch_top_n,
+        region_hint=payload.regions[0] if payload.regions else "",
+        company_terms=company_terms,
     )
 
-    applied = _apply_filters(
+    applied, filter_stats = _apply_filters(
         candidates,
         regions=payload.regions,
         min_price=payload.min_price_kzt,
@@ -147,7 +161,14 @@ async def run_supplier_sandbox(
         "lot_id": payload.lot_id,
         "lot_url": build_lot_url(payload.lot_id),
         "requirements": [
-            {"code": r.code, "title": r.title, "mandatory": r.is_mandatory}
+            {
+                "code": r.code,
+                "title": r.title,
+                # Описание содержит характеристики ТЗ: без них в запросы не
+                # попадают «60,3 Мпа», «фланцевый», «80 мм».
+                "description": r.description or None,
+                "mandatory": r.is_mandatory,
+            }
             for r in requirements
         ],
         "trace": {
@@ -155,6 +176,9 @@ async def run_supplier_sandbox(
             "direct_queries": meta.get("direct_queries", []),
             "found_before_filters": meta.get("candidates_count", 0),
             "blocked_filtered": meta.get("blocked_filtered", 0),
+            # Сколько кандидатов отсеял каждый фильтр: раньше потеря
+            # 20 → 1 была видна только как разница в total.
+            "filtered_out": filter_stats,
             "pages_read": costs.page_fetch_count,
             "personalization": context_block,
             "filters_applied": {
@@ -163,6 +187,7 @@ async def run_supplier_sandbox(
                 "only_direct": payload.only_direct,
                 "only_with_price": payload.only_with_price,
                 "only_with_contacts": payload.only_with_contacts,
+                "budget_kzt": budget_kzt,
             },
         },
         "costs": {
@@ -196,36 +221,67 @@ def _card(candidate) -> dict[str, Any]:
     }
 
 
-def _apply_filters(
-    candidates,
-    *,
-    regions: list[str],
-    min_price: float | None,
-    max_price: float | None,
-    only_direct: bool,
-    only_with_price: bool,
-    only_with_contacts: bool,
-) -> list:
-    """Фильтры применяются в коде, а не в промпте — их можно проверить тестом."""
-    out = []
+def _apply_filters(candidates, *, regions, min_price, max_price, only_direct, only_with_price, only_with_contacts) -> tuple[list, dict[str, int]]:
+    """Фильтры применяются в коде, а не в промпте — их можно проверить тестом.
+
+    Возвращает также статистику отбрасываний. Раньше она не считалась, и по
+    следу (20 кандидатов → 1) было невозможно понять, какой именно фильтр
+    вырезал почти всю выдачу.
+
+    Регион: кандидат с НЕИЗВЕСТНЫМ городом не отбрасывается. «Не знаю
+    город» — это не «не в том регионе», и раньше фильтр по «Астана»
+    уничтожал 95 % выдачи, потому что город был заполнен у единиц.
+    """
+    out: list = []
+    stats = {"dropped_region": 0, "dropped_price": 0, "dropped_direct": 0,
+             "dropped_no_price": 0, "dropped_no_contacts": 0, "unknown_city_kept": 0}
     for c in candidates:
         card = c.to_card()
         if regions:
-            city = (card["city"] or "").lower()
-            if not any(r.lower() in city for r in regions):
+            city = (card["city"] or "").strip()
+            if not city:
+                stats["unknown_city_kept"] += 1
+            elif not any(r.lower() in city.lower() for r in regions):
+                stats["dropped_region"] += 1
                 continue
         if min_price is not None and (card["price_kzt"] is None or card["price_kzt"] < min_price):
+            stats["dropped_price"] += 1
             continue
         if max_price is not None and (card["price_kzt"] is None or card["price_kzt"] > max_price):
+            stats["dropped_price"] += 1
             continue
         if only_direct and c.domain_kind != "direct":
+            stats["dropped_direct"] += 1
             continue
         if only_with_price and not card["price_kzt"]:
+            stats["dropped_no_price"] += 1
             continue
         if only_with_contacts and not (card["email"] or card["phone"]):
+            stats["dropped_no_contacts"] += 1
             continue
         out.append(c)
-    return out
+    return out, stats
+
+
+def _budget_from_analysis(analysis) -> float | None:
+    """Бюджет лота из сохранённого анализа.
+
+    Без него агент не понимает цену позиции: на лоте «фильтры + регулятор,
+    48 000 тг» поставщик с ценой 107 000 ₸ за штуку не подходит вовсе,
+    но агент такого поставщика не отсеивал.
+    """
+    if analysis is None:
+        return None
+    for value in (getattr(analysis, "budget_kzt", None),):
+        if isinstance(value, (int, float)) and value > 0:
+            return float(value)
+    result = analysis.result_json if isinstance(analysis.result_json, dict) else {}
+    lot = result.get("lot") if isinstance(result.get("lot"), dict) else {}
+    for key in ("budget_kzt", "amount_kzt", "estimated_budget_kzt"):
+        value = lot.get(key)
+        if isinstance(value, (int, float)) and value > 0:
+            return float(value)
+    return None
 
 
 def _requirements_from_analysis(analysis) -> list[dict[str, Any]]:

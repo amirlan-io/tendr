@@ -193,8 +193,12 @@ async def reserve_user_quota(
 ) -> dict[str, Any]:
     """Atomically reserve quota for a single user operation.
 
-    The check and reservation are performed inside the same DB transaction to
-    prevent two concurrent requests from consuming the final slot.
+    Гонка закрыта блокировкой строки пользователя (`SELECT ... FOR UPDATE`),
+    а не только общей транзакцией: при READ COMMITTED (дефолт PostgreSQL) две
+    параллельные транзакции читали бы одинаковые used/reserved и обе вставили
+    бы резервацию, обойдя лимит. Блокировка строки сериализует резервирование
+    для одного пользователя; конкурент ждёт и после освобождения видит
+    обновлённые данные (аудит 2026-10-03, P0 #2).
     """
     if amount <= 0:
         raise ValueError("amount must be positive")
@@ -206,7 +210,11 @@ async def reserve_user_quota(
 
     async def _reserve() -> dict[str, Any]:
         await cleanup_expired_quota_reservations(session, now=now)
-        user = await session.get(User, user_id)
+        # Блокировка строки: следующий запрос по тому же пользователю
+        # дождётся завершения этой транзакции.
+        user = (
+            await session.execute(select(User).where(User.id == user_id).with_for_update())
+        ).scalar_one_or_none()
         if user is None:
             raise LookupError(f"User {user_id} not found")
         used_this_month = await count_analyses_this_month(session, user_id, now_override=now)

@@ -47,6 +47,14 @@ async def _user_for_request(session: AsyncSession, request: Request) -> User:
     return user
 
 
+def _escape_like(value: str) -> str:
+    """Экранировать спецсимволы шаблона LIKE (`%`, `_`, `\\`).
+
+    Иначе пользователь управляет шаблоном поиска по заголовкам анализов.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 async def _check_access(
     session: AsyncSession, workspace_id: int, user_id: int, required: str = "viewer"
 ) -> tuple[B2GWorkspace, str]:
@@ -207,20 +215,21 @@ async def list_members(
         .all()
     )
     items = []
+    # client_id намеренно НЕ отдаётся: у авторизованного пользователя он
+    # равен supabase_<uuid>, а require_client_id принимает такой же формат
+    # без токена. Выдача превращала любого участника вкладки в держателя
+    # чужой личности для всех гостевых эндпоинтов (аудит 2026-10-03).
     if owner:
         items.append(
             {
                 "user_id": owner.id,
-                "client_id": owner.web_client_id,
                 "role": "owner",
             }
         )
     for m in members:
-        u = await session.get(User, m.user_id)
         items.append(
             {
                 "user_id": m.user_id,
-                "client_id": u.web_client_id if u else None,
                 "role": m.role,
             }
         )
@@ -253,11 +262,14 @@ async def generate_tz(
     ws = await session.get(B2GWorkspace, ws_id)
 
     # Поиск похожих лотов в БД
+    # LIKE-спецсимволы экранируются: иначе пользователь управляет шаблоном
+    # поиска и `%` вместо слова превращается в «совпадение со всем».
     keywords = payload.need_description.split()[:3]
-    like_pattern = f"%{keywords[0]}%" if keywords else "%%"
+    pattern = _escape_like(keywords[0]) if keywords else ""
+    like_pattern = f"%{pattern}%"
     stmt = (
         select(Analysis)
-        .where(Analysis.title.ilike(like_pattern))
+        .where(Analysis.title.ilike(like_pattern, escape="\\"))
         .where(Analysis.budget_kzt.is_not(None))
         .order_by(Analysis.created_at.desc())
         .limit(5)

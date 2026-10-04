@@ -257,7 +257,34 @@ async def test_require_client_id_accepts_valid_values() -> None:
             "headers": [(b"x-client-id", b"web_1234567890abcd")],
         }
     )
-    assert await require_client_id(request) == "web_1234567890abcd"
+    # Гость попадает в собственное пространство имён (`gst_`), поэтому его
+    # значение никогда не совпадёт с `supabase_*` авторизованного аккаунта.
+    assert await require_client_id(request) == "gst_web_1234567890abcd"
+
+
+@pytest.mark.asyncio
+async def test_require_client_id_rejects_authenticated_identity_as_guest() -> None:
+    """Гость не может выдать себя за авторизованного пользователя.
+
+    Идентификатор авторизованного — `supabase_<uuid>`. Если бы гостевой путь
+    его принимал, знание чужого UUID (например, из списка участников вкладки)
+    давало бы доступ к чужим данным без токена (аудит 2026-10-03, P0 #1).
+    """
+    for forged in (
+        b"supabase_064f71e5787b44b3a16bd4d41d957d99",
+        b"SUPABASE_064f71e5787b44b3a16bd4d41d957d99",
+    ):
+        request = Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/",
+                "headers": [(b"x-client-id", forged)],
+            }
+        )
+        with pytest.raises(HTTPException) as exc:
+            await require_client_id(request)
+        assert exc.value.status_code == 400
 
 
 @pytest.mark.asyncio

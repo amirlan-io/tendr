@@ -32,6 +32,7 @@ from urllib.parse import urlsplit
 import httpx
 from loguru import logger
 
+from app.agents.page_guard import block_reason, looks_like_block_page
 from app.core.config import get_settings
 
 JINA_READER_BASE = "https://r.jina.ai/"
@@ -243,11 +244,25 @@ async def fetch_page(
         page = await fetch_jina(url, timeout=timeout)
     except Exception as exc:  # noqa: BLE001 - страховка внешнего сервиса
         page = PageContent(url=url, text="", provider="jina", ok=False, error=type(exc).__name__)
-    if page.is_usable:
+    if page.is_usable and not looks_like_block_page(page.text):
         return page
+    # Jina отдала анти-бот заглушку (капчу, «Checking your browser»).
+    # Раньше такой текст считался успешным чтением, из-за чего каскадом
+    # отключались и Tavily, и браузерный агент, и поставщик терялся
+    # вместе с ценой и контактами. Теперь идём к запасным источникам.
+    if page.is_usable:
+        page = PageContent(
+            url=url,
+            text="",
+            provider=page.provider,
+            ok=False,
+            error=block_reason(page.text) or "blocked_page",
+        )
     fallback = await fetch_tavily_extract([url], timeout=timeout)
     for candidate in fallback:
-        if candidate.url == url and candidate.is_usable:
+        if candidate.url == url and candidate.is_usable and not looks_like_block_page(
+            candidate.text
+        ):
             return candidate
     # Ничего не подошло — возвращаем причину от Jina, она информативнее.
     return page
