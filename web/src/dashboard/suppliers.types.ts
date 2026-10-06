@@ -152,6 +152,33 @@ export interface CompanyProfile {
   outreach_mode: OutreachMode;
 }
 
+export interface TenderInterests {
+  categories: string[];
+  regions: string[];
+  keywords: string[];
+  min_budget_kzt: number | null;
+  max_budget_kzt: number | null;
+  quiz_completed: boolean;
+}
+
+export interface TenderFitScore {
+  lot_id: string;
+  title: string;
+  score: number;
+  reasons: string[];
+  confidence: string;
+  is_urgent: boolean;
+  deadline_date: string | null;
+  amount_kzt: number | null;
+  customer: string;
+}
+
+export interface TenderScoreResponse {
+  items: TenderFitScore[];
+  profile_complete: boolean;
+  profile_path: string;
+}
+
 /** Режим отправки: manual — только черновик, review — с проверкой, trusted — авто. */
 export type OutreachMode = "manual" | "review" | "trusted";
 

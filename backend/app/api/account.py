@@ -17,17 +17,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.admin_auth import require_admin_key
 from app.core.client_id import require_client_id
-from app.core.supabase_auth import SupabaseUser, require_supabase_user, supabase_client_id
+from app.core.config import get_settings
+from app.core.supabase_auth import (
+    SupabaseUser,
+    get_optional_supabase_user,
+    require_supabase_user,
+    supabase_client_id,
+)
 from app.db import get_db
 from app.db import repo as db_repo
-from app.core.config import get_settings
 from app.db.models import Analysis, DiscoverySubscription, Payment, Subscription, User
 
 router = APIRouter(prefix="/account", tags=["account"])
 
 
 async def _user(session: AsyncSession, request: Request):
-    cid = await require_client_id(request)
+    auth_user = await get_optional_supabase_user(request)
+    cid = supabase_client_id(auth_user) if auth_user else await require_client_id(request)
     user = await db_repo.get_user_by_web_id(session, cid)
     if not user:
         user = await db_repo.get_or_create_user(session, web_client_id=cid)
@@ -470,17 +476,34 @@ async def discovery_subscribe(
 ) -> dict[str, Any]:
     """Подписаться на уведомления о новых лотах по ключевым словам."""
     user = await _user(session, request)
-    sub = DiscoverySubscription(
-        user_id=user.id,
-        keywords=payload.keywords,
-        category=payload.category,
-        region=payload.region,
-        min_budget_kzt=payload.min_budget_kzt,
-        max_budget_kzt=payload.max_budget_kzt,
-        channel=payload.channel,
-        is_active=True,
+    normalized_keywords = ", ".join(
+        dict.fromkeys(part.strip() for part in payload.keywords.split(",") if part.strip())
     )
-    session.add(sub)
+    if not normalized_keywords:
+        raise HTTPException(status_code=422, detail="KEYWORDS_REQUIRED")
+    existing = (
+        await session.execute(
+            select(DiscoverySubscription).where(
+                DiscoverySubscription.user_id == user.id,
+                DiscoverySubscription.keywords == normalized_keywords,
+                DiscoverySubscription.channel == payload.channel,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        sub = DiscoverySubscription(
+            user_id=user.id,
+            keywords=normalized_keywords,
+            channel=payload.channel,
+        )
+        session.add(sub)
+    else:
+        sub = existing
+    sub.category = payload.category
+    sub.region = payload.region
+    sub.min_budget_kzt = payload.min_budget_kzt
+    sub.max_budget_kzt = payload.max_budget_kzt
+    sub.is_active = True
     await session.flush()
     return {"ok": True, "subscription_id": sub.id}
 

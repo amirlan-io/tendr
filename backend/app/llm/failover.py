@@ -33,8 +33,6 @@ class FailoverProvider(LLMProvider):
         self.name = f"failover:{primary.name}"
 
     def _should_failover(self) -> bool:
-        import time
-
         if self._secondary is None:
             return False
         if self._primary_failed_count < self._max_failures:
@@ -64,8 +62,16 @@ class FailoverProvider(LLMProvider):
             return result
         except Exception as e:
             self._record_failure()
-            if self._should_failover() and self._secondary is not None:
-                logger.warning("Primary failed ({}), using fallback", e)
+            # Fallback нужен для текущего пользовательского запроса сразу.
+            # Старое поведение ждало три отдельных сбоя: первый анализ лота
+            # поэтому возвращался пустым, хотя резервный провайдер был рабочим.
+            if self._secondary is not None:
+                logger.warning(
+                    "Primary LLM '{}' failed ({}), using fallback '{}'",
+                    self._primary.name,
+                    e,
+                    self._secondary.name,
+                )
                 return await coro_factory(self._secondary, *args, **kwargs)
             raise
 

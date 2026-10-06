@@ -111,8 +111,14 @@ export function loadSavedLots(): SavedLot[] {
 
 export function saveLot(lot: SavedLot): SavedLot[] {
   const items = loadSavedLots().filter((i) => i.id !== lot.id);
-  items.unshift(lot);
+  items.unshift({ ...lot, stage: lot.stage || "found" });
   const next = items.slice(0, MAX_SAVED);
+  writeJson(SAVED_LOTS_KEY, next);
+  return next;
+}
+
+export function updateSavedLotStage(id: number, stage: SavedLot["stage"]): SavedLot[] {
+  const next = loadSavedLots().map((item) => item.id === id ? { ...item, stage } : item);
   writeJson(SAVED_LOTS_KEY, next);
   return next;
 }

@@ -19,6 +19,7 @@ from app.schemas.lot import (
     LotCreate,
     MarginEstimate,
     ProcurementMethod,
+    RequirementItem,
 )
 from app.services.document_reader import extract_text
 from app.services.goszakup_parser import (
@@ -132,7 +133,7 @@ class LotOrchestrator:
                 title=parsed.title or f"Лот {parsed.lot_id}",
                 customer=parsed.customer_name or "(не удалось извлечь)",
                 method=parsed.method,
-                source_url=_resolve_source_url(parsed, lot_input),
+                source_url=self._resolve_source_url(parsed, lot_input),
                 summary="",
                 red_flags=[],
                 requirements=[],
@@ -164,6 +165,45 @@ class LotOrchestrator:
         analysis = await self._documenter.run(text_for_agent, lot_id=parsed.lot_id)
         logger.info("Documenter agent done for lot {}", parsed.lot_id)
 
+        # Даже при временной недоступности обеих LLM не выбрасываем уже
+        # полученные официальные данные. Показываем дословный фрагмент ТЗ и
+        # помечаем его как требующий ручной проверки, не выдумывая требований.
+        documenter_failed = analysis.title in {
+            "",
+            "(не удалось проанализировать)",
+            "(без названия)",
+        }
+        if documenter_failed:
+            analysis.title = parsed.title or f"Лот {parsed.lot_id}"
+            analysis.customer = parsed.customer_name or "(не указан)"
+            analysis.procurement_method = parsed.method or ProcurementMethod.OTHER
+            analysis.summary = (parsed.description or ts)[:800]
+            analysis.technical_specification = ts
+            analysis.documents_required = list(parsed.documents_required or [])[:10]
+            if parsed.requirements:
+                analysis.requirements = [
+                    RequirementItem(
+                        name=f"Требование {index}",
+                        value=str(value)[:1200],
+                        is_critical=True,
+                        category="техническое",
+                    )
+                    for index, value in enumerate(parsed.requirements[:10], start=1)
+                    if str(value).strip()
+                ]
+            elif ts:
+                analysis.requirements = [
+                    RequirementItem(
+                        name="Техническая спецификация",
+                        value=ts[:1200],
+                        is_critical=True,
+                        category="техническое",
+                    )
+                ]
+            analysis.warnings.append(
+                "Структурированный ИИ-разбор временно недоступен: показаны исходные данные официального лота."
+            )
+
         # 2.1 Дополняем LotAnalysis реальными данными из парсера (Documenter
         # часто не извлекает budget/deadline из текста, но они у нас уже есть).
         if parsed.budget_kzt is not None and not analysis.amount_kzt:
@@ -174,7 +214,7 @@ class LotOrchestrator:
             analysis.customer = parsed.customer_name
         if parsed.method and (not analysis.procurement_method or analysis.procurement_method == "other"):
             analysis.procurement_method = parsed.method
-        analysis.source_url = _resolve_source_url(parsed, lot_input)
+        analysis.source_url = self._resolve_source_url(parsed, lot_input)
 
         # 3. Юридическая проверка
         legal: LegalCheckResult | None = None

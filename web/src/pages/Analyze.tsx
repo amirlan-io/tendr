@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ChevronDown,
   ExternalLink,
   FileCheck2,
-  RotateCcw,
+  MessageSquare,
+  Plus,
   Sparkles,
 } from "lucide-react";
 import { LayoutOrEmbed } from "../dashboard/Embedded";
@@ -107,11 +108,21 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   analysisJobId?: string;
+  actions?: Array<{ label: string; href: string }>;
+};
+
+type ChatSession = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messages: ChatMessage[];
 };
 
 const ACTIVE_JOB_KEY = "tendr_active_analysis_job:v1";
 const LAST_JOB_KEY = "tendr_last_analysis_job:v1";
 const CHAT_STORAGE_KEY = "tendr_ai_analyst_chat:v1";
+const CHAT_SESSIONS_KEY = "tendr_ai_chat_sessions:v2";
+const ACTIVE_CHAT_KEY = "tendr_ai_active_chat:v2";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_EXTS = [".pdf", ".docx", ".txt", ".csv", ".xls", ".xlsx"] as const;
@@ -135,27 +146,97 @@ function validateFileClientSide(f: File): string | null {
   return null;
 }
 
-function loadChatMessages(): ChatMessage[] {
+function createLocalId(): string {
+  const randomPart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : Math.random().toString(16).slice(2);
+  return `${Date.now()}-${randomPart}`;
+}
+
+function isChatMessage(item: unknown): item is ChatMessage {
+  if (!item || typeof item !== "object") return false;
+  const value = item as Partial<ChatMessage>;
+  return (value.role === "user" || value.role === "assistant") && typeof value.content === "string";
+}
+
+function chatTitle(messages: ChatMessage[]): string {
+  const firstUser = messages.find((message) => message.role === "user")?.content.trim();
+  if (!firstUser) return "Новый чат";
+  return firstUser.length > 42 ? `${firstUser.slice(0, 42).trim()}…` : firstUser;
+}
+
+function loadLegacyMessages(): ChatMessage[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || "[]");
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item) => item && (item.role === "user" || item.role === "assistant") && typeof item.content === "string")
-      .slice(-30);
+    return parsed.filter(isChatMessage).slice(-40);
   } catch {
     return [];
   }
 }
 
-function chatMessage(role: ChatMessage["role"], content: string, analysisJobId?: string): ChatMessage {
-  const randomPart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : Math.random().toString(16).slice(2);
+function loadChatState(): { sessions: ChatSession[]; activeId: string } {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CHAT_SESSIONS_KEY) || "[]");
+    if (Array.isArray(parsed)) {
+      const sessions = parsed
+        .filter((item): item is ChatSession => Boolean(
+          item && typeof item.id === "string" && Array.isArray(item.messages),
+        ))
+        .map((item) => ({ ...item, messages: item.messages.filter(isChatMessage).slice(-40) }))
+        .slice(0, 30);
+      if (sessions.length) {
+        const savedActive = localStorage.getItem(ACTIVE_CHAT_KEY);
+        const activeId = sessions.some((item) => item.id === savedActive) ? savedActive! : sessions[0].id;
+        return { sessions, activeId };
+      }
+    }
+  } catch {
+    // Повреждённую локальную историю заменяем новым диалогом.
+  }
+  const legacy = loadLegacyMessages();
+  const session: ChatSession = {
+    id: createLocalId(),
+    title: chatTitle(legacy),
+    updatedAt: new Date().toISOString(),
+    messages: legacy,
+  };
+  return { sessions: [session], activeId: session.id };
+}
+
+function cleanAssistantText(value: string): string {
+  return value
+    .replace(/^[ \t]*#{1,6}[ \t]*/gm, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/^[ \t]*[-*][ \t]+/gm, "• ")
+    .replace(/```|`/g, "")
+    .replace(/\*/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function formatChatDate(value: string): string {
+  const date = new Date(value);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+  return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+}
+
+function chatMessage(
+  role: ChatMessage["role"],
+  content: string,
+  analysisJobId?: string,
+  actions?: Array<{ label: string; href: string }>,
+): ChatMessage {
   return {
-    id: `${Date.now()}-${randomPart}`,
+    id: createLocalId(),
     role,
     content,
     analysisJobId,
+    actions,
   };
 }
 
@@ -171,6 +252,7 @@ function extractLotReference(message: string): string | null {
 export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useT();
   const [searchParams] = useSearchParams();
+  const initialChatState = useMemo(loadChatState, []);
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -179,7 +261,11 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const [quota, setQuota] = useState(false);
   const [autoTitle, setAutoTitle] = useState<string>("");
   const [job, setJob] = useState<AnalysisJob | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>(loadChatMessages);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>(initialChatState.sessions);
+  const [activeChatId, setActiveChatId] = useState(initialChatState.activeId);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    initialChatState.sessions.find((item) => item.id === initialChatState.activeId)?.messages || [],
+  );
   const [chatBusy, setChatBusy] = useState(false);
   const [restoreChecked, setRestoreChecked] = useState(false);
   const [lastRequest, setLastRequest] = useState<
@@ -192,11 +278,24 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const conversationEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-30)));
+    const now = new Date().toISOString();
+    setChatSessions((current) => {
+      const next = current.map((session) => session.id === activeChatId
+        ? {
+            ...session,
+            title: chatTitle(messages),
+            updatedAt: now,
+            messages: messages.slice(-40),
+          }
+        : session);
+      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next.slice(0, 30)));
+      localStorage.setItem(ACTIVE_CHAT_KEY, activeChatId);
+      return next;
+    });
     if (typeof conversationEndRef.current?.scrollIntoView === "function") {
       conversationEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [messages, loading, chatBusy, result]);
+  }, [messages, loading, chatBusy, result, activeChatId]);
 
   function applyCompletedJob(done: AnalysisJob) {
     if (!done.result) {
@@ -360,7 +459,10 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     setError(null);
     setChatBusy(true);
     try {
-      const response = await api<{ answer: string }>("/api/lots/assistant/chat", {
+      const response = await api<{
+        answer: string;
+        actions?: Array<{ label: string; href: string }>;
+      }>("/api/lots/assistant/chat", {
         method: "POST",
         body: JSON.stringify({
           message: cleanMessage,
@@ -368,7 +470,10 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
           history,
         }),
       });
-      setMessages((current) => [...current, chatMessage("assistant", response.answer)]);
+      setMessages((current) => [
+        ...current,
+        chatMessage("assistant", response.answer, undefined, response.actions),
+      ]);
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : "AI-чат временно недоступен. Попробуйте ещё раз.");
     } finally {
@@ -433,7 +538,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     }
   }
 
-  function reset() {
+  function clearActiveAnalysis() {
     setResult(null);
     setError(null);
     setQuota(false);
@@ -442,10 +547,43 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     setLastRequest(null);
     lastFileRef.current = null;
     setJob(null);
-    setMessages([]);
-    localStorage.removeItem(CHAT_STORAGE_KEY);
     localStorage.removeItem(LAST_JOB_KEY);
     localStorage.removeItem(ACTIVE_JOB_KEY);
+  }
+
+  function reset() {
+    if (loading || chatBusy) return;
+    const newSession: ChatSession = {
+      id: createLocalId(),
+      title: "Новый чат",
+      updatedAt: new Date().toISOString(),
+      messages: [],
+    };
+    setChatSessions((current) => [newSession, ...current.filter((item) => item.messages.length)].slice(0, 30));
+    setActiveChatId(newSession.id);
+    setMessages([]);
+    setAutoTitle("");
+    clearActiveAnalysis();
+    localStorage.removeItem(CHAT_STORAGE_KEY);
+  }
+
+  async function openChat(session: ChatSession) {
+    if (session.id === activeChatId || loading || chatBusy) return;
+    setActiveChatId(session.id);
+    setMessages(session.messages);
+    setAutoTitle("");
+    clearActiveAnalysis();
+    const analysisJobId = [...session.messages]
+      .reverse()
+      .find((message) => message.analysisJobId)?.analysisJobId;
+    if (!analysisJobId) return;
+    try {
+      const restored = await api<AnalysisJob>(`/api/lots/analysis-jobs/${analysisJobId}`);
+      setJob(restored);
+      if (restored.status === "completed" && restored.result) setResult(restored.result);
+    } catch {
+      // Текст старого диалога остаётся доступным, даже если серверный анализ удалён.
+    }
   }
 
   function downloadDocx(kind: "complaint" | "report") {
@@ -493,39 +631,78 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   return (
     <LayoutOrEmbed embedded={embedded} plainBackground>
       <div className={`${embedded ? "" : "page-container py-8 sm:py-10"} bg-[#070707]`}>
-        <section className="relative mx-auto flex min-h-[calc(100vh-150px)] max-w-[1120px] flex-col overflow-hidden rounded-[28px] border border-white/[0.075] bg-[#090909] shadow-[0_30px_100px_-55px_rgba(0,0,0,1)]">
+        <section className="relative mx-auto flex min-h-[calc(100vh-150px)] max-w-[1320px] flex-col overflow-hidden rounded-[28px] border border-white/[0.075] bg-[#090909] shadow-[0_30px_100px_-55px_rgba(0,0,0,1)]">
           <header className="relative flex items-center justify-between gap-4 border-b border-white/[0.065] px-5 py-4 sm:px-7">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.1] text-emerald-300"><Sparkles size={18} /></span>
               <div><h1 className="text-sm font-semibold text-white">AI‑чат Tendr</h1><p className="mt-0.5 text-[11px] text-white/35">Работает с реальными данными лота и вашим контекстом</p></div>
             </div>
-            <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.07] px-3 text-xs text-white/42 transition hover:bg-white/[0.05] hover:text-white"><RotateCcw size={14} /> <span className="hidden sm:inline">Новый диалог</span></button>
+            <button type="button" onClick={reset} disabled={loading || chatBusy} className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.07] px-3 text-xs text-white/55 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><Plus size={14} /> <span className="hidden sm:inline">Новый чат</span></button>
           </header>
 
-          <div className="relative flex-1 overflow-y-auto px-4 py-8 sm:px-8">
-            <div className="mx-auto max-w-[940px] space-y-7">
-              {autoTitle && <div className="mx-auto w-fit rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-1.5 text-xs text-emerald-200/75">Выбран из каталога: {autoTitle}</div>}
-              {messages.map((message) => message.role === "user" ? <UserBubble key={message.id}>{message.content}</UserBubble> : <AssistantBubble key={message.id}><div className="whitespace-pre-wrap text-sm leading-7 text-white/68">{message.content}</div>{message.analysisJobId === job?.id && result ? <div className="mt-4"><AnalysisSnapshot result={result} needsReview={resultNeedsReview} sourceUrl={sourceUrl} onReset={reset} onDownload={downloadDocx} /></div> : null}</AssistantBubble>)}
+          <div className="flex min-h-0 flex-1">
+            <aside className="hidden w-[245px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0c0c0c] p-3 md:flex">
+              <button type="button" onClick={reset} disabled={loading || chatBusy} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.035] text-xs font-medium text-white/70 transition hover:bg-white/[0.07] hover:text-white disabled:opacity-40"><Plus size={15} /> Новый чат</button>
+              <p className="mb-2 mt-5 px-2 text-[10px] font-medium uppercase tracking-[.16em] text-white/25">История чатов</p>
+              <div className="min-h-0 flex-1 space-y-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {[...chatSessions]
+                  .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+                  .map((session) => (
+                    <button
+                      type="button"
+                      key={session.id}
+                      onClick={() => void openChat(session)}
+                      className={`group flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left transition ${session.id === activeChatId ? "bg-white/[0.075] text-white" : "text-white/45 hover:bg-white/[0.04] hover:text-white/75"}`}
+                    >
+                      <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-55" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium">{session.title}</span>
+                        <span className="mt-1 block text-[10px] text-white/25">{formatChatDate(session.updatedAt)}</span>
+                      </span>
+                    </button>
+                  ))}
+              </div>
+              <p className="px-2 pb-1 pt-3 text-[10px] leading-4 text-white/20">Диалоги сохраняются в этом браузере.</p>
+            </aside>
 
-              {loading && <AssistantBubble><div role="status" aria-busy="true" aria-label="Идёт AI-анализ" className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.045] p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm font-medium text-emerald-200">{job?.stage || "Запускаю анализ"}</p><p className="mt-1 text-xs text-white/35">Можно обновить страницу — задача сохранена на сервере.</p></div><span className="text-xs tabular-nums text-emerald-300">{job?.progress ?? 3}%</span></div><div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-700" style={{ width: `${Math.max(3, job?.progress ?? 3)}%` }} /></div></div></AssistantBubble>}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="relative flex-1 overflow-y-auto px-4 py-8 sm:px-8">
+                <div className="mx-auto max-w-[900px] space-y-7">
+                  {autoTitle && <div className="mx-auto w-fit rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-1.5 text-xs text-emerald-200/75">Выбран из каталога: {autoTitle}</div>}
+                  {messages.map((message) => message.role === "user" ? <UserBubble key={message.id}>{message.content}</UserBubble> : <AssistantBubble key={message.id}>
+                    <div className="whitespace-pre-wrap text-sm leading-6 text-white/68">{cleanAssistantText(message.content)}</div>
+                    {message.actions?.some((action) => /^\/dashboard(?:\/|$)/.test(action.href)) && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {message.actions
+                          .filter((action) => /^\/dashboard(?:\/|$)/.test(action.href))
+                          .slice(0, 2)
+                          .map((action) => <Link key={action.href} to={action.href} className="inline-flex h-9 items-center rounded-xl border border-emerald-400/20 bg-emerald-400/[0.07] px-3 text-xs font-medium text-emerald-200/85 transition hover:bg-emerald-400/[0.12] hover:text-emerald-100">{action.label}</Link>)}
+                      </div>
+                    )}
+                    {message.analysisJobId === job?.id && result ? <div className="mt-4"><AnalysisSnapshot result={result} needsReview={resultNeedsReview} sourceUrl={sourceUrl} onReset={reset} onDownload={downloadDocx} /></div> : null}
+                  </AssistantBubble>)}
 
-              {chatBusy && <AssistantBubble><div className="flex items-center gap-2 text-sm text-white/42"><span className="flex gap-1"><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-.2s]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-.1s]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300" /></span>Проверяю сохранённый разбор…</div></AssistantBubble>}
+                  {loading && <AssistantBubble><div role="status" aria-busy="true" aria-label="Идёт AI-анализ" className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.045] p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm font-medium text-emerald-200">{job?.stage || "Запускаю анализ"}</p><p className="mt-1 text-xs text-white/35">Можно обновить страницу — задача сохранена на сервере.</p></div><span className="text-xs tabular-nums text-emerald-300">{job?.progress ?? 3}%</span></div><div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-700" style={{ width: `${Math.max(3, job?.progress ?? 3)}%` }} /></div></div></AssistantBubble>}
 
-              {quota && <div role="alert" className="ml-11 rounded-xl border border-amber-400/15 bg-amber-400/[0.055] px-4 py-3 text-sm text-amber-100/75">{t("analyze.quota.text")} <button type="button" onClick={retry} className="ml-2 font-medium text-amber-300 hover:text-amber-200">Повторить</button></div>}
-              {error && <div role="alert" className="ml-11 rounded-xl border border-red-400/15 bg-red-400/[0.055] px-4 py-3 text-sm text-red-200/80">{error}</div>}
-              <div ref={conversationEndRef} />
+                  {chatBusy && <AssistantBubble><div className="flex items-center gap-2 text-sm text-white/42"><span className="flex gap-1"><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-.2s]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-.1s]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300" /></span>Думаю…</div></AssistantBubble>}
+
+                  {quota && <div role="alert" className="ml-11 rounded-xl border border-amber-400/15 bg-amber-400/[0.055] px-4 py-3 text-sm text-amber-100/75">{t("analyze.quota.text")} <button type="button" onClick={retry} className="ml-2 font-medium text-amber-300 hover:text-amber-200">Повторить</button></div>}
+                  {error && <div role="alert" className="ml-11 rounded-xl border border-red-400/15 bg-red-400/[0.055] px-4 py-3 text-sm text-red-200/80">{error}</div>}
+                  <div ref={conversationEndRef} />
+                </div>
+              </div>
+
+              <footer className="relative border-t border-white/[0.055] bg-[#090909] px-4 py-4 sm:px-8 sm:py-5">
+                <div className="mx-auto max-w-[900px]">
+                  <form onSubmit={submit}>
+                    <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.csv,.xls,.xlsx" aria-label={t("analyze.file.label")} onChange={(event) => setFile(event.target.files?.[0] || null)} className="sr-only" disabled={loading || chatBusy} />
+                    <TendrChatComposer value={url} onChange={setUrl} onSubmit={() => void submit()} onAttach={() => fileInput.current?.click()} onRemoveFile={() => { setFile(null); if (fileInput.current) fileInput.current.value = ""; }} file={file} disabled={loading || chatBusy} />
+                  </form>
+                  <p className="mt-2 text-center text-[10px] text-white/22">AI может ошибаться. Важные требования сверяйте с документацией на Госзакупках.</p>
+                </div>
+              </footer>
             </div>
           </div>
-
-          <footer className="relative border-t border-white/[0.055] bg-[#090909] px-4 py-4 sm:px-8 sm:py-5">
-            <div className="mx-auto max-w-[940px]">
-              <form onSubmit={submit}>
-                <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.csv,.xls,.xlsx" aria-label={t("analyze.file.label")} onChange={(event) => setFile(event.target.files?.[0] || null)} className="sr-only" disabled={loading || chatBusy} />
-                <TendrChatComposer value={url} onChange={setUrl} onSubmit={() => void submit()} onAttach={() => fileInput.current?.click()} onRemoveFile={() => { setFile(null); if (fileInput.current) fileInput.current.value = ""; }} file={file} disabled={loading || chatBusy} />
-              </form>
-              <p className="mt-2 text-center text-[10px] text-white/22">AI может ошибаться. Важные требования сверяйте с документацией на Госзакупках.</p>
-            </div>
-          </footer>
         </section>
       </div>
     </LayoutOrEmbed>

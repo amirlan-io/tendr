@@ -21,6 +21,7 @@ from app.services.personalization import (
     confidence_label,
     next_digest_time,
     rank_tenders,
+    score_tender,
 )
 
 router = APIRouter(prefix="/tenders", tags=["tenders"])
@@ -80,7 +81,7 @@ async def update_interests(
 ) -> dict[str, Any]:
     user = await _user(session, auth_user)
     row = await srepo.update_interests(
-        session, user.id, payload.model_dump(exclude_none=True)
+        session, user.id, payload.model_dump(exclude_unset=True)
     )
     await session.commit()
     return {
@@ -96,6 +97,77 @@ async def update_interests(
 class TenderFeedbackRequest(BaseModel):
     lot_id: str = Field(..., min_length=1, max_length=64)
     verdict: str = Field(..., pattern="^(fits|not_fits)$")
+
+
+class TenderScoreItem(BaseModel):
+    """Карточка из живой выдачи Госзакупок для персонального скоринга."""
+
+    lot_id: str = Field(..., min_length=1, max_length=128)
+    title: str = Field(..., min_length=1, max_length=2000)
+    description: str | None = Field(default=None, max_length=8000)
+    category: str | None = Field(default=None, max_length=128)
+    region: str | None = Field(default=None, max_length=256)
+    customer: str | None = Field(default=None, max_length=1000)
+    amount_kzt: float | None = Field(default=None, ge=0)
+    deadline_date: str | None = Field(default=None, max_length=64)
+    created_at: str | None = Field(default=None, max_length=64)
+    is_urgent: bool = False
+
+
+class TenderScoreRequest(BaseModel):
+    items: list[TenderScoreItem] = Field(..., min_length=1, max_length=50)
+
+
+def _merged_interest(interests, profile) -> TenderInterest:
+    """Объединить поисковые интересы и рабочий профиль компании."""
+
+    def unique(*groups: list[str]) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for group in groups:
+            for raw in group or []:
+                value = str(raw).strip()
+                key = value.casefold()
+                if value and key not in seen:
+                    seen.add(key)
+                    result.append(value)
+        return result
+
+    return TenderInterest(
+        categories=unique(list(interests.categories or []), list(profile.categories or [])),
+        regions=unique(list(interests.regions or []), list(profile.regions or [])),
+        keywords=list(interests.keywords or []),
+        min_budget_kzt=interests.min_budget_kzt,
+        max_budget_kzt=interests.max_budget_kzt or profile.budget_max_kzt,
+        min_check_kzt=profile.min_check_kzt,
+        quiz_completed=bool(interests.quiz_completed),
+    )
+
+
+@router.post("/score")
+async def score_live_tenders(
+    payload: TenderScoreRequest,
+    auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Оценить текущую выдачу под компанию без повторного поиска лотов."""
+    user = await _user(session, auth_user)
+    interests = await srepo.get_or_create_interests(session, user.id)
+    profile = await srepo.get_or_create_company_profile(session, user.id)
+    merged = _merged_interest(interests, profile)
+    await session.commit()
+
+    scored = []
+    for item in payload.items:
+        result = score_tender(item.model_dump(), merged)
+        scored.append({**result.to_dict(), "confidence": confidence_label(result.score)})
+
+    profile_complete = bool(merged.categories or merged.keywords) and bool(merged.regions)
+    return {
+        "items": scored,
+        "profile_complete": profile_complete,
+        "profile_path": "/dashboard/settings",
+    }
 
 
 @router.post("/feedback")

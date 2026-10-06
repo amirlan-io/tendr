@@ -12,7 +12,7 @@
 * след: какие запросы пробовались, что вернул поиск, что сделала сверка;
 * фильтры: регион, бюджет, только прямые поставщики, требовать контакты;
 * персонализация: профиль компании влияет на запросы и на приоритет;
-* стоимость: сколько реально потрачено на этот запуск.
+* стоимость: прозрачная оценка по числу вызовов (не банковский чек).
 
 Ничего не отправляется наружу: агент только читает страницы. Любой вызов
 исходящего контакта по-прежнему идёт через approval.
@@ -52,6 +52,7 @@ class SandboxRequest(BaseModel):
     regions: list[str] = Field(default_factory=list, max_length=10)
     min_price_kzt: float | None = Field(default=None, ge=0)
     max_price_kzt: float | None = Field(default=None, ge=0)
+    budget_kzt: float | None = Field(default=None, ge=0)
     only_direct: bool = Field(default=False, description="Только сайты компаний, без маркетплейсов")
     only_with_price: bool = Field(default=False)
     only_with_contacts: bool = Field(default=False)
@@ -75,11 +76,11 @@ async def run_supplier_sandbox(
     identity = supabase_client_id(auth_user)
     user = await db_repo.get_or_create_user(session, web_client_id=identity)
 
+    # Анализ нужен не только для требований: в нём лежат бюджет и регион
+    # поставки. Раньше при ручных requirements анализ вообще не читался.
+    analysis = await db_repo.get_analysis_by_lot(session, user.id, payload.lot_id)
     requirements = dedupe_requirements(payload.requirements[:25])
-    budget_kzt: float | None = None
-    analysis = None
     if not requirements:
-        analysis = await db_repo.get_analysis_by_lot(session, user.id, payload.lot_id)
         requirements = dedupe_requirements(_requirements_from_analysis(analysis))
     if not requirements:
         raise HTTPException(
@@ -89,7 +90,8 @@ async def run_supplier_sandbox(
     # Бюджет лота обязателен: без него агент не может отсеять поставщиков
     # дороже закупки. Раньше сюда жёстко передавался None, и на лоте
     # «фильтры + регулятор, 48 000 тг» бюджет просто не учитывался.
-    budget_kzt = _budget_from_analysis(analysis)
+    budget_kzt = payload.budget_kzt or _budget_from_analysis(analysis)
+    lot_region = _region_from_analysis(analysis)
 
     # Персонализация: профиль компании подмешивается в контекст запросов.
     context_block = ""
@@ -107,11 +109,9 @@ async def run_supplier_sandbox(
         # Категории профиля идут в запросы: без этого персонализация была
         # только текстом в trace, который ни на что не влиял.
         company_terms = [c for c in context.categories if c][:5]
-        # Явный выбор пользователя по региону ПРИОРИТЕТНЕЕ регионов профиля:
-        # иначе фильтр «Астана» незаметно подмешивал «Алматы» из профиля и
-        # в trace.filters_applied возвращался список, которого не просил.
-        if not payload.regions:
-            payload = payload.model_copy(update={"regions": list(context.regions)})
+        # Регионы профиля не превращаем в строгий фильтр поставщиков.
+        # Компания из Астаны может участвовать в лоте Акмолинской области;
+        # географию самого лота берём из анализа ниже.
 
     blocked = {row.supplier for row in await srepo.list_blocked(session, user.id)}
 
@@ -123,8 +123,10 @@ async def run_supplier_sandbox(
         enrich_browser=payload.enrich_browser,
         query_variants=payload.query_variants,
         page_fetch_top_n=payload.page_fetch_top_n,
-        region_hint=payload.regions[0] if payload.regions else "",
+        region_hint=payload.regions[0] if payload.regions else lot_region,
         company_terms=company_terms,
+        # Сначала дешёвые фильтры и limit, затем дорогая LLM-сверка.
+        perform_matching=False,
     )
 
     applied, filter_stats = _apply_filters(
@@ -135,8 +137,26 @@ async def run_supplier_sandbox(
         only_direct=payload.only_direct,
         only_with_price=payload.only_with_price,
         only_with_contacts=payload.only_with_contacts,
+        budget_kzt=budget_kzt,
     )
     applied = applied[: payload.limit]
+
+    # Сверяем только тот шорт-лист, который реально увидит пользователь.
+    # Раньше LLM обрабатывала все 20 карточек до фильтров и одинаковая
+    # «стоимость» вводила в заблуждение.
+    match_costs = await agent.match_requirements(applied, requirements)
+    costs.merge(match_costs)
+    agent.assess_budget(applied, requirements, budget_kzt)
+    within_budget = []
+    for candidate in applied:
+        if budget_kzt and candidate.budget_status == "over_budget":
+            filter_stats["dropped_budget"] += 1
+            continue
+        within_budget.append(candidate)
+    applied = sorted(
+        within_budget,
+        key=lambda c: (-c.score, c.domain.lower(), c.url.lower()),
+    )
 
     if payload.save_results and applied:
         await srepo.replace_candidates(
@@ -188,6 +208,7 @@ async def run_supplier_sandbox(
                 "only_with_price": payload.only_with_price,
                 "only_with_contacts": payload.only_with_contacts,
                 "budget_kzt": budget_kzt,
+                "lot_region": lot_region,
             },
         },
         "costs": {
@@ -195,6 +216,10 @@ async def run_supplier_sandbox(
             "tavily_usd": round(costs.tavily_usd, 6),
             "browser_usd": round(costs.browser_usd, 6),
             "total_usd": round(costs.llm_usd + costs.tavily_usd + costs.browser_usd, 6),
+            "is_estimate": True,
+            "llm_calls": costs.llm_calls,
+            "tavily_calls": costs.tavily_calls,
+            "browser_calls": costs.browser_calls,
         },
         "duration_sec": round(time.monotonic() - started, 1),
         "total": len(applied),
@@ -216,12 +241,17 @@ def _card(candidate) -> dict[str, Any]:
         "city": card["city"],
         "email": card["email"],
         "phone": card["phone"],
+        "estimated_total_kzt": card["estimated_total_kzt"],
+        "budget_status": card["budget_status"],
         "requirement_matches": match["requirement_matches"],
         "warnings": match["warnings"],
     }
 
 
-def _apply_filters(candidates, *, regions, min_price, max_price, only_direct, only_with_price, only_with_contacts) -> tuple[list, dict[str, int]]:
+def _apply_filters(
+    candidates, *, regions, min_price, max_price, only_direct,
+    only_with_price, only_with_contacts, budget_kzt=None,
+) -> tuple[list, dict[str, int]]:
     """Фильтры применяются в коде, а не в промпте — их можно проверить тестом.
 
     Возвращает также статистику отбрасываний. Раньше она не считалась, и по
@@ -234,7 +264,8 @@ def _apply_filters(candidates, *, regions, min_price, max_price, only_direct, on
     """
     out: list = []
     stats = {"dropped_region": 0, "dropped_price": 0, "dropped_direct": 0,
-             "dropped_no_price": 0, "dropped_no_contacts": 0, "unknown_city_kept": 0}
+             "dropped_no_price": 0, "dropped_no_contacts": 0, "dropped_budget": 0,
+             "unknown_city_kept": 0}
     for c in candidates:
         card = c.to_card()
         if regions:
@@ -259,6 +290,9 @@ def _apply_filters(candidates, *, regions, min_price, max_price, only_direct, on
         if only_with_contacts and not (card["email"] or card["phone"]):
             stats["dropped_no_contacts"] += 1
             continue
+        if budget_kzt and getattr(c, "budget_status", "unknown") == "over_budget":
+            stats["dropped_budget"] += 1
+            continue
         out.append(c)
     return out, stats
 
@@ -282,6 +316,20 @@ def _budget_from_analysis(analysis) -> float | None:
         if isinstance(value, (int, float)) and value > 0:
             return float(value)
     return None
+
+
+def _region_from_analysis(analysis) -> str:
+    """Регион поставки лота, а не домашний регион профиля компании."""
+    if analysis is None or not isinstance(analysis.result_json, dict):
+        return ""
+    lot = analysis.result_json.get("lot")
+    if not isinstance(lot, dict):
+        return ""
+    for key in ("region", "delivery_region", "delivery_address"):
+        value = str(lot.get(key) or "").strip()
+        if value:
+            return value[:160]
+    return ""
 
 
 def _requirements_from_analysis(analysis) -> list[dict[str, Any]]:

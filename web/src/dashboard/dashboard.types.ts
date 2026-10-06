@@ -32,7 +32,10 @@ export type SavedLot = {
   /** Номер объявления на площадке — нужен для перехода на оригинал. */
   sourceId?: string | null;
   savedAt: string;
+  stage?: SavedLotStage;
 };
+
+export type SavedLotStage = "found" | "analysis" | "decision" | "preparing" | "submitted";
 
 export type PreparedDocument = {
   id: string;

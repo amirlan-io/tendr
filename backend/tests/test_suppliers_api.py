@@ -71,6 +71,7 @@ async def anon_client():
         ("GET", "/api/suppliers/lists"),
         ("GET", "/api/suppliers/profile"),
         ("GET", "/api/tenders/recommended"),
+        ("POST", "/api/tenders/score"),
         ("POST", "/api/tenders/feedback"),
         ("GET", "/api/approvals/pending"),
         ("POST", "/api/outreach/email"),
@@ -85,6 +86,7 @@ async def test_supplier_endpoints_require_auth(anon_client, method: str, path: s
         "/api/suppliers/feedback": {"candidate_id": 1, "verdict": "fits"},
         "/api/suppliers/draft": {"candidate_id": 1, "kind": "email"},
         "/api/tenders/feedback": {"lot_id": "1", "verdict": "fits"},
+        "/api/tenders/score": {"items": [{"lot_id": "1", "title": "Фильтры"}]},
         "/api/outreach/email": {"approval_id": 1, "subject": "тема"},
         "/api/outreach/call": {"approval_id": 1},
     }
@@ -172,6 +174,42 @@ async def test_recommended_returns_explanation_shape(client) -> None:
     assert "items" in body
     assert "cold_start" in body
     assert isinstance(body["items"], list)
+
+
+@pytest.mark.asyncio
+async def test_live_tender_score_uses_company_profile(client) -> None:
+    await client.patch(
+        "/api/suppliers/profile",
+        json={
+            "categories": ["фильтры"],
+            "regions": ["Астана"],
+            "min_check_kzt": 100_000,
+            "budget_max_kzt": 5_000_000,
+        },
+    )
+    await client.patch(
+        "/api/profile/interests",
+        json={"keywords": ["топливный"], "quiz_completed": True},
+    )
+    resp = await client.post(
+        "/api/tenders/score",
+        json={
+            "items": [
+                {
+                    "lot_id": "lot-1",
+                    "title": "Топливные фильтры",
+                    "category": "фильтры",
+                    "region": "г. Астана",
+                    "amount_kzt": 1_000_000,
+                }
+            ]
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["profile_complete"] is True
+    assert body["items"][0]["score"] >= 70
+    assert body["items"][0]["reasons"]
 
 
 @pytest.mark.asyncio

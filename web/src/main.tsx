@@ -8,6 +8,7 @@ import { HistoryPage } from "./pages/History";
 import { AdminPage } from "./pages/Admin";
 import { B2GPage } from "./pages/B2G";
 import { LotsPage } from "./pages/Lots";
+import { LotDetailsPage } from "./pages/LotDetails";
 import { NotFoundPage } from "./pages/NotFound";
 import { UiPreviewPage } from "./pages/UiPreview";
 import { getOrCreateClientId } from "./clientId";
@@ -51,6 +52,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/b2g" element={<B2GPage />} />
           <Route path="/lots" element={<LotsPage />} />
+          <Route path="/lots/:lotId" element={<LotDetailsPage />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           {/* Песочница shadcn-компонентов для ручной проверки. */}
@@ -67,6 +69,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route index element={<OverviewPage />} />
             <Route path="analyze" element={<AnalyzePage embedded />} />
             <Route path="lots" element={<LotsPage embedded />} />
+            <Route path="lots/:lotId" element={<LotDetailsPage embedded />} />
             <Route path="history" element={<HistoryPage embedded />} />
             <Route path="documents" element={<DocumentsPage />} />
             <Route path="suppliers" element={<SuppliersPage />} />

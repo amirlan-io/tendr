@@ -6,9 +6,10 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowDownUp,
+  BellPlus,
   Bookmark,
   BriefcaseBusiness,
   Building2,
@@ -30,8 +31,10 @@ import { escapeCsvCell } from "../security/csv";
 import { getSafeExternalUrl } from "../security/externalUrl";
 import { LotSourceIconButton } from "../dashboard/components/LotSourceLink";
 import { isLotSaved, removeSavedLot, saveLot } from "../dashboard/dashboard.data";
+import { scoreTenderCards } from "../dashboard/suppliers.api";
+import type { TenderFitScore } from "../dashboard/suppliers.types";
 
-type Lot = {
+export type Lot = {
   id: number;
   source: string;
   source_id: string;
@@ -41,6 +44,7 @@ type Lot = {
   procurement_method?: string;
   platform?: string;
   amount_kzt?: number;
+  price_per_unit?: number;
   region?: string;
   delivery_address?: string;
   publish_date?: string;
@@ -72,6 +76,15 @@ type SearchResult = {
 
 type SortMode = "amount_desc" | "amount_asc" | "deadline";
 type StatusMode = "active" | "published" | "offers" | "archive";
+type SavedSearch = {
+  id: number;
+  keywords: string;
+  category?: string | null;
+  region?: string | null;
+  min_budget_kzt?: number | null;
+  max_budget_kzt?: number | null;
+  channel: string;
+};
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 // v5 invalidates empty V2-search results cached before global V3 search.
@@ -199,6 +212,11 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [sort, setSort] = useState<SortMode>("amount_desc");
   const [currentCursor, setCurrentCursor] = useState<number | null>(null);
   const [cursorHistory, setCursorHistory] = useState<Array<number | null>>([]);
+  const [fitScores, setFitScores] = useState<Record<string, TenderFitScore>>({});
+  const [fitProfileComplete, setFitProfileComplete] = useState<boolean | null>(null);
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [savingSearch, setSavingSearch] = useState(false);
+  const [savedSearchNotice, setSavedSearchNotice] = useState<string | null>(null);
   const [partnershipLot, setPartnershipLot] = useState<Lot | null>(null);
   const [partnershipRole, setPartnershipRole] = useState<
     "supplier" | "investor" | "applicant" | "partner"
@@ -271,6 +289,46 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
     // Первый запрос в dashboard выполняется один раз.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedded]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    void api<{ items: SavedSearch[] }>("/api/account/discovery/list")
+      .then((data) => setSavedSearches(Array.isArray(data.items) ? data.items : []))
+      .catch(() => undefined);
+  }, [embedded]);
+
+  useEffect(() => {
+    if (!result?.lots.length) {
+      setFitScores({});
+      return;
+    }
+    let cancelled = false;
+    void scoreTenderCards(
+      result.lots.map((lot) => ({
+        lot_id: lot.source_id || String(lot.id),
+        title: lot.title,
+        description: lot.description,
+        category: lot.category,
+        region: lot.region,
+        customer: lot.organizer,
+        amount_kzt: lot.amount_kzt,
+        deadline_date: lot.deadline_date,
+        created_at: lot.publish_date,
+        is_urgent: lot.is_urgent,
+      })),
+    )
+      .then((response) => {
+        if (cancelled) return;
+        setFitProfileComplete(response.profile_complete);
+        setFitScores(Object.fromEntries(response.items.map((item) => [item.lot_id, item])));
+      })
+      .catch(() => {
+        if (!cancelled) setFitProfileComplete(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [result]);
 
   const sortedLots = useMemo(() => {
     if (!result) return [];
@@ -355,6 +413,45 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const saveCurrentSearch = async () => {
+    const keywords = query.trim();
+    if (!keywords) {
+      setSavedSearchNotice("Введите ключевые слова, чтобы сохранить поиск.");
+      return;
+    }
+    setSavingSearch(true);
+    setSavedSearchNotice(null);
+    try {
+      await api("/api/account/discovery/subscribe", {
+        method: "POST",
+        body: JSON.stringify({
+          keywords,
+          category: category || null,
+          region: region || null,
+          min_budget_kzt: priceRange[0] || null,
+          max_budget_kzt: priceRange[1] >= PRICE_MAX ? null : priceRange[1],
+          channel: "email",
+        }),
+      });
+      const data = await api<{ items: SavedSearch[] }>("/api/account/discovery/list");
+      setSavedSearches(Array.isArray(data.items) ? data.items : []);
+      setSavedSearchNotice("Поиск сохранён в вашем кабинете.");
+    } catch (reason) {
+      setSavedSearchNotice(reason instanceof ApiError ? reason.message : "Не удалось сохранить поиск.");
+    } finally {
+      setSavingSearch(false);
+    }
+  };
+
+  const removeSavedSearch = async (id: number) => {
+    try {
+      await api(`/api/account/discovery/${id}`, { method: "DELETE" });
+      setSavedSearches((items) => items.filter((item) => item.id !== id));
+    } catch (reason) {
+      setSavedSearchNotice(reason instanceof ApiError ? reason.message : "Не удалось удалить поиск.");
+    }
   };
 
   const submitPartnership = async () => {
@@ -567,6 +664,34 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                   <Search className="h-4 w-4" />
                   {loading ? "Ищем лоты…" : "Найти лоты"}
                 </button>
+
+                {embedded && (
+                  <div className="rounded-xl border border-white/[0.07] bg-black/15 p-3">
+                    <button
+                      type="button"
+                      onClick={() => void saveCurrentSearch()}
+                      disabled={savingSearch}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/[0.1] px-3 py-2.5 text-xs font-medium text-white/65 transition hover:border-white/20 hover:text-white disabled:opacity-40"
+                    >
+                      <BellPlus className="h-3.5 w-3.5" />
+                      {savingSearch ? "Сохраняем…" : "Сохранить поиск"}
+                    </button>
+                    {savedSearchNotice && <p className="mt-2 text-[10px] leading-4 text-white/38">{savedSearchNotice}</p>}
+                    {savedSearches.length > 0 && (
+                      <div className="mt-3 border-t border-white/[0.06] pt-3">
+                        <p className="mb-2 text-[10px] uppercase tracking-[.14em] text-white/25">Сохранённые поиски</p>
+                        <div className="space-y-1.5">
+                          {savedSearches.slice(0, 3).map((item) => (
+                            <div key={item.id} className="flex items-center gap-2 rounded-lg bg-white/[0.025] px-2.5 py-2">
+                              <button type="button" onClick={() => { setQuery(item.keywords); setCategory(item.category || ""); setRegion(item.region || ""); }} className="min-w-0 flex-1 truncate text-left text-[11px] text-white/55 hover:text-white">{item.keywords}</button>
+                              <button type="button" onClick={() => void removeSavedSearch(item.id)} aria-label={`Удалить поиск ${item.keywords}`} className="text-white/25 hover:text-red-300"><X size={12} /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </aside>
 
@@ -647,9 +772,23 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                   </div>
                 )}
 
+                {fitProfileComplete === false && result?.lots.length ? (
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-400/15 bg-blue-400/[0.055] px-4 py-3 text-xs text-blue-100/70">
+                    <span>Заполните профиль компании — Tendr покажет, почему каждый лот подходит именно вам.</span>
+                    <Link to="/dashboard/settings" className="font-semibold text-blue-200 hover:text-white">Заполнить профиль →</Link>
+                  </div>
+                ) : null}
+
                 {error && (
-                  <div role="alert" className="mb-4 rounded-xl border border-red-400/25 bg-red-400/[0.08] p-3 text-sm text-red-200">
-                    {error}
+                  <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/25 bg-red-400/[0.08] p-3 text-sm text-red-200">
+                    <span>{error}</span>
+                    <button
+                      type="button"
+                      onClick={() => void search(null, true)}
+                      className="rounded-lg border border-red-200/20 bg-black/15 px-3 py-1.5 text-xs font-semibold text-red-100 transition hover:bg-white/[0.06]"
+                    >
+                      Повторить поиск
+                    </button>
                   </div>
                 )}
 
@@ -666,6 +805,7 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
                         <LotResultCard
                           key={lot.id}
                           lot={lot}
+                          fit={fitScores[lot.source_id || String(lot.id)]}
                           analyzeBase={embedded ? "/dashboard" : ""}
                           onPartnership={() => setPartnershipLot(lot)}
                         />
@@ -885,18 +1025,22 @@ function PriceRangeSlider({
 
 function LotResultCard({
   lot,
+  fit,
   analyzeBase,
   onPartnership,
 }: {
   lot: Lot;
+  fit?: TenderFitScore;
   analyzeBase: string;
   onPartnership: () => void;
 }) {
+  const navigate = useNavigate();
   const safeSourceUrl = getSafeExternalUrl(lot.source_url);
   const [saved, setSaved] = useState(() => isLotSaved(lot.id));
   const normalizedCategory = (lot.category || "").toLowerCase();
   const Icon = normalizedCategory === "работа" ? Wrench : normalizedCategory === "услуга" ? BriefcaseBusiness : Package;
   const accentClasses = "border-white/[0.09] bg-white/[0.035] text-white/60";
+  const detailsPath = `${analyzeBase}/lots/${lot.id}`;
 
   const toggleSaved = () => {
     if (saved) {
@@ -919,7 +1063,22 @@ function LotResultCard({
   };
 
   return (
-    <article className="group relative grid gap-4 rounded-xl border border-white/[0.075] bg-[#121213]/90 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-[#151516] sm:grid-cols-[52px_minmax(0,1fr)_auto] sm:p-5">
+    <article
+      role="link"
+      tabIndex={0}
+      aria-label={`Открыть лот ${lot.source_id}: ${lot.title}`}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+        navigate(detailsPath);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          navigate(detailsPath);
+        }
+      }}
+      className="group relative grid cursor-pointer gap-4 rounded-xl border border-white/[0.075] bg-[#121213]/90 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.14] hover:bg-[#151516] focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300/60 sm:grid-cols-[52px_minmax(0,1fr)_auto] sm:p-5"
+    >
       <div className={`flex h-12 w-12 items-center justify-center rounded-xl border ${accentClasses}`}>
         <Icon className="h-5 w-5" strokeWidth={1.8} />
       </div>
@@ -939,6 +1098,11 @@ function LotResultCard({
           <span className="rounded-full border border-white/[0.08] px-2.5 py-1 text-[11px] text-white/34">
             {lot.status}
           </span>
+          {fit && fit.reasons.length > 0 && (
+            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${fit.score >= 70 ? "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300" : fit.score >= 45 ? "border-amber-400/25 bg-amber-400/[0.08] text-amber-300" : "border-white/[0.1] bg-white/[0.035] text-white/50"}`}>
+              {fit.score}% совпадения
+            </span>
+          )}
         </div>
 
         <h2 className="text-base font-semibold leading-6 text-white sm:text-lg">{lot.title}</h2>
@@ -967,17 +1131,23 @@ function LotResultCard({
             </span>
           )}
         </div>
+        {fit && fit.reasons.length > 0 && (
+          <p className="mt-3 line-clamp-2 text-[11px] leading-5 text-emerald-100/55">
+            Почему подходит: {fit.reasons.slice(0, 2).join(" · ")}
+          </p>
+        )}
       </div>
 
       <div className="flex items-end justify-between gap-4 sm:min-w-[180px] sm:flex-col sm:items-end">
         <div className="flex gap-1.5 sm:order-none">
           <Link
-            to={`${analyzeBase}/analyze?lot_url=${encodeURIComponent(lot.source_url || "")}&lot_title=${encodeURIComponent(lot.title)}`}
+            to={`${analyzeBase}/analyze?lot_url=${encodeURIComponent(lot.source_url || lot.source_id)}&lot_title=${encodeURIComponent(lot.title)}`}
             aria-label={`AI-анализ лота ${lot.source_id}`}
             title="AI-анализ"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.09] text-white/42 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-white/[0.09] px-2 text-white/42 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
           >
             <Sparkles className="h-3.5 w-3.5" />
+            <span className="hidden text-[10px] font-medium xl:inline">Быстрый разбор</span>
           </Link>
           <button
             type="button"

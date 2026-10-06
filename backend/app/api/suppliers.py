@@ -59,6 +59,8 @@ def _candidate_payload(row) -> dict[str, Any]:
             # direct / aggregator / classifieds / unknown — UI показывает
             # прямых поставщиков отдельно от площадок-посредников.
             "domain_kind": card.get("domain_kind", "unknown"),
+            "estimated_total_kzt": card.get("estimated_total_kzt"),
+            "budget_status": card.get("budget_status", "unknown"),
         },
         "requirement_matches": match.get("requirement_matches", []),
         "warnings": match.get("warnings", []),
@@ -99,15 +101,41 @@ async def search_suppliers(
 
     blocked = {row.supplier for row in await srepo.list_blocked(session, user.id)}
 
+    # Контекст должен работать и в основном поиске, не только в песочнице.
+    analysis = await db_repo.get_analysis_by_lot(session, user.id, payload.lot_id)
+    lot_data = (
+        analysis.result_json.get("lot", {})
+        if analysis is not None and isinstance(analysis.result_json, dict)
+        else {}
+    )
+    if not isinstance(lot_data, dict):
+        lot_data = {}
+    budget_kzt = payload.budget_kzt or getattr(analysis, "budget_kzt", None)
+    if not budget_kzt:
+        budget_kzt = lot_data.get("budget_kzt") or lot_data.get("amount_kzt")
+    region_hint = str(
+        lot_data.get("region")
+        or lot_data.get("delivery_region")
+        or lot_data.get("delivery_address")
+        or ""
+    )[:160]
+    profile = await srepo.get_or_create_company_profile(session, user.id)
+    company_terms = [str(value) for value in (profile.categories or []) if value][:5]
+
     from app.agents.supplier_agent import SupplierAgent
 
     agent = SupplierAgent()
     candidates, costs, meta = await agent.find_suppliers(
         requirements,
-        budget_kzt=payload.budget_kzt,
+        budget_kzt=float(budget_kzt) if isinstance(budget_kzt, (int, float)) else None,
         blocked=blocked,
         enrich_browser=payload.enrich_browser,
+        region_hint=region_hint,
+        company_terms=company_terms,
     )
+    # Известная расчётная стоимость выше бюджета не должна попадать в
+    # рабочий шорт-лист. Кандидаты без цены остаются с честным «нет данных».
+    candidates = [c for c in candidates if c.budget_status != "over_budget"]
 
     rows = await srepo.replace_candidates(
         session,
@@ -469,7 +497,7 @@ async def update_company_profile(
     """Профиль компании: категории, регионы, мощности, рабочие контакты (F7)."""
     user = await _user(session, auth_user)
     profile = await srepo.update_company_profile(
-        session, user.id, payload.model_dump(exclude_none=True)
+        session, user.id, payload.model_dump(exclude_unset=True)
     )
     if user.company_name is None and profile.contact_name:
         user.company_name = user.company_name or profile.contact_name

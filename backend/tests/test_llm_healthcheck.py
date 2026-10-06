@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from app.llm.base import LLMProvider, LLMResponse, Message
+from app.llm.failover import FailoverProvider
 
 
 class _Fake(LLMProvider):
@@ -80,6 +81,19 @@ async def test_healthcheck_prefers_chat_over_embed() -> None:
     provider = _Fake(chat_ok=True, embed_ok=True)
     assert await provider.healthcheck() is True
     assert provider.chat_calls, "healthcheck должен проверять chat"
+
+
+@pytest.mark.asyncio
+async def test_failover_uses_secondary_on_first_primary_error() -> None:
+    primary = _Fake(chat_ok=False, embed_ok=False)
+    secondary = _Fake(chat_ok=True, embed_ok=False)
+    provider = FailoverProvider(primary=primary, secondary=secondary)
+
+    response = await provider.chat([Message(role="user", content="Разбери лот")])
+
+    assert response.content == "ok"
+    assert len(primary.chat_calls) == 1
+    assert len(secondary.chat_calls) == 1
 
 
 @pytest.mark.asyncio

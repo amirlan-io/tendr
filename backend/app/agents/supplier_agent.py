@@ -141,19 +141,30 @@ class Requirement:
 
 @dataclass(slots=True)
 class Costs:
-    """Накопитель расходов по шагам (пишется в аудит, F10)."""
+    """Оценка расходов и фактические счётчики вызовов.
+
+    Провайдеры не возвращают подтверждённую сумму списания для каждого
+    запроса. Поэтому денежные поля ниже — расчётная оценка, а не чек.
+    Счётчики позволяют проверить, из чего эта оценка получилась.
+    """
 
     llm_usd: float = 0.0
     tavily_usd: float = 0.0
     browser_usd: float = 0.0
     # Счётчики бесплатных операций — для отчётности по себестоимости.
     page_fetch_count: int = 0
+    llm_calls: int = 0
+    tavily_calls: int = 0
+    browser_calls: int = 0
 
     def merge(self, other: Costs) -> None:
         self.llm_usd += other.llm_usd
         self.tavily_usd += other.tavily_usd
         self.browser_usd += other.browser_usd
         self.page_fetch_count += other.page_fetch_count
+        self.llm_calls += other.llm_calls
+        self.tavily_calls += other.tavily_calls
+        self.browser_calls += other.browser_calls
 
 
 @dataclass(slots=True)
@@ -181,6 +192,11 @@ class SupplierCandidate:
     # Тип площадки: direct (сайт компании) / aggregator (маркетплейс) /
     # classifieds (доска объявлений). Определяется classify_domain.
     domain_kind: str = "unknown"
+    # Фрагмент реальной страницы/поисковой выдачи для доказательной сверки.
+    # В API наружу не отдаётся целиком, чтобы не раздувать ответ.
+    evidence_text: str = ""
+    estimated_total_kzt: float | None = None
+    budget_status: str = "unknown"  # within_budget / over_budget / unknown
 
     def to_card(self) -> dict[str, Any]:
         return {
@@ -200,6 +216,8 @@ class SupplierCandidate:
             "sources": self.sources,
             "is_middleman": self.is_middleman,
             "domain_kind": self.domain_kind,
+            "estimated_total_kzt": self.estimated_total_kzt,
+            "budget_status": self.budget_status,
         }
 
     def to_match(self) -> dict[str, Any]:
@@ -280,7 +298,10 @@ def requirement_text(req: Requirement) -> str:
     «регулятор давления» и приносил газовые и пневматические.
     """
     parts = [req.title or "", req.description or ""]
-    return " ".join(p for p in parts if p).strip()
+    # Разделитель важен: без него первое слово description считалось
+    # продолжением названия и исчезало из технических подсказок
+    # («Регулятор давления Стальной» → терялось «стальной»).
+    return "; ".join(p for p in parts if p).strip()
 
 
 def _manufacturer_queries(requirements: list[Requirement]) -> list[str]:
@@ -289,18 +310,76 @@ def _manufacturer_queries(requirements: list[Requirement]) -> list[str]:
     Отдельная функция, чтобы след работы (trace.direct_queries) показывал
     реальные запросы второй фазы, а не пустой список.
     """
-    base_terms: list[str] = []
-    for req in requirements[:3]:
+    prepared: list[tuple[str, str]] = []
+    for req in requirements[:5]:
         core = extract_search_term(req.title, max_words=6)
-        if core and core not in base_terms:
-            base_terms.append(core)
-    if not base_terms:
+        hints = extract_tech_hints(requirement_text(req))
+        if core and all(core != existing[0] for existing in prepared):
+            prepared.append((core, hints))
+    if not prepared:
         return []
     queries: list[str] = []
-    for term in base_terms[:2]:
-        queries.append(f"{term} {_MANUFACTURER_QUERY_SUFFIXES[0]}")
-    queries.append(f"{base_terms[0]} {_MANUFACTURER_QUERY_SUFFIXES[1]}")
-    return queries[:3]
+    # Сначала запросы с характеристиками. Иначе общий «регулятор давления»
+    # приносит газовые модели, хотя в ТЗ нужен 60,3 МПа, 80 мм, фланцевый.
+    for core, hints in prepared:
+        precise = f"{core} {hints}".strip()
+        queries.append(f"{precise} {_MANUFACTURER_QUERY_SUFFIXES[0]}")
+    for core, _hints in prepared:
+        queries.append(f"{core} {_MANUFACTURER_QUERY_SUFFIXES[1]}")
+    return list(dict.fromkeys(queries))[:6]
+
+
+def extract_quantity(req: Requirement) -> int | None:
+    """Количество позиции из ТЗ (например, ``10 шт.``)."""
+    matches = re.findall(
+        r"\b(\d{1,6})\s*(?:шт\.?|штук\w*)\b",
+        requirement_text(req),
+        re.IGNORECASE,
+    )
+    if not matches:
+        return None
+    values = [int(value) for value in matches if int(value) > 0]
+    return values[-1] if values else None
+
+
+def _normalized_evidence(text: str) -> str:
+    return re.sub(r"[^а-яёa-z0-9]+", "", (text or "").lower().replace(",", "."))
+
+
+def evidence_coverage(req: Requirement, evidence: str) -> tuple[int, int]:
+    """Сколько ключевых характеристик ТЗ явно подтверждено источником."""
+    hints = extract_tech_hints(requirement_text(req))
+    parts = [m.group(0) for m in _TECH_HINTS.finditer(hints)]
+    if not parts:
+        return (0, 0)
+    haystack = _normalized_evidence(evidence)
+    matched = sum(1 for part in parts if _normalized_evidence(part) in haystack)
+    return matched, len(parts)
+
+
+def relevant_evidence(text: str, terms: Sequence[str], *, limit: int = 5000) -> str:
+    """Собрать короткие фрагменты страницы рядом с искомыми товарами."""
+    if not text:
+        return ""
+    compact = re.sub(r"[ \t]+", " ", text)
+    chunks: list[str] = []
+    lowered = compact.lower()
+    for term in terms:
+        needle = (term or "").strip().lower()
+        if len(needle) < 4:
+            continue
+        start = 0
+        while len("\n".join(chunks)) < limit:
+            index = lowered.find(needle, start)
+            if index < 0:
+                break
+            chunks.append(compact[max(0, index - 220) : index + len(needle) + 520])
+            start = index + len(needle)
+            if len(chunks) >= 8:
+                break
+    if not chunks:
+        chunks.append(compact[: min(limit, 1800)])
+    return "\n…\n".join(dict.fromkeys(chunks))[:limit]
 
 
 def _tokens_overlap(query: str, title: str) -> bool:
@@ -699,6 +778,7 @@ class SupplierAgent(Agent):
         )
         data = await self._chat_json(prompt, max_tokens=800)
         costs.llm_usd += 0.0002
+        costs.llm_calls += 1
         llm_queries = [str(q).strip() for q in (data.get("queries") or []) if str(q).strip()]
 
         # Ядро названия вместо первых 80 символов пункта ТЗ.
@@ -716,10 +796,33 @@ class SupplierAgent(Agent):
             return llm_queries[:7], costs
 
         variants: list[str] = []
-        # Сначала то, что придумала модель: это самые «умные» формулировки.
+        # Точные характеристики ставим ПЕРВЫМИ. Раньше они добавлялись в
+        # конец, а search_web обрезал список до семи запросов: запрос
+        # «60,3 МПа, 80 мм, фланцевый» фактически не выполнялся.
+        def _hint_weight(req: Requirement) -> tuple[int, int]:
+            hints = extract_tech_hints(requirement_text(req))
+            numeric = len(re.findall(r"\d", hints))
+            return (1 if numeric else 0, numeric)
+
+        precise_targets = sorted(
+            [r for r in requirements if extract_tech_hints(requirement_text(r))],
+            key=_hint_weight,
+            reverse=True,
+        )[:5]
+        for req in precise_targets:
+            hints = extract_tech_hints(requirement_text(req))
+            core = extract_search_term(req.title)
+            if not hints or not core:
+                continue
+            precise = f"{core} {hints}"
+            variants.append(precise)
+            if region_hint:
+                variants.append(f"{precise} {region_hint}")
+
+        # Затем формулировки модели и устойчивые шаблоны.
         variants.extend(q for q in llm_queries if any(
             _tokens_overlap(q, term) for term in cores
-        ))
+        ) and q not in variants)
         # Затем шаблонные варианты по каждому пункту. Их ограничиваем так,
         # чтобы в лимит поместились ещё точный запрос с характеристиками и
         # региональный — без них технические пункты ТЗ не закрываются.
@@ -730,35 +833,6 @@ class SupplierAgent(Agent):
                     variants.append(candidate)
                 if sum(1 for v in variants if _tokens_overlap(v, term)) >= variants_per_item + 1:
                     break
-
-        # Точный запрос с характеристиками: без него «регулятор давления»
-        # возвращает газовые и пневматические, а нужен стальной фланцевый.
-        #
-        # Строим для НЕСКОЛЬКИХ пунктов, а не только для первого: в реальном
-        # прогоне так терялся регулятор «60,3 Мпа, 80 мм», потому что
-        # характеристики нашлись у первого пункта и цикл завершался.
-        def _hint_weight(req: Requirement) -> tuple[int, int]:
-            hints = extract_tech_hints(requirement_text(req))
-            # Числовые характеристики отличают нужный товар от сотен
-            # похожих, словесные — слабее.
-            numeric = len(re.findall(r"\d", hints))
-            return (1 if numeric else 0, numeric)
-
-        precise_targets = sorted(
-            [r for r in requirements if extract_tech_hints(requirement_text(r))],
-            key=_hint_weight,
-            reverse=True,
-        )[:2]
-        for req in precise_targets:
-            hints = extract_tech_hints(requirement_text(req))
-            core = extract_search_term(req.title)
-            if not hints or not core:
-                continue
-            precise = f"{core} {hints}"
-            if precise not in variants:
-                variants.append(precise)
-            if region_hint and f"{precise} {region_hint}" not in variants:
-                variants.append(f"{precise} {region_hint}")
 
         # Регион лота в запросы: поставка в Казахстан из другой страны —
         # это другая логистика и другая цена.
@@ -794,7 +868,10 @@ class SupplierAgent(Agent):
 
         collected: list[dict[str, Any]] = []
         seen: set[str] = set()
-        for query in queries[:7]:
+        # build_queries уже ограничивает набор десятью запросами. Выполняем
+        # весь видимый trace, чтобы trace не утверждал, что точный запрос
+        # был сделан, когда он на самом деле был обрезан.
+        for query in queries[:10]:
             try:
                 kwargs: dict[str, Any] = dict(
                     query=query,
@@ -809,6 +886,7 @@ class SupplierAgent(Agent):
                 continue
             # ~$0.008 за запрос (средняя оценка по тарифам Tavily).
             costs.tavily_usd += 0.008
+            costs.tavily_calls += 1
             for item in response.get("results", []):
                 url = str(item.get("url") or "")
                 if not url or url in seen:
@@ -859,6 +937,7 @@ class SupplierAgent(Agent):
                 logger.warning("[supplier] manufacturer search failed: {}", exc)
                 continue
             costs.tavily_usd += 0.008  # ~$0.008 за запрос
+            costs.tavily_calls += 1
             for item in response.get("results", []):
                 url = str(item.get("url") or "")
                 if not url or url in seen:
@@ -1004,6 +1083,10 @@ class SupplierAgent(Agent):
         if phone and not candidate.phone:
             candidate.phone = phone
             candidate.sources["phone"] = candidate.url
+
+        page_evidence = relevant_evidence(text, list(terms) + [candidate.title])
+        if page_evidence:
+            candidate.evidence_text = page_evidence
 
         if candidate.price_kzt is None:
             # Цену берём ТОЛЬКО рядом с названием товара — того самого, который
@@ -1158,6 +1241,7 @@ class SupplierAgent(Agent):
                 logger.warning("[supplier] browser enrich failed for {}: {}", candidate.url, exc)
                 candidate.warnings.append("Не удалось проверить страницу поставщика.")
                 continue
+            costs.browser_calls += 1
             costs.browser_usd += float(getattr(result, "cost_usd", 0.0) or 0.0)
             output = getattr(result, "output", None)
             if not isinstance(output, dict):
@@ -1209,6 +1293,7 @@ class SupplierAgent(Agent):
 
         req_block = "\n".join(
             f"[{r.code or r.title[:32]}] {r.title}"
+            + (f" — {r.description[:700]}" if r.description else "")
             + (" — обязательный" if r.is_mandatory else "")
             for r in requirements[:20]
         )
@@ -1224,6 +1309,7 @@ class SupplierAgent(Agent):
                 f"Сертификаты: {candidate.certificates}\n"
                 f"Гарантия: {candidate.warranty}\n"
                 f"Источник: {candidate.url}\n\n"
+                f"Фрагмент источника:\n{candidate.evidence_text[:6000] or 'нет текста страницы'}\n\n"
                 "Верни JSON {\"requirement_matches\": [{\"code\": \"...\", "
                 "\"title\": \"...\", \"status\": \"fits|partial|no|unknown\", "
                 "\"comment\": \"...\", \"source_url\": \"...\"}]}."
@@ -1231,6 +1317,7 @@ class SupplierAgent(Agent):
             )
             data = await self._chat_json(prompt, max_tokens=1500)
             costs.llm_usd += 0.0005
+            costs.llm_calls += 1
             matches: list[dict[str, Any]] = []
             for raw in data.get("requirement_matches", []) or []:
                 if not isinstance(raw, dict):
@@ -1242,15 +1329,26 @@ class SupplierAgent(Agent):
                     (r for r in requirements if code and code == r.code),
                     None,
                 ) or next((r for r in requirements if title and title == r.title), None)
-                matches.append(
-                    {
+                match = {
                         "code": known.code if known else code[:64],
                         "title": (known.title if known else title)[:512],
                         "status": normalize_match_status(raw.get("status")),
                         "comment": str(raw.get("comment") or "")[:1000],
-                        "source_url": str(raw.get("source_url") or "")[:1000] or candidate.url,
+                        "source_url": candidate.url,
                     }
-                )
+                # Статус «подходит» допустим только при доказательстве на
+                # реальной странице. Модель не может додумать 60,3 МПа,
+                # фланец или 80 мм из одного заголовка каталога.
+                if known and match["status"] in {MATCH_FITS, MATCH_PARTIAL}:
+                    evidence = f"{candidate.title} {candidate.evidence_text}"
+                    covered_hints, total_hints = evidence_coverage(known, evidence)
+                    if total_hints and covered_hints < total_hints:
+                        match["status"] = MATCH_PARTIAL if covered_hints else MATCH_UNKNOWN
+                        match["comment"] = (
+                            f"Источник подтверждает {covered_hints} из {total_hints} "
+                            "ключевых характеристик ТЗ. Требуется подтверждение поставщика."
+                        )
+                matches.append(match)
             # Пункты, о которых LLM не сказала, — честно «нет данных».
             covered = {m["code"] for m in matches if m.get("code")}
             for req in requirements:
@@ -1267,7 +1365,10 @@ class SupplierAgent(Agent):
             candidate.requirement_matches = matches
             candidate.score = score_from_matches(matches)
             candidate.is_middleman = candidate.domain in MIDDLEMAN_DOMAINS
-            candidate.warnings = build_warnings(candidate, requirements)
+            existing_warnings = list(candidate.warnings)
+            candidate.warnings = list(
+                dict.fromkeys(existing_warnings + build_warnings(candidate, requirements))
+            )
 
         return costs
 
@@ -1306,6 +1407,19 @@ class SupplierAgent(Agent):
         groups: list[list[str]] = []
         for req in requirements[:5]:
             own = [q for q in shared if _tokens_overlap(q, req.title)]
+            hints = extract_tech_hints(requirement_text(req))
+            if hints:
+                hint_markers = [
+                    _normalized_evidence(match.group(0))
+                    for match in _TECH_HINTS.finditer(hints)
+                ]
+                own.sort(
+                    key=lambda q: (
+                        -sum(marker in _normalized_evidence(q) for marker in hint_markers),
+                        len(q),
+                        q.lower(),
+                    )
+                )
             if own:
                 groups.append(own[:2])
                 continue
@@ -1323,6 +1437,7 @@ class SupplierAgent(Agent):
         query_variants: int = 2,
         region_hint: str = "",
         company_terms: Sequence[str] = (),
+        perform_matching: bool = True,
     ) -> tuple[list[SupplierCandidate], Costs, dict[str, Any]]:
         """Полный конвейер F1+F2. Возвращает кандидатов, расходы и метаданные."""
         requirements = dedupe_requirements(requirements)
@@ -1389,7 +1504,7 @@ class SupplierAgent(Agent):
         # Приоритет: прямой поставщик важнее витрины. Без этой сортировки
         # маркетплейсы забивают лимит 20 первыми, и сайты производителей
         # (а именно там есть контакты) до него не доходят.
-        def _priority(item: dict[str, Any]) -> tuple[int, float]:
+        def _priority(item: dict[str, Any]) -> tuple[int, int, float, str, str]:
             domain = extract_domain(item["url"])
             kind = str(item.get("domain_kind") or classify_domain(domain))
             # 0 — прямой поставщик, 1 — агрегатор/неизвестно
@@ -1398,7 +1513,13 @@ class SupplierAgent(Agent):
             country_rank = {"kz": 0, "neutral": 1, "foreign": 2}.get(
                 domain_country_hint(domain), 1
             )
-            return (0 if kind == "direct" else 1, country_rank, -float(item.get("score") or 0.0))
+            return (
+                0 if kind == "direct" else 1,
+                country_rank,
+                -float(item.get("score") or 0.0),
+                domain,
+                str(item.get("url") or ""),
+            )
 
         results = sorted(results, key=_priority)
 
@@ -1423,6 +1544,7 @@ class SupplierAgent(Agent):
                 phone=phone,
                 is_middleman=kind == "aggregator",
                 domain_kind=kind,
+                evidence_text=str(item.get("content") or "")[:5000],
             )
             candidate.sources["search"] = item["url"]
             candidates.append(candidate)
@@ -1467,8 +1589,53 @@ class SupplierAgent(Agent):
                 costs = await self.enrich_with_browser(need_browser, top_n=3)
                 total.merge(costs)
 
-        costs = await self.match_requirements(candidates, requirements)
-        total.merge(costs)
+        if perform_matching:
+            costs = await self.match_requirements(candidates, requirements)
+            total.merge(costs)
+            self.assess_budget(candidates, requirements, budget_kzt)
 
-        candidates.sort(key=lambda c: c.score, reverse=True)
+        candidates.sort(
+            key=lambda c: (
+                1 if c.budget_status == "over_budget" else 0,
+                -c.score,
+                {"kz": 0, "neutral": 1, "foreign": 2}.get(domain_country_hint(c.domain), 1),
+                c.domain.lower(),
+                c.url.lower(),
+            )
+        )
         return candidates, total, meta
+
+    @staticmethod
+    def assess_budget(
+        candidates: list[SupplierCandidate],
+        requirements: list[Requirement],
+        budget_kzt: float | None,
+    ) -> None:
+        """Сопоставить цену позиции, количество и бюджет всего лота."""
+        if not budget_kzt or budget_kzt <= 0:
+            return
+        for candidate in candidates:
+            if candidate.price_kzt is None:
+                continue
+            relevant = [
+                req
+                for req in requirements
+                if _tokens_overlap(candidate.title, req.title)
+                or any(
+                    m.get("code") == req.code
+                    and m.get("status") in {MATCH_FITS, MATCH_PARTIAL}
+                    for m in candidate.requirement_matches
+                )
+            ]
+            quantities = [q for req in relevant if (q := extract_quantity(req))]
+            quantity = max(quantities) if quantities else 1
+            candidate.estimated_total_kzt = candidate.price_kzt * quantity
+            if candidate.estimated_total_kzt > budget_kzt:
+                candidate.budget_status = "over_budget"
+                candidate.score = max(0, candidate.score - 30)
+                candidate.warnings.append(
+                    f"Расчётная стоимость {candidate.estimated_total_kzt:,.0f} ₸ "
+                    f"превышает бюджет лота {budget_kzt:,.0f} ₸."
+                )
+            else:
+                candidate.budget_status = "within_budget"

@@ -174,10 +174,16 @@ describe("AnalyzePage: диалог с AI-аналитиком", () => {
         }
         if (path === "/api/lots/assistant/chat") {
           chatBody = JSON.parse(String(init?.body || "{}"));
-          return new Response(JSON.stringify({ answer: "Пришлите ссылку или ID лота с Госзакупок." }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
+          return new Response(
+            JSON.stringify({
+              answer: "### Ответ\n**Пришлите ссылку или ID лота с Госзакупок.**",
+              actions: [{ label: "Открыть поиск лотов", href: "/dashboard/lots" }],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
         return new Response(JSON.stringify({}), {
           status: 200,
@@ -190,11 +196,21 @@ describe("AnalyzePage: диалог с AI-аналитиком", () => {
     await userEvent.type(screen.getByLabelText("Анализ лота"), "Как со мной работать?");
     await userEvent.click(screen.getByRole("button", { name: "Анализировать" }));
 
-    expect(await screen.findByText("Пришлите ссылку или ID лота с Госзакупок.")).toBeInTheDocument();
+    expect(await screen.findByText(/Пришлите ссылку или ID лота с Госзакупок/)).toBeInTheDocument();
+    expect(screen.queryByText(/###|\*\*/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Открыть поиск лотов" })).toHaveAttribute(
+      "href",
+      "/dashboard/lots",
+    );
     expect(chatBody).toMatchObject({
       message: "Как со мной работать?",
       job_id: null,
       history: [],
+    });
+    await waitFor(() => {
+      const saved = window.localStorage.getItem("tendr_ai_chat_sessions:v2");
+      expect(saved).toContain("Как со мной работать?");
+      expect(saved).toContain("Открыть поиск лотов");
     });
   });
 });

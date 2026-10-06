@@ -19,6 +19,8 @@ import type {
   OutreachKind,
   PricePolicy,
   RecommendedResponse,
+  TenderInterests,
+  TenderScoreResponse,
   ShortlistResponse,
   SupplierCandidate,
   SupplierLists,
@@ -146,6 +148,39 @@ export async function updateCompanyProfile(patch: Partial<CompanyProfile>): Prom
   return api<CompanyProfile>("/api/suppliers/profile", {
     method: "PATCH",
     body: JSON.stringify(patch),
+  });
+}
+
+export async function fetchTenderInterests(): Promise<TenderInterests> {
+  return api<TenderInterests>("/api/profile/interests");
+}
+
+export async function updateTenderInterests(
+  patch: Partial<TenderInterests>,
+): Promise<TenderInterests> {
+  return api<TenderInterests>("/api/profile/interests", {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function scoreTenderCards(
+  items: Array<{
+    lot_id: string;
+    title: string;
+    description?: string;
+    category?: string;
+    region?: string;
+    customer?: string;
+    amount_kzt?: number;
+    deadline_date?: string;
+    created_at?: string;
+    is_urgent?: boolean;
+  }>,
+): Promise<TenderScoreResponse> {
+  return api<TenderScoreResponse>("/api/tenders/score", {
+    method: "POST",
+    body: JSON.stringify({ items }),
   });
 }
 

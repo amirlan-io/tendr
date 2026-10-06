@@ -6,6 +6,16 @@ import { useT } from "../i18n";
 import { clearHistory, type HistoryItem as LocalItem } from "../historyStore";
 import { useHistoryList } from "../dashboard/hooks/useDashboardData";
 import { LotSourceLink } from "../dashboard/components/LotSourceLink";
+import { loadSavedLots, updateSavedLotStage } from "../dashboard/dashboard.data";
+import type { SavedLot, SavedLotStage } from "../dashboard/dashboard.types";
+
+const PIPELINE_STAGES: Array<{ id: SavedLotStage; label: string }> = [
+  { id: "found", label: "Найдено" },
+  { id: "analysis", label: "Анализ" },
+  { id: "decision", label: "Решение" },
+  { id: "preparing", label: "Готовим заявку" },
+  { id: "submitted", label: "Подано" },
+];
 
 export function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useT();
@@ -14,6 +24,7 @@ export function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [query, setQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const [pipelineLots, setPipelineLots] = useState<SavedLot[]>(loadSavedLots);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -59,6 +70,49 @@ export function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
             : "История загружается с сервера вашего аккаунта; локальная копия хранится в этом браузере как offline-запас."}
           {total !== null && ` Всего записей: ${total}.`}
         </p>
+
+        <section className="mb-7 rounded-2xl border border-white/[0.075] bg-[#0d0d0e] p-4 sm:p-5" aria-label="Работа с закупками">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-300/70">Рабочий процесс</p>
+              <h2 className="mt-1 text-lg font-semibold text-white">Закупки в работе</h2>
+            </div>
+            <Link to={embedded ? "/dashboard/lots" : "/lots"} className="text-xs font-medium text-emerald-300 hover:text-emerald-200">Найти лоты →</Link>
+          </div>
+          {pipelineLots.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-white/[0.08] px-4 py-6 text-center text-xs text-white/35">Сохраните лот в поиске — он появится здесь.</p>
+          ) : (
+            <div className="grid gap-3 overflow-x-auto pb-2 xl:grid-cols-5">
+              {PIPELINE_STAGES.map((stage) => {
+                const stageLots = pipelineLots.filter((lot) => (lot.stage || "found") === stage.id);
+                return (
+                  <div key={stage.id} className="min-w-[210px] rounded-xl border border-white/[0.065] bg-white/[0.018] p-2.5">
+                    <div className="mb-2 flex items-center justify-between px-1">
+                      <h3 className="text-[11px] font-semibold text-white/55">{stage.label}</h3>
+                      <span className="text-[10px] tabular-nums text-white/25">{stageLots.length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {stageLots.slice(0, 8).map((lot) => (
+                        <article key={lot.id} className="rounded-lg border border-white/[0.07] bg-[#151516] p-3">
+                          <p className="line-clamp-2 text-xs font-medium leading-5 text-white/75">{lot.title}</p>
+                          <p className="mt-1 truncate text-[10px] text-white/30">{lot.organizer || `Лот № ${lot.sourceId || lot.id}`}</p>
+                          <select
+                            value={lot.stage || "found"}
+                            onChange={(event) => setPipelineLots(updateSavedLotStage(lot.id, event.target.value as SavedLotStage))}
+                            aria-label={`Этап лота ${lot.title}`}
+                            className="mt-3 h-8 w-full rounded-lg border border-white/[0.08] bg-black/25 px-2 text-[10px] text-white/55 outline-none"
+                          >
+                            {PIPELINE_STAGES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                          </select>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {error && (
           <p role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">

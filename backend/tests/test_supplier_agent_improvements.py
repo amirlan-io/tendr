@@ -11,16 +11,16 @@ from types import SimpleNamespace
 import pytest
 
 from app.agents.supplier_agent import (
-    Costs,
     Requirement,
     SupplierAgent,
     _manufacturer_queries,
+    evidence_coverage,
+    extract_quantity,
     extract_search_term,
     extract_tech_hints,
     requirement_text,
 )
-from app.api.sandbox import _apply_filters, _budget_from_analysis
-
+from app.api.sandbox import _apply_filters, _budget_from_analysis, _region_from_analysis
 
 # ───── 1. Номенклатурное ядро вместо всей строки ТЗ ─────
 
@@ -172,6 +172,32 @@ def test_budget_none_for_missing_analysis() -> None:
     assert _budget_from_analysis(None) is None
 
 
+def test_lot_region_has_priority_source_in_analysis() -> None:
+    analysis = SimpleNamespace(
+        result_json={"lot": {"region": "Акмолинская область", "delivery_address": "Ерейментау"}}
+    )
+    assert _region_from_analysis(analysis) == "Акмолинская область"
+
+
+def test_budget_assessment_accounts_for_quantity() -> None:
+    from app.agents.supplier_agent import SupplierCandidate
+
+    candidate = SupplierCandidate(
+        supplier="Ankas",
+        domain="ankas.kz",
+        title="Топливный фильтр Petroll GL-3",
+        price_kzt=11_200,
+        score=80,
+        requirement_matches=[{"code": "1", "status": "fits"}],
+    )
+    req = Requirement(code="1", title="Топливный фильтр", description="Количество 10 шт.")
+    SupplierAgent.assess_budget([candidate], [req], 48_000)
+    assert candidate.estimated_total_kzt == 112_000
+    assert candidate.budget_status == "over_budget"
+    assert candidate.score == 50
+    assert any("превышает бюджет" in warning for warning in candidate.warnings)
+
+
 # ───── 4. След работы показывает фазу производителей ─────
 
 
@@ -184,8 +210,30 @@ def test_manufacturer_queries_are_derived_and_visible() -> None:
     queries = _manufacturer_queries(reqs)
     assert queries, "запросы производителей должны формироваться"
     assert any("Регулятор давления" in q for q in queries)
-    # Название из ТЗ не должно уезжать в запрос целиком.
-    assert not any("60,3" in q for q in queries)
+    # Критичная характеристика обязана попасть именно в direct-поиск.
+    assert any("60,3" in q for q in queries)
+    assert any("фланцев" in q.lower() for q in queries)
+
+
+def test_quantity_is_read_from_requirement() -> None:
+    req = Requirement(code="1", title="Топливный фильтр", description="Количество — 10 шт.")
+    assert extract_quantity(req) == 10
+
+
+def test_evidence_coverage_requires_real_specs() -> None:
+    req = Requirement(
+        code="2",
+        title="Регулятор давления",
+        description="Стальной, фланцевый, проход 80 мм, давление 60,3 Мпа",
+    )
+    matched, total = evidence_coverage(
+        req,
+        "Регулятор давления стальной фланцевый. Проход 80 мм, до 60,3 МПа.",
+    )
+    assert total >= 4
+    assert matched == total
+    missing, _ = evidence_coverage(req, "Редуктор воздуха 10 бар")
+    assert missing == 0
 
 
 # ───── 5. Персонализация реально меняет запросы ─────
@@ -285,6 +333,43 @@ async def test_precise_query_not_lost_to_first_requirement() -> None:
     assert "60,3" in joined, f"давление регулятора потеряно: {queries}"
     assert "80 мм" in joined, f"проход регулятора потерян: {queries}"
     assert "фланцев" in joined, f"тип регулятора потерян: {queries}"
+
+    groups = agent._queries_by_requirement(reqs, queries)
+    regulator_queries = groups[1]
+    assert any("60,3" in query for query in regulator_queries)
+    assert any("80 мм" in query for query in regulator_queries)
+
+
+@pytest.mark.asyncio
+async def test_match_downgrades_unproven_technical_fit() -> None:
+    """Модель не может поставить fits без характеристик в источнике."""
+    from app.agents.supplier_agent import SupplierCandidate
+
+    agent = SupplierAgent()
+
+    async def _claims_fit(*_args, **_kwargs):
+        return {
+            "requirement_matches": [
+                {"code": "2", "title": "Регулятор давления", "status": "fits", "comment": "подходит"}
+            ]
+        }
+
+    agent._chat_json = _claims_fit  # type: ignore[method-assign]
+    candidate = SupplierCandidate(
+        supplier="Пневмотехника",
+        domain="pnevmoteh.kz",
+        title="Редуктор воздуха",
+        url="https://pnevmoteh.kz/reducer",
+        evidence_text="Пневматический редуктор, рабочее давление 10 бар.",
+    )
+    requirement = Requirement(
+        code="2",
+        title="Регулятор давления",
+        description="Стальной, фланцевый, проход 80 мм, давление 60,3 Мпа",
+    )
+    await agent.match_requirements([candidate], [requirement])
+    assert candidate.requirement_matches[0]["status"] == "unknown"
+    assert candidate.requirement_matches[0]["source_url"] == candidate.url
 
 
 # ───── 6. Фильтры: считаем отбрасывания, не теряем неизвестный город ─────

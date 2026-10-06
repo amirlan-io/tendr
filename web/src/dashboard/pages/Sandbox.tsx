@@ -24,6 +24,8 @@ interface SandboxCandidate {
   score: number;
   domain_kind: string;
   price_kzt: number | null;
+  estimated_total_kzt: number | null;
+  budget_status: "within_budget" | "over_budget" | "unknown";
   city: string;
   email: string;
   phone: string;
@@ -50,7 +52,16 @@ interface SandboxResult {
     personalization: string;
     filters_applied: Record<string, unknown>;
   };
-  costs: { llm_usd: number; tavily_usd: number; browser_usd: number; total_usd: number };
+  costs: {
+    llm_usd: number;
+    tavily_usd: number;
+    browser_usd: number;
+    total_usd: number;
+    is_estimate: boolean;
+    llm_calls: number;
+    tavily_calls: number;
+    browser_calls: number;
+  };
   duration_sec: number;
   total: number;
   candidates: SandboxCandidate[];
@@ -250,11 +261,11 @@ function SandboxOutput({ result }: { result: SandboxResult }) {
             </ul>
           </div>
           <div>
-            <p className="mb-1.5 text-white/35">Стоимость прогона</p>
+            <p className="mb-1.5 text-white/35">Оценка расходов (не факт списания)</p>
             <dl className="space-y-1 text-white/55">
-              <Row label="LLM" value={`$${costs.llm_usd.toFixed(4)}`} />
-              <Row label="Tavily" value={`$${costs.tavily_usd.toFixed(4)}`} />
-              <Row label="Browser Use" value={`$${costs.browser_usd.toFixed(4)}`} />
+              <Row label={`LLM · ${costs.llm_calls} выз.`} value={`≈ $${costs.llm_usd.toFixed(4)}`} />
+              <Row label={`Tavily · ${costs.tavily_calls} запрос.`} value={`≈ $${costs.tavily_usd.toFixed(4)}`} />
+              <Row label={`Browser Use · ${costs.browser_calls} выз.`} value={`≈ $${costs.browser_usd.toFixed(4)}`} />
               <Row label="Итого" value={`$${costs.total_usd.toFixed(4)}`} strong />
               <Row label="Время" value={`${result.duration_sec} с`} />
             </dl>
@@ -293,6 +304,11 @@ function SandboxOutput({ result }: { result: SandboxResult }) {
 
             <div className="mt-3 flex flex-wrap gap-3 text-xs text-white/45">
               {c.price_kzt ? <span>Цена: {c.price_kzt.toLocaleString("ru-RU")} ₸</span> : <span className="text-white/25">Цена не найдена</span>}
+              {c.estimated_total_kzt && c.estimated_total_kzt !== c.price_kzt && (
+                <span>С учётом количества: {c.estimated_total_kzt.toLocaleString("ru-RU")} ₸</span>
+              )}
+              {c.budget_status === "within_budget" && <span className="text-emerald-300/80">В бюджете</span>}
+              {c.budget_status === "over_budget" && <span className="text-red-300/80">Выше бюджета</span>}
               {c.city && <span>Город: {c.city}</span>}
               {c.email && <span>✉ {c.email}</span>}
               {c.phone && <span>☎ {c.phone}</span>}

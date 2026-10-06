@@ -8,6 +8,7 @@ import { DashboardIcon } from "./DashboardIcon";
 import { DashboardMobileNav } from "./DashboardMobileNav";
 import { EmbedProvider } from "./Embedded";
 import { DASHBOARD_NAV } from "./dashboard.data";
+import { AssistantDock } from "./components/AssistantDock";
 
 function displayNameOf(email: string | null, metaName: unknown): string {
   if (typeof metaName === "string" && metaName.trim()) return metaName.trim();
@@ -115,6 +116,7 @@ export function DashboardLayout() {
         </main>
       </div>
       <DashboardMobileNav />
+      <AssistantDock />
 
       {searchOpen && (
         <div

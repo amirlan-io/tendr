@@ -6,6 +6,7 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -17,9 +18,10 @@ from app.api.account import (
     _stripe_period,
     _verify_stripe_signature,
 )
-from app.db import Base
-from app.db import repo
+from app.db import Base, repo
 from app.db.models import Analysis, QuotaReservation, Subscription, User
+from app.schemas.lot import LotAnalysis, LotCreate
+from app.services.goszakup_parser import ParsedLot
 from app.services.orchestrator import LotOrchestrator
 from app.services.outreach import LeximoCallProvider, outreach_capabilities
 from app.services.scoring import estimate_margin_pct, get_customer_score
@@ -38,6 +40,47 @@ async def session():
 
 def test_unknown_legal_risk_never_becomes_participate() -> None:
     assert LotOrchestrator._make_recommendation(risk="needs_review", trust=95, margin_pct=40) == "review"
+
+
+@pytest.mark.asyncio
+async def test_quick_analysis_keeps_original_lot_url() -> None:
+    """Регрессия: быстрый разбор не должен падать при добавлении source_url."""
+    source_url = "https://v3bl.goszakup.gov.kz/ru/announce/index/17686160-1"
+    parsed = ParsedLot(
+        lot_id="17686160",
+        title="Работы по изготовлению мебели",
+        customer_name="Тестовый заказчик",
+        customer_bin="123456789012",
+        method="tender",
+        deadline="2026-11-01T12:00:00",
+        budget_kzt=1_000_000,
+        description="Изготовление мебели по технической спецификации.",
+        technical_specification="Изготовить комплект мебели по указанным размерам. " * 8,
+        extra={"source_url": source_url},
+    )
+    orchestrator = LotOrchestrator()
+    orchestrator._resolve_lot = AsyncMock(return_value=parsed)
+    orchestrator._documenter.run = AsyncMock(
+        return_value=LotAnalysis(
+            lot_id=parsed.lot_id,
+            title="(не удалось проанализировать)",
+        )
+    )
+
+    result = await orchestrator.analyze_lot(
+        LotCreate(source_url=source_url, source_id="17686160-1"),
+        user_id=1,
+        is_pilot=False,
+        used_this_month=0,
+        free_limit=3,
+        with_legal=False,
+    )
+
+    assert result.lot.source_url == source_url
+    assert result.lot.title == parsed.title
+    assert result.lot.customer == parsed.customer_name
+    assert result.lot.requirements[0].name == "Техническая спецификация"
+    assert "официального лота" in result.lot.warnings[0]
 
 
 def test_margin_is_explicitly_an_estimate() -> None:

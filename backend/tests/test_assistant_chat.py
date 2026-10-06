@@ -59,8 +59,11 @@ async def test_assistant_chat_is_grounded_in_owned_completed_job(monkeypatch) ->
     assert response["grounded"] is True
     assert response["lot_id"] == "12345"
     assert response["answer"] == "Нужен обязательный сертификат."
+    assert response["actions"] == []
     assert "Поставка фильтров" in captured["messages"][0].content
     assert "Никогда не придумывай" in captured["messages"][0].content
+    assert "/dashboard/lots" in captured["messages"][0].content
+    assert "до 60 слов" in captured["messages"][0].content
 
 
 def test_assistant_context_is_bounded_and_marks_missing_context() -> None:
@@ -82,3 +85,22 @@ def test_assistant_context_is_bounded_and_marks_missing_context() -> None:
     assert len(context) <= 45_000
     assert lot_id == "1"
     assert "Лицензия обязательна" in context
+
+
+def test_clean_assistant_answer_removes_raw_markdown() -> None:
+    cleaned = lots_api._clean_assistant_answer(
+        "### 2. **Анализ лота**\n\n* Первый пункт\n- Второй пункт\n*курсив* и `код`"
+    )
+
+    assert cleaned == "2. Анализ лота\n\n• Первый пункт\n• Второй пункт\nкурсив и код"
+    assert "#" not in cleaned
+    assert "**" not in cleaned
+
+
+def test_navigation_actions_only_include_exact_internal_routes() -> None:
+    assert lots_api._assistant_navigation_actions(
+        "Поиск находится в разделе /dashboard/lots. Откройте его."
+    ) == [{"label": "Открыть поиск лотов", "href": "/dashboard/lots"}]
+    assert lots_api._assistant_navigation_actions(
+        "Неизвестный путь /dashboard/lots-old не должен создавать кнопку."
+    ) == []
