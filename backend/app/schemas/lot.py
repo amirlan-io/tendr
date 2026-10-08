@@ -334,14 +334,14 @@ class MarginCalculationRequest(BaseModel):
     маппятся в новые через model_validator(mode='before').
     """
 
-    unit_cost_kzt: float = Field(..., description="Себестоимость единицы (тенге)")
-    desired_margin_pct: float = Field(default=15, description="Желаемая маржа (%)")
+    unit_cost_kzt: float = Field(..., ge=0, description="Себестоимость единицы без НДС (тенге)")
+    desired_margin_pct: float = Field(default=15, ge=0, lt=100, description="Желаемая маржа от выручки без НДС (%)")
     competitor_price_kzt: float | None = Field(
-        default=None, description="Цена конкурента (если известна)"
+        default=None, gt=0, description="Публичная сопоставимая цена с НДС (если известна)"
     )
-    vat_rate: float = Field(default=12, description="Ставка НДС (%)")
-    logistics_per_unit_kzt: float = Field(default=0, description="Логистика на единицу (тенге)")
-    overhead_per_unit_kzt: float = Field(default=0, description="Накладные расходы на единицу (тенге)")
+    vat_rate: float = Field(default=12, ge=0, le=100, description="Ставка НДС (%)")
+    logistics_per_unit_kzt: float = Field(default=0, ge=0, description="Логистика на единицу без НДС (тенге)")
+    overhead_per_unit_kzt: float = Field(default=0, ge=0, description="Накладные расходы на единицу без НДС (тенге)")
     # Обратная совместимость со старым форматом
     cost_price: float | None = Field(default=None)
     desired_margin_percent: float | None = Field(default=None)
@@ -401,6 +401,21 @@ class RequirementItem(BaseModel):
     value: str
     is_critical: bool = False
     category: str = ""  # техническое, квалификационное, и т.д.
+    # Дословное подтверждение из официальной карточки/вложения. Требование без
+    # проверяемой цитаты не должно выглядеть в UI как подтверждённый факт.
+    source_quote: str = ""
+    source_document: str = ""
+
+
+class SourceDocument(BaseModel):
+    """Официальный файл, приложенный к позиции закупки."""
+
+    name: str
+    document_type: str = ""
+    url: str
+    extracted: bool = False
+    text_chars: int = 0
+    error: str = ""
 
 
 class ProcurementMethod(str):
@@ -444,6 +459,7 @@ class LotAnalysis(BaseModel):
 
     # Документы
     documents_required: list[str] = Field(default_factory=list)
+    source_documents: list[SourceDocument] = Field(default_factory=list)
 
     # Оценка
     evaluation_criteria: dict[str, Any] = Field(default_factory=dict)

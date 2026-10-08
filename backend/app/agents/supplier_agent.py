@@ -155,6 +155,7 @@ class Costs:
     page_fetch_count: int = 0
     llm_calls: int = 0
     tavily_calls: int = 0
+    tavily_attempts: int = 0
     browser_calls: int = 0
 
     def merge(self, other: Costs) -> None:
@@ -164,6 +165,7 @@ class Costs:
         self.page_fetch_count += other.page_fetch_count
         self.llm_calls += other.llm_calls
         self.tavily_calls += other.tavily_calls
+        self.tavily_attempts += other.tavily_attempts
         self.browser_calls += other.browser_calls
 
 
@@ -355,6 +357,104 @@ def evidence_coverage(req: Requirement, evidence: str) -> tuple[int, int]:
     haystack = _normalized_evidence(evidence)
     matched = sum(1 for part in parts if _normalized_evidence(part) in haystack)
     return matched, len(parts)
+
+
+def requirement_resolution_gaps(
+    requirements: Sequence[Requirement],
+    candidates: Sequence[SupplierCandidate],
+) -> list[dict[str, Any]]:
+    """Показать, почему каждая позиция ТЗ закрыта или остаётся нерешённой.
+
+    Само название товара недостаточно. Для технической позиции карточка
+    считается подтверждённой только когда источник содержит все извлечённые
+    характеристики; после этого отдельно проверяется наличие цены.
+    """
+    gaps: list[dict[str, Any]] = []
+    for req in requirements:
+        req_text = requirement_text(req)
+        related = [
+            candidate
+            for candidate in candidates
+            if _tokens_overlap(req_text, f"{candidate.title} {candidate.evidence_text}")
+        ]
+        if not related:
+            gaps.append(
+                {
+                    "code": req.code,
+                    "title": req.title,
+                    "status": "product_not_found",
+                    "reason": "Товар не найден в конкретной карточке поставщика.",
+                    "matched_specs": 0,
+                    "total_specs": len(list(_TECH_HINTS.finditer(extract_tech_hints(req_text)))),
+                }
+            )
+            continue
+
+        coverage = [
+            (*evidence_coverage(req, f"{candidate.title} {candidate.evidence_text}"), candidate)
+            for candidate in related
+        ]
+        total_specs = max((total for _matched, total, _candidate in coverage), default=0)
+        verified = [
+            candidate
+            for matched, total, candidate in coverage
+            if total == 0 or matched == total
+        ]
+        best_matched = max((matched for matched, _total, _candidate in coverage), default=0)
+        if total_specs and not verified:
+            gaps.append(
+                {
+                    "code": req.code,
+                    "title": req.title,
+                    "status": "specifications_unconfirmed",
+                    "reason": (
+                        f"Карточка найдена, но подтверждено только {best_matched} "
+                        f"из {total_specs} обязательных характеристик."
+                    ),
+                    "matched_specs": best_matched,
+                    "total_specs": total_specs,
+                }
+            )
+            continue
+
+        if not any(candidate.price_kzt is not None for candidate in verified):
+            gaps.append(
+                {
+                    "code": req.code,
+                    "title": req.title,
+                    "status": "price_unverified",
+                    "reason": "Характеристики подтверждены, но проверенная цена не найдена.",
+                    "matched_specs": total_specs,
+                    "total_specs": total_specs,
+                }
+            )
+            continue
+
+        gaps.append(
+            {
+                "code": req.code,
+                "title": req.title,
+                "status": "resolved",
+                "reason": "Товар, обязательные характеристики и цена подтверждены источником.",
+                "matched_specs": total_specs,
+                "total_specs": total_specs,
+            }
+        )
+    return gaps
+
+
+def recovery_query(req: Requirement, status: str, *, region_hint: str = "") -> str:
+    """Один следующий запрос, направленный на конкретный пробел позиции."""
+    core = extract_search_term(req.title) or req.title[:120]
+    hints = extract_tech_hints(requirement_text(req))
+    region = region_hint.strip() or "Казахстан"
+    if status == "specifications_unconfirmed":
+        suffix = "технические характеристики паспорт спецификация"
+    elif status == "price_unverified":
+        suffix = "цена купить тенге карточка товара"
+    else:
+        suffix = "поставщик купить карточка товара"
+    return " ".join(part for part in (core, hints, suffix, region) if part).strip()
 
 
 def relevant_evidence(text: str, terms: Sequence[str], *, limit: int = 5000) -> str:
@@ -855,6 +955,7 @@ class SupplierAgent(Agent):
         *,
         max_results: int = 20,
         domains: Sequence[str] | None = DEFAULT_SEARCH_DOMAINS,
+        max_calls: int | None = None,
     ) -> tuple[list[dict[str, Any]], Costs]:
         """Поиск в интернете. Без Tavily возвращает пустой список, а не выдумку.
 
@@ -871,13 +972,15 @@ class SupplierAgent(Agent):
         # build_queries уже ограничивает набор десятью запросами. Выполняем
         # весь видимый trace, чтобы trace не утверждал, что точный запрос
         # был сделан, когда он на самом деле был обрезан.
-        for query in queries[:10]:
+        call_limit = max(0, min(10, max_calls if max_calls is not None else 10))
+        for query in queries[:call_limit]:
+            costs.tavily_attempts += 1
             try:
-                kwargs: dict[str, Any] = dict(
-                    query=query,
-                    search_depth="advanced",
-                    max_results=10,
-                )
+                kwargs: dict[str, Any] = {
+                    "query": query,
+                    "search_depth": "basic",
+                    "max_results": 10,
+                }
                 if domains:
                     kwargs["include_domains"] = list(domains)
                 response = self._tavily_client.search(**kwargs)
@@ -905,7 +1008,11 @@ class SupplierAgent(Agent):
 
     # ── Шаг 2b: поиск прямых производителей в открытом веб-поиске ──
     async def search_manufacturers(
-        self, requirements: list[Requirement], *, max_results: int = 12
+        self,
+        requirements: list[Requirement],
+        *,
+        max_results: int = 12,
+        max_calls: int | None = None,
     ) -> tuple[list[dict[str, Any]], Costs]:
         """Найти сайты производителей и дилеров без ограничения доменов.
 
@@ -925,12 +1032,14 @@ class SupplierAgent(Agent):
 
         collected: list[dict[str, Any]] = []
         seen: set[str] = set()
-        for query in queries:
+        call_limit = max(0, min(len(queries), max_calls if max_calls is not None else len(queries)))
+        for query in queries[:call_limit]:
+            costs.tavily_attempts += 1
             try:
                 # Без include_domains — ищем сайты компаний по всему вебу.
                 response = self._tavily_client.search(
                     query=query,
-                    search_depth="advanced",
+                    search_depth="basic",
                     max_results=8,
                 )
             except Exception as exc:
@@ -1442,9 +1551,14 @@ class SupplierAgent(Agent):
         """Полный конвейер F1+F2. Возвращает кандидатов, расходы и метаданные."""
         requirements = dedupe_requirements(requirements)
         total = Costs()
+        max_search_calls = max(1, min(20, int(get_settings().supplier_search_max_calls)))
         meta: dict[str, Any] = {
             "queries": [],
             "direct_queries": [],
+            "planned_queries": [],
+            "search_call_limit": max_search_calls,
+            "search_calls_attempted": 0,
+            "resolution_gaps": [],
             "candidates_count": 0,
             "blocked_filtered": 0,
         }
@@ -1460,7 +1574,7 @@ class SupplierAgent(Agent):
             company_terms=company_terms,
         )
         total.merge(costs)
-        meta["queries"] = queries
+        meta["planned_queries"] = queries
         if not queries:
             return [], total, meta
 
@@ -1471,33 +1585,25 @@ class SupplierAgent(Agent):
         # Поэтому каждый пункт ТЗ получает свою квоту результатов.
         per_item_queries = self._queries_by_requirement(requirements, queries)
         results: list[dict[str, Any]] = []
-        if len(per_item_queries) > 1:
-            per_item_quota = max(3, 20 // len(per_item_queries))
-            for item_queries in per_item_queries:
-                found, costs = await self.search_web(item_queries, max_results=per_item_quota)
-                total.merge(costs)
-                results.extend(found)
-            results = _dedupe_results(results)[:20]
-        else:
-            results, costs = await self.search_web(queries)
+        executed_queries: list[str] = []
+        per_item_quota = max(3, 20 // max(1, len(per_item_queries)))
+        # Первый круг даёт каждой позиции ровно одну технически точную
+        # попытку. Остаток бюджета сохраняется для адресного повторного
+        # поиска после проверки фактических карточек.
+        for item_queries in per_item_queries:
+            if total.tavily_attempts >= max_search_calls:
+                break
+            attempt = item_queries[:1]
+            found, costs = await self.search_web(
+                attempt,
+                max_results=per_item_quota,
+                max_calls=1,
+            )
             total.merge(costs)
-
-        # Вторая фаза: сайты производителей и дилеров в открытом вебе.
-        manufacturer_queries = _manufacturer_queries(requirements)
-        manufacturer_results, costs = await self.search_manufacturers(requirements)
-        total.merge(costs)
-        # Запросы фазы должны быть видны в следе: без них нельзя понять,
-        # почему поставщиков нашлось столько, сколько нашлось.
-        meta["direct_queries"] = list(manufacturer_queries)
-        known_urls = {str(item.get("url")) for item in results}
-        for item in manufacturer_results:
-            if item["url"] in known_urls:
-                continue
-            results.append(item)
-            known_urls.add(item["url"])
-
-        if not results:
-            return [], total, meta
+            executed_queries.extend(attempt[: costs.tavily_attempts])
+            results.extend(found)
+        results = _dedupe_results(results)[:20]
+        meta["queries"] = executed_queries
 
         blocked = blocked or set()
         candidates: list[SupplierCandidate] = []
@@ -1521,58 +1627,106 @@ class SupplierAgent(Agent):
                 str(item.get("url") or ""),
             )
 
-        results = sorted(results, key=_priority)
+        known_urls: set[str] = set()
+        search_terms = [
+            core
+            for core in dict.fromkeys(extract_search_term(r.title) for r in requirements)
+            if core
+        ]
 
-        for item in results:
-            domain = extract_domain(item["url"])
-            supplier = item["title"][:256] or domain
-            # Стоп-лист: не показываем и не предлагаем (F6).
-            if supplier in blocked or domain in blocked:
-                meta["blocked_filtered"] += 1
-                continue
-            kind = str(item.get("domain_kind") or classify_domain(domain))
-            # Соцсети и доски объявлений пропускаем: контактов там нет.
-            if kind == "classifieds":
-                continue
-            email, phone = find_contacts(item.get("content", ""))
-            candidate = SupplierCandidate(
-                supplier=supplier,
-                domain=domain,
-                title=item["title"][:512],
-                url=item["url"],
-                email=email,
-                phone=phone,
-                is_middleman=kind == "aggregator",
-                domain_kind=kind,
-                evidence_text=str(item.get("content") or "")[:5000],
+        def _append_results(items: Sequence[dict[str, Any]]) -> list[SupplierCandidate]:
+            added: list[SupplierCandidate] = []
+            for item in sorted(items, key=_priority):
+                url = str(item.get("url") or "")
+                if not url or url in known_urls or len(candidates) >= 20:
+                    continue
+                known_urls.add(url)
+                domain = extract_domain(url)
+                supplier = str(item.get("title") or "")[:256] or domain
+                if supplier in blocked or domain in blocked:
+                    meta["blocked_filtered"] += 1
+                    continue
+                kind = str(item.get("domain_kind") or classify_domain(domain))
+                if kind == "classifieds":
+                    continue
+                content = str(item.get("content") or "")[:5000]
+                email, phone = find_contacts(content)
+                candidate = SupplierCandidate(
+                    supplier=supplier,
+                    domain=domain,
+                    title=str(item.get("title") or "")[:512],
+                    url=url,
+                    email=email,
+                    phone=phone,
+                    is_middleman=kind == "aggregator",
+                    domain_kind=kind,
+                    evidence_text=content,
+                )
+                candidate.sources["search"] = url
+                # Цена из фрагмента считается подтверждённой только когда
+                # находится рядом с названием позиции, а не в соседней карточке.
+                self._apply_page_text(candidate, content, terms=search_terms)
+                candidates.append(candidate)
+                added.append(candidate)
+            return added
+
+        initial_candidates = _append_results(results)
+
+        # Сначала бесплатное чтение страниц, потом (если нужно) платный браузер.
+        if enrich_browser and initial_candidates:
+            costs = await self.enrich_with_pages(
+                initial_candidates,
+                top_n=min(page_fetch_top_n, len(initial_candidates)),
+                terms=search_terms,
             )
-            candidate.sources["search"] = item["url"]
-            candidates.append(candidate)
-            if len(candidates) >= 20:  # критерий приёмки: ≤20 кандидатов
-                break
+            total.merge(costs)
 
+        # Проверяем каждую позицию до того, как тратить оставшийся поиск.
+        # Страница с одним названием не закрывает регулятор, если на ней нет
+        # 60,3 МПа, материала и типа соединения.
+        gaps = requirement_resolution_gaps(requirements, candidates)
+        unresolved = [gap for gap in gaps if gap["status"] != "resolved"]
+        remaining_calls = max(0, max_search_calls - total.tavily_attempts)
+        recovery_queries: list[str] = []
+        for gap in unresolved:
+            if len(recovery_queries) >= remaining_calls:
+                break
+            req = next(
+                (item for item in requirements if item.code == gap["code"]),
+                None,
+            )
+            if req is None:
+                continue
+            query = recovery_query(req, str(gap["status"]), region_hint=region_hint)
+            if query and query not in recovery_queries and query not in executed_queries:
+                recovery_queries.append(query)
+
+        if recovery_queries:
+            recovery_results, costs = await self.search_web(
+                recovery_queries,
+                domains=None,
+                max_results=max(3, 20 - len(candidates)),
+                max_calls=remaining_calls,
+            )
+            total.merge(costs)
+            meta["direct_queries"] = recovery_queries[: costs.tavily_attempts]
+            recovered_candidates = _append_results(recovery_results)
+            if enrich_browser and recovered_candidates:
+                costs = await self.enrich_with_pages(
+                    recovered_candidates,
+                    top_n=min(page_fetch_top_n, len(recovered_candidates)),
+                    terms=search_terms,
+                )
+                total.merge(costs)
+            gaps = requirement_resolution_gaps(requirements, candidates)
+
+        meta["resolution_gaps"] = gaps
+        meta["search_calls_attempted"] = total.tavily_attempts
         meta["candidates_count"] = len(candidates)
         if not candidates:
             return [], total, meta
 
-        # Сначала бесплатное чтение страниц, потом (если нужно) платный браузер.
         if enrich_browser:
-            # Номенклатурные ядра из ТЗ нужны для поиска цены на странице:
-            # заголовок карточки — это рубрика каталога, а не товар.
-            # Именно короткое название: длинное описание («стальной,
-            # фланцевый, 80 мм, 60,3 Мпа») на странице каталога целиком
-            # не встречается, и поиск по нему ничего не найдёт.
-            search_terms = [
-                core
-                for core in dict.fromkeys(
-                    extract_search_term(r.title) for r in requirements
-                )
-                if core
-            ]
-            costs = await self.enrich_with_pages(
-                candidates, top_n=page_fetch_top_n, terms=search_terms
-            )
-            total.merge(costs)
             # Browser-Use нужен там, где бесплатные источники не справились:
             # страница не прочиталась ИЛИ цена не нашлась. Раньше условие было
             # только про непрочитанные страницы, поэтому при 12 успешно
@@ -1588,6 +1742,9 @@ class SupplierAgent(Agent):
             if need_browser:
                 costs = await self.enrich_with_browser(need_browser, top_n=3)
                 total.merge(costs)
+                meta["resolution_gaps"] = requirement_resolution_gaps(
+                    requirements, candidates
+                )
 
         if perform_matching:
             costs = await self.match_requirements(candidates, requirements)

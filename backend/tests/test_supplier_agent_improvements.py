@@ -13,11 +13,14 @@ import pytest
 from app.agents.supplier_agent import (
     Requirement,
     SupplierAgent,
+    SupplierCandidate,
     _manufacturer_queries,
     evidence_coverage,
     extract_quantity,
     extract_search_term,
     extract_tech_hints,
+    recovery_query,
+    requirement_resolution_gaps,
     requirement_text,
 )
 from app.api.sandbox import _apply_filters, _budget_from_analysis, _region_from_analysis
@@ -234,6 +237,103 @@ def test_evidence_coverage_requires_real_specs() -> None:
     assert matched == total
     missing, _ = evidence_coverage(req, "Редуктор воздуха 10 бар")
     assert missing == 0
+
+
+def test_requirement_with_title_only_stays_unresolved() -> None:
+    req = Requirement(
+        code="2",
+        title="Регулятор давления",
+        description="Стальной, фланцевый, проход 80 мм, давление 60,3 Мпа",
+    )
+    candidate = SupplierCandidate(
+        supplier="Каталог",
+        domain="example.kz",
+        title="Регулятор давления",
+        evidence_text="Регулятор давления для промышленного оборудования",
+        price_kzt=45_000,
+    )
+    [gap] = requirement_resolution_gaps([req], [candidate])
+    assert gap["status"] == "specifications_unconfirmed"
+    assert gap["matched_specs"] < gap["total_specs"]
+
+
+def test_requirement_gap_distinguishes_missing_price_from_missing_specs() -> None:
+    req = Requirement(
+        code="2",
+        title="Регулятор давления",
+        description="Стальной, фланцевый, проход 80 мм, давление 60,3 Мпа",
+    )
+    evidence = "Регулятор давления стальной фланцевый, проход 80 мм, давление 60,3 МПа"
+    candidate = SupplierCandidate(
+        supplier="Поставщик",
+        domain="supplier.kz",
+        title="Регулятор давления",
+        evidence_text=evidence,
+    )
+    [gap] = requirement_resolution_gaps([req], [candidate])
+    assert gap["status"] == "price_unverified"
+
+    candidate.price_kzt = 45_000
+    [resolved] = requirement_resolution_gaps([req], [candidate])
+    assert resolved["status"] == "resolved"
+
+
+def test_recovery_query_keeps_mandatory_regulator_specs() -> None:
+    req = Requirement(
+        code="2",
+        title="Регулятор давления",
+        description="Стальной, фланцевый, проход 80 мм, давление 60,3 Мпа",
+    )
+    query = recovery_query(req, "specifications_unconfirmed")
+    normalized = query.lower().replace(".", ",")
+    assert "60,3" in normalized
+    assert "80 мм" in normalized
+    assert "фланцев" in normalized
+    assert "технические характеристики" in normalized
+
+
+@pytest.mark.asyncio
+async def test_remaining_search_call_targets_unresolved_requirement(monkeypatch) -> None:
+    from app.agents.supplier_agent import Costs
+
+    agent = SupplierAgent()
+    req = Requirement(
+        code="2",
+        title="Регулятор давления",
+        description="Стальной, фланцевый, проход 80 мм, давление 60,3 Мпа",
+    )
+    calls: list[str] = []
+
+    async def fake_build_queries(*_args, **_kwargs):
+        return ["Регулятор давления 60,3 Мпа 80 мм фланцевый"], Costs()
+
+    async def fake_search_web(queries, **_kwargs):
+        query = queries[0]
+        calls.append(query)
+        if len(calls) == 1:
+            content = "Регулятор давления. Каталог промышленной арматуры."
+            url = "https://catalog.kz/regulator"
+        else:
+            content = (
+                "Регулятор давления стальной фланцевый, проход 80 мм, "
+                "давление 60,3 МПа. Цена 45 000 тенге."
+            )
+            url = "https://supplier.kz/regulator-603"
+        return ([{"title": "Регулятор давления", "url": url, "content": content, "score": 1.0}], Costs(tavily_calls=1, tavily_attempts=1))
+
+    monkeypatch.setattr(agent, "build_queries", fake_build_queries)
+    monkeypatch.setattr(agent, "search_web", fake_search_web)
+    candidates, costs, meta = await agent.find_suppliers(
+        [req],
+        enrich_browser=False,
+        perform_matching=False,
+    )
+
+    assert len(calls) == 2
+    assert "технические характеристики" in calls[1].lower()
+    assert costs.tavily_attempts == 2
+    assert candidates
+    assert meta["resolution_gaps"][0]["status"] == "resolved"
 
 
 # ───── 5. Персонализация реально меняет запросы ─────

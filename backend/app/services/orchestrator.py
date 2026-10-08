@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from loguru import logger
@@ -20,6 +21,7 @@ from app.schemas.lot import (
     MarginEstimate,
     ProcurementMethod,
     RequirementItem,
+    SourceDocument,
 )
 from app.services.document_reader import extract_text
 from app.services.goszakup_parser import (
@@ -28,6 +30,7 @@ from app.services.goszakup_parser import (
     build_lot_url,
     get_parser,
 )
+from app.services.official_documents import fetch_official_documents
 from app.services.scoring import (
     estimate_margin_pct,
     get_customer_score,
@@ -36,6 +39,23 @@ from app.services.scoring import (
 
 class QuotaExceeded(Exception):
     """Пользователь исчерпал лимит freemium."""
+
+
+def _normalized_evidence(value: str) -> str:
+    return re.sub(r"\s+", " ", value.replace("×", "x").replace("х", "x")).strip().casefold()
+
+
+def _requirement_has_evidence(requirement: RequirementItem, source_text: str) -> bool:
+    """Подтвердить, что цитата требования действительно есть в источнике."""
+
+    quote = _normalized_evidence(requirement.source_quote)
+    source = _normalized_evidence(source_text)
+    return len(quote) >= 8 and quote in source
+
+
+def _claim_has_evidence(claim: str, source_text: str) -> bool:
+    normalized = _normalized_evidence(claim)
+    return len(normalized) >= 5 and normalized in _normalized_evidence(source_text)
 
 
 class LotOrchestrator:
@@ -99,6 +119,37 @@ class LotOrchestrator:
                     "Или пришлите PDF/DOCX с ТЗ — проанализируем без токена."
                 ),
             )
+
+        # Официальная карточка содержит лишь краткое описание. Полное ТЗ у
+        # Госзакупок хранится в Lots.Files; скачиваем и читаем только файлы с
+        # официального allowlist-домена. Именно этот текст затем получает ИИ.
+        official_files = list((parsed.extra or {}).get("source_documents") or [])
+        extracted_documents = await fetch_official_documents(official_files)
+        source_documents = [
+            SourceDocument(
+                name=document.name,
+                document_type=document.document_type,
+                url=document.url,
+                extracted=document.extracted,
+                text_chars=len(document.text),
+                error=document.error,
+            )
+            for document in extracted_documents
+        ]
+        official_card_text = (parsed.technical_specification or "").strip()
+        source_sections = []
+        if official_card_text:
+            source_sections.append(
+                "=== ИСТОЧНИК: Официальная карточка лота ===\n" + official_card_text
+            )
+        source_sections.extend(
+            "=== ИСТОЧНИК: "
+            f"{document.document_type} — {document.name} ===\n{document.text}"
+            for document in extracted_documents
+            if document.extracted
+        )
+        if source_sections:
+            parsed.technical_specification = "\n\n".join(source_sections)
 
         # 1.5 Guard: если парсер вернул почти пусто — не вызываем LLM на пустых данных,
         # а просим пользователя прислать текст/PDF.
@@ -204,6 +255,43 @@ class LotOrchestrator:
                 "Структурированный ИИ-разбор временно недоступен: показаны исходные данные официального лота."
             )
 
+        # Не показываем утверждение как факт, если агент не приложил дословную
+        # цитату, которую можно найти в официальной карточке или приложении.
+        if not documenter_failed:
+            proposed_requirements = list(analysis.requirements)
+            analysis.requirements = [
+                requirement
+                for requirement in proposed_requirements
+                if _requirement_has_evidence(requirement, parsed.technical_specification)
+            ]
+            rejected_count = len(proposed_requirements) - len(analysis.requirements)
+            if rejected_count:
+                analysis.warnings.append(
+                    f"Не показано неподтверждённых требований: {rejected_count}."
+                )
+            proposed_documents = list(analysis.documents_required)
+            analysis.documents_required = [
+                document
+                for document in proposed_documents
+                if _claim_has_evidence(document, parsed.technical_specification)
+            ]
+            proposed_red_flags = list(analysis.red_flags)
+            analysis.red_flags = [
+                flag
+                for flag in proposed_red_flags
+                if _claim_has_evidence(flag, parsed.technical_specification)
+            ]
+            unverified_claims = (
+                len(proposed_documents)
+                - len(analysis.documents_required)
+                + len(proposed_red_flags)
+                - len(analysis.red_flags)
+            )
+            if unverified_claims:
+                analysis.warnings.append(
+                    f"Не показано неподтверждённых документов или рисков: {unverified_claims}."
+                )
+
         # 2.1 Дополняем LotAnalysis реальными данными из парсера (Documenter
         # часто не извлекает budget/deadline из текста, но они у нас уже есть).
         if parsed.budget_kzt is not None and not analysis.amount_kzt:
@@ -214,6 +302,8 @@ class LotOrchestrator:
             analysis.customer = parsed.customer_name
         if parsed.method and (not analysis.procurement_method or analysis.procurement_method == "other"):
             analysis.procurement_method = parsed.method
+        analysis.technical_specification = parsed.technical_specification
+        analysis.source_documents = source_documents
         analysis.source_url = self._resolve_source_url(parsed, lot_input)
 
         # 3. Юридическая проверка
@@ -245,10 +335,32 @@ class LotOrchestrator:
         analysis.margin_estimate = margin_est
         analysis.recommendation = recommendation
 
+        failed_official_documents = [document for document in source_documents if not document.extracted]
+        incomplete_reasons: list[str] = []
+        if documenter_failed:
+            incomplete_reasons.append("структурированный разбор временно недоступен")
+        if (parsed.extra or {}).get("source_documents_lookup_failed"):
+            incomplete_reasons.append(
+                "не удалось проверить список официальных вложений лота"
+            )
+        if len(official_files) > len(extracted_documents):
+            incomplete_reasons.append("часть официальных вложений не обработана из-за лимита")
+        if failed_official_documents:
+            incomplete_reasons.append(
+                "не удалось прочитать: "
+                + ", ".join(document.name for document in failed_official_documents[:3])
+            )
+        if extracted_documents and not analysis.requirements:
+            incomplete_reasons.append(
+                "в официальном ТЗ не удалось подтвердить структурированные требования"
+            )
+
         return LotAnalysisResponse(
             lot=analysis,
             legal=legal,
             created_at=datetime.utcnow(),
+            incomplete=bool(incomplete_reasons),
+            incomplete_reason="; ".join(incomplete_reasons),
         )
 
     @staticmethod

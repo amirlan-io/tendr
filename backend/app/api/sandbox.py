@@ -194,6 +194,10 @@ async def run_supplier_sandbox(
         "trace": {
             "queries": meta.get("queries", []),
             "direct_queries": meta.get("direct_queries", []),
+            "planned_queries": meta.get("planned_queries", []),
+            "search_call_limit": meta.get("search_call_limit", 0),
+            "search_calls_attempted": meta.get("search_calls_attempted", 0),
+            "resolution_gaps": meta.get("resolution_gaps", []),
             "found_before_filters": meta.get("candidates_count", 0),
             "blocked_filtered": meta.get("blocked_filtered", 0),
             # Сколько кандидатов отсеял каждый фильтр: раньше потеря
@@ -219,6 +223,7 @@ async def run_supplier_sandbox(
             "is_estimate": True,
             "llm_calls": costs.llm_calls,
             "tavily_calls": costs.tavily_calls,
+            "tavily_attempts": costs.tavily_attempts,
             "browser_calls": costs.browser_calls,
         },
         "duration_sec": round(time.monotonic() - started, 1),

@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # === Tavily (поиск товаров) ===
     tavily_api_key: str = ""
     tavily_max_results: int = 10
+    # Общий бюджет поисковых попыток на один лот, включая неудачные.
+    # Небольшой лимит заставляет агент тратить повторный запрос только на
+    # позиции, которые не закрыты доказательствами с карточки товара.
+    supplier_search_max_calls: int = 4
     # Провайдер эмбеддингов: "local" (sentence-transformers) или "llm"
     embedding_provider: Literal["local", "llm"] = "llm"
     embedding_local_model: str = "intfloat/multilingual-e5-small"

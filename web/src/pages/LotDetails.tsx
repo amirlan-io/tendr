@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowUpRight,
   Bookmark,
   BriefcaseBusiness,
   Building2,
+  Calculator,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -15,6 +16,7 @@ import {
   Sparkles,
   Wrench,
 } from "lucide-react";
+import { BidCalculator } from "../components/BidCalculator";
 import { api, ApiError } from "../clientId";
 import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { isLotSaved, removeSavedLot, saveLot } from "../dashboard/dashboard.data";
@@ -50,6 +52,7 @@ function DetailRow({ label, value, accent = false }: { label: string; value: Rea
 
 export function LotDetailsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { lotId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [lot, setLot] = useState<Lot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +102,14 @@ export function LotDetailsPage({ embedded = false }: { embedded?: boolean } = {}
 
   const backPath = embedded ? "/dashboard/lots" : "/lots";
   const analyzePath = embedded ? "/dashboard/analyze" : "/analyze";
+  const activeTab = searchParams.get("tab") === "calculation" ? "calculation" : "overview";
+
+  const selectTab = (tab: "overview" | "calculation") => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === "overview") next.delete("tab");
+    else next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
 
   if (loading) {
     return <LayoutOrEmbed embedded={embedded} plainBackground><div className="mx-auto max-w-6xl space-y-4"><div className="h-12 w-32 animate-pulse rounded-xl bg-white/[0.04]" /><div className="h-72 animate-pulse rounded-2xl border border-white/[0.07] bg-white/[0.025]" /></div></LayoutOrEmbed>;
@@ -145,6 +156,14 @@ export function LotDetailsPage({ embedded = false }: { embedded?: boolean } = {}
           </div>
         </header>
 
+        <nav className="mt-4 flex w-fit rounded-xl border border-white/[0.075] bg-[#111112] p-1" aria-label="Разделы лота">
+          <button type="button" onClick={() => selectTab("overview")} className={`inline-flex h-9 items-center rounded-lg px-3.5 text-xs font-medium transition ${activeTab === "overview" ? "bg-white/[0.09] text-white" : "text-white/42 hover:text-white/75"}`}>О лоте</button>
+          <button type="button" onClick={() => selectTab("calculation")} className={`inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-xs font-medium transition ${activeTab === "calculation" ? "bg-emerald-400 text-[#04130c]" : "text-white/42 hover:text-white/75"}`}><Calculator size={14} /> Расчёт заявки</button>
+        </nav>
+
+        {activeTab === "calculation" ? (
+          <BidCalculator lotId={lot.source_id || String(lot.id)} lotTitle={lot.title} budgetKzt={lot.amount_kzt || 0} />
+        ) : <>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <section className="overflow-hidden rounded-2xl border border-white/[0.075] bg-[#111112]">
             <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-4"><Building2 size={16} className="text-emerald-300" /><h2 className="text-sm font-semibold text-white/80">Заказчик и условия</h2></div>
@@ -180,6 +199,7 @@ export function LotDetailsPage({ embedded = false }: { embedded?: boolean } = {}
           {lot.ai_summary && <div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.045] p-4"><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-emerald-300/70">AI-резюме</p><p className="mt-2 text-sm leading-6 text-white/60">{lot.ai_summary}</p></div>}
           {lot.ai_red_flags?.length ? <div className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-4"><p className="text-xs font-semibold text-amber-200/80">На что обратить внимание</p><ul className="mt-2 space-y-1.5 text-xs leading-5 text-white/50">{lot.ai_red_flags.map((flag) => <li key={flag}>• {flag}</li>)}</ul></div> : null}
         </section>
+        </>}
       </div>
     </LayoutOrEmbed>
   );

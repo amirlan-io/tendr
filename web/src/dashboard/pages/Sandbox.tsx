@@ -46,6 +46,17 @@ interface SandboxResult {
   trace: {
     queries: string[];
     direct_queries: string[];
+    planned_queries: string[];
+    search_call_limit: number;
+    search_calls_attempted: number;
+    resolution_gaps: Array<{
+      code: string;
+      title: string;
+      status: "resolved" | "product_not_found" | "specifications_unconfirmed" | "price_unverified";
+      reason: string;
+      matched_specs: number;
+      total_specs: number;
+    }>;
     found_before_filters: number;
     blocked_filtered: number;
     pages_read: number;
@@ -60,6 +71,7 @@ interface SandboxResult {
     is_estimate: boolean;
     llm_calls: number;
     tavily_calls: number;
+    tavily_attempts: number;
     browser_calls: number;
   };
   duration_sec: number;
@@ -243,11 +255,32 @@ function SandboxOutput({ result }: { result: SandboxResult }) {
       <section className="rounded-2xl border border-white/[0.08] bg-[#0a1115]/90 p-5">
         <h2 className="text-sm font-medium text-white/80">Ход работы агента</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Запросов пробовано" value={String(trace.queries.length + trace.direct_queries.length)} />
+          <Stat label="Запросов пробовано" value={`${trace.search_calls_attempted} из ${trace.search_call_limit}`} />
           <Stat label="Найдено до фильтров" value={String(trace.found_before_filters)} />
           <Stat label="Прочитано страниц" value={String(trace.pages_read)} />
           <Stat label="Прошло фильтры" value={String(result.total)} />
         </div>
+        {trace.resolution_gaps.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-xs text-white/35">Покрытие позиций ТЗ:</p>
+            <ul className="grid gap-2 lg:grid-cols-2">
+              {trace.resolution_gaps.map((gap) => {
+                const resolved = gap.status === "resolved";
+                return (
+                  <li key={`${gap.code}-${gap.title}`} className={`rounded-lg border px-3 py-2.5 text-xs ${resolved ? "border-emerald-400/15 bg-emerald-400/[0.04]" : "border-amber-400/15 bg-amber-400/[0.04]"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-medium text-white/70">{gap.title}</span>
+                      <span className={resolved ? "text-emerald-300/80" : "text-amber-300/80"}>
+                        {resolved ? "Подтверждено" : "Нужен поиск"}
+                      </span>
+                    </div>
+                    <p className="mt-1 leading-5 text-white/40">{gap.reason}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
         <div className="mt-4 grid gap-4 text-xs lg:grid-cols-2">
           <div>
             <p className="mb-1.5 text-white/35">Поисковые запросы:</p>
@@ -264,7 +297,7 @@ function SandboxOutput({ result }: { result: SandboxResult }) {
             <p className="mb-1.5 text-white/35">Оценка расходов (не факт списания)</p>
             <dl className="space-y-1 text-white/55">
               <Row label={`LLM · ${costs.llm_calls} выз.`} value={`≈ $${costs.llm_usd.toFixed(4)}`} />
-              <Row label={`Tavily · ${costs.tavily_calls} запрос.`} value={`≈ $${costs.tavily_usd.toFixed(4)}`} />
+              <Row label={`Tavily · ${costs.tavily_attempts} попыт., ${costs.tavily_calls} успеш.`} value={`≈ $${costs.tavily_usd.toFixed(4)}`} />
               <Row label={`Browser Use · ${costs.browser_calls} выз.`} value={`≈ $${costs.browser_usd.toFixed(4)}`} />
               <Row label="Итого" value={`$${costs.total_usd.toFixed(4)}`} strong />
               <Row label="Время" value={`${result.duration_sec} с`} />

@@ -5,8 +5,10 @@ import {
   ExternalLink,
   FileCheck2,
   MessageSquare,
+  MoreHorizontal,
   Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { LayoutOrEmbed } from "../dashboard/Embedded";
 import { useT } from "../i18n";
@@ -18,14 +20,29 @@ import {
   TendrChatComposer,
   UserBubble,
 } from "../components/ui/tendr-ai-chat";
+import { BidCalculator } from "../components/BidCalculator";
 import { resolveLotSourceUrl } from "../dashboard/components/LotSourceLink";
 
 type Requirement = {
-  code: string;
-  title: string;
-  description: string;
-  is_mandatory: boolean;
+  code?: string;
+  title?: string;
+  description?: string;
+  is_mandatory?: boolean;
+  name?: string;
+  value?: string;
+  is_critical?: boolean;
+  category?: string;
   source_quote?: string;
+  source_document?: string;
+};
+
+type SourceDocument = {
+  name: string;
+  document_type?: string;
+  url: string;
+  extracted: boolean;
+  text_chars?: number;
+  error?: string;
 };
 
 type CustomerScore = {
@@ -60,6 +77,7 @@ type LotAnalysis = {
   source_url?: string | null;
   requirements: Requirement[];
   documents_required: string[];
+  source_documents?: SourceDocument[];
   summary: string;
   red_flags: string[];
   customer_score?: CustomerScore | null;
@@ -249,9 +267,63 @@ function extractLotReference(message: string): string | null {
   return idMatch?.[1] || (/^[0-9]{5,}$/.test(message.trim()) ? message.trim() : null);
 }
 
+function requirementTitle(requirement: Requirement): string {
+  return requirement.title || requirement.name || requirement.code || "Требование";
+}
+
+function requirementDescription(requirement: Requirement): string {
+  return requirement.description || requirement.value || "";
+}
+
+function requirementIsMandatory(requirement: Requirement): boolean {
+  return requirement.is_mandatory ?? requirement.is_critical ?? false;
+}
+
+function TypewriterText({ text, active }: { text: string; active: boolean }) {
+  const [visibleCharacters, setVisibleCharacters] = useState(active ? 0 : text.length);
+
+  useEffect(() => {
+    if (!active || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setVisibleCharacters(text.length);
+      return;
+    }
+    setVisibleCharacters(0);
+    const durationMs = Math.min(1800, Math.max(650, text.length * 10));
+    const tickMs = 18;
+    const charactersPerTick = Math.max(1, Math.ceil(text.length / (durationMs / tickMs)));
+    const timer = window.setInterval(() => {
+      setVisibleCharacters((current) => {
+        const next = Math.min(text.length, current + charactersPerTick);
+        if (next >= text.length) window.clearInterval(timer);
+        return next;
+      });
+    }, tickMs);
+    return () => window.clearInterval(timer);
+  }, [active, text]);
+
+  const typing = active && visibleCharacters < text.length;
+  return (
+    <>
+      {text.slice(0, visibleCharacters)}
+      {typing && <span aria-hidden="true" className="ml-0.5 inline-block h-[1em] w-px translate-y-0.5 animate-pulse bg-emerald-300/80" />}
+    </>
+  );
+}
+
+function AnalysisOrbit() {
+  return (
+    <span className="analysis-orbit" aria-hidden="true">
+      <i />
+      <i />
+      <i />
+    </span>
+  );
+}
+
 export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useT();
   const [searchParams] = useSearchParams();
+  const requestedLotUrl = searchParams.get("lot_url");
   const initialChatState = useMemo(loadChatState, []);
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -267,6 +339,8 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     initialChatState.sessions.find((item) => item.id === initialChatState.activeId)?.messages || [],
   );
   const [chatBusy, setChatBusy] = useState(false);
+  const [openChatMenuId, setOpenChatMenuId] = useState<string | null>(null);
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const [restoreChecked, setRestoreChecked] = useState(false);
   const [lastRequest, setLastRequest] = useState<
     { kind: "url"; url: string } | { kind: "file"; name: string } | null
@@ -297,7 +371,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     }
   }, [messages, loading, chatBusy, result, activeChatId]);
 
-  function applyCompletedJob(done: AnalysisJob) {
+  function applyCompletedJob(done: AnalysisJob, animateResponse = true) {
     if (!done.result) {
       setError("Результат анализа не найден. Запустите анализ ещё раз.");
       setLoading(false);
@@ -311,18 +385,22 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     localStorage.setItem(LAST_JOB_KEY, done.id);
     if (!completedJobsRef.current.has(done.id) && done.result.lot?.lot_id) {
       completedJobsRef.current.add(done.id);
+      const confirmedRequirements = done.result.lot.requirements?.length || 0;
+      const readDocuments = done.result.lot.source_documents?.filter((document) => document.extracted).length || 0;
+      const completedMessage = readDocuments
+        ? `Готово — я прочитал официальные файлы Госзакупок (${readDocuments}) и нашёл ${confirmedRequirements} подтверждённых требований с цитатами. Полный разбор ниже.`
+        : `Готово — я проверил официальную карточку лота и нашёл ${confirmedRequirements} подтверждённых требований. Полный разбор ниже.`;
+      const responseMessage = chatMessage(
+        "assistant",
+        done.result?.incomplete
+          ? "Я собрал доступные данные, но часть сведений не удалось подтвердить. Ниже показал, что найдено и что нужно перепроверить в первоисточнике."
+          : completedMessage,
+        done.id,
+      );
+      if (animateResponse) setTypingMessageId(responseMessage.id);
       setMessages((current) => current.some((message) => message.analysisJobId === done.id)
         ? current
-        : [
-            ...current,
-            chatMessage(
-              "assistant",
-              done.result?.incomplete
-                ? "Я собрал доступные данные, но часть сведений не удалось подтвердить. Ниже показал, что найдено и что нужно перепроверить в первоисточнике."
-                : "Готово — я собрал данные закупки, требования ТЗ, документы и риски. Полный разбор ниже. Можете задать любой уточняющий вопрос по этому лоту.",
-              done.id,
-            ),
-          ]);
+        : [...current, responseMessage]);
       pushHistory({
         lot_id: done.result.lot.lot_id,
         title: done.result.lot.title || done.input_label,
@@ -345,14 +423,29 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
         const savedId = localStorage.getItem(ACTIVE_JOB_KEY);
         let restored = savedId
           ? await api<AnalysisJob>(`/api/lots/analysis-jobs/${savedId}`)
-          : await api<AnalysisJob | null>("/api/lots/analysis-jobs/active");
+          : null;
+        if (requestedLotUrl && restored?.input_label !== requestedLotUrl) {
+          restored = null;
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+        }
+        if (!requestedLotUrl && !restored) {
+          restored = await api<AnalysisJob | null>("/api/lots/analysis-jobs/active");
+        }
         const lastId = localStorage.getItem(LAST_JOB_KEY);
-        if (!restored && lastId) {
+        if (!requestedLotUrl && !restored && lastId) {
           restored = await api<AnalysisJob>(`/api/lots/analysis-jobs/${lastId}`);
+        }
+        if (
+          restored?.status === "completed"
+          && restored.result?.lot?.title?.toLowerCase().includes("не удалось проанализировать")
+        ) {
+          localStorage.removeItem(LAST_JOB_KEY);
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          restored = null;
         }
         if (cancelled || !restored) return;
         setJob(restored);
-        if (restored.status === "completed") applyCompletedJob(restored);
+        if (restored.status === "completed") applyCompletedJob(restored, false);
         else if (restored.status === "failed") {
           localStorage.removeItem(ACTIVE_JOB_KEY);
           setError("Предыдущий анализ не завершился. Запустите его ещё раз.");
@@ -369,7 +462,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [requestedLotUrl]);
 
   // Сервер выполняет работу независимо от вкладки; UI только читает состояние.
   useEffect(() => {
@@ -470,10 +563,9 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
           history,
         }),
       });
-      setMessages((current) => [
-        ...current,
-        chatMessage("assistant", response.answer, undefined, response.actions),
-      ]);
+      const responseMessage = chatMessage("assistant", response.answer, undefined, response.actions);
+      setTypingMessageId(responseMessage.id);
+      setMessages((current) => [...current, responseMessage]);
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : "AI-чат временно недоступен. Попробуйте ещё раз.");
     } finally {
@@ -562,15 +654,18 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     setChatSessions((current) => [newSession, ...current.filter((item) => item.messages.length)].slice(0, 30));
     setActiveChatId(newSession.id);
     setMessages([]);
+    setTypingMessageId(null);
     setAutoTitle("");
     clearActiveAnalysis();
     localStorage.removeItem(CHAT_STORAGE_KEY);
   }
 
   async function openChat(session: ChatSession) {
+    setOpenChatMenuId(null);
     if (session.id === activeChatId || loading || chatBusy) return;
     setActiveChatId(session.id);
     setMessages(session.messages);
+    setTypingMessageId(null);
     setAutoTitle("");
     clearActiveAnalysis();
     const analysisJobId = [...session.messages]
@@ -584,6 +679,35 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     } catch {
       // Текст старого диалога остаётся доступным, даже если серверный анализ удалён.
     }
+  }
+
+  function deleteChat(session: ChatSession) {
+    if (loading || chatBusy) return;
+    if (!window.confirm(`Удалить чат «${session.title}»? Это действие нельзя отменить.`)) return;
+
+    setOpenChatMenuId(null);
+    const remaining = chatSessions.filter((item) => item.id !== session.id);
+    if (session.id !== activeChatId) {
+      setChatSessions(remaining);
+      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(remaining));
+      return;
+    }
+
+    const blank: ChatSession = {
+      id: createLocalId(),
+      title: "Новый чат",
+      updatedAt: new Date().toISOString(),
+      messages: [],
+    };
+    const next = [blank, ...remaining].slice(0, 30);
+    setChatSessions(next);
+    localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
+    localStorage.setItem(ACTIVE_CHAT_KEY, blank.id);
+    setActiveChatId(blank.id);
+    setMessages([]);
+    setTypingMessageId(null);
+    setAutoTitle("");
+    clearActiveAnalysis();
   }
 
   function downloadDocx(kind: "complaint" | "report") {
@@ -627,6 +751,14 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   );
   const sourceUrl = resolveLotSourceUrl(result?.lot.source_url, result?.lot.lot_id)
     ?? (job?.kind === "url" && /^https?:\/\//i.test(job.input_label) ? job.input_label : undefined);
+  const jobProgress = Math.max(3, job?.progress ?? 3);
+  const isVerifyingSources = loading && jobProgress >= 18 && jobProgress < 82;
+  const loadingTitle = isVerifyingSources
+    ? "Ещё немного — проверяем требования по источникам"
+    : (job?.stage || "Запускаю анализ");
+  const loadingNote = isVerifyingSources
+    ? "Читаем официальные вложения и сверяем каждую цитату."
+    : "Можно обновить страницу — задача сохранена на сервере.";
 
   return (
     <LayoutOrEmbed embedded={embedded} plainBackground>
@@ -648,18 +780,45 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
                 {[...chatSessions]
                   .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
                   .map((session) => (
-                    <button
-                      type="button"
+                    <div
                       key={session.id}
-                      onClick={() => void openChat(session)}
-                      className={`group flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2.5 text-left transition ${session.id === activeChatId ? "bg-white/[0.075] text-white" : "text-white/45 hover:bg-white/[0.04] hover:text-white/75"}`}
+                      className={`group relative flex w-full items-start rounded-xl transition ${session.id === activeChatId ? "bg-white/[0.075] text-white" : "text-white/45 hover:bg-white/[0.04] hover:text-white/75"}`}
                     >
-                      <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-55" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium">{session.title}</span>
-                        <span className="mt-1 block text-[10px] text-white/25">{formatChatDate(session.updatedAt)}</span>
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => void openChat(session)}
+                        className="flex min-w-0 flex-1 items-start gap-2.5 px-2.5 py-2.5 pr-9 text-left"
+                      >
+                        <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-55" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium">{session.title}</span>
+                          <span className="mt-1 block text-[10px] text-white/25">{formatChatDate(session.updatedAt)}</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Действия с чатом «${session.title}»`}
+                        aria-expanded={openChatMenuId === session.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenChatMenuId((current) => current === session.id ? null : session.id);
+                        }}
+                        className="absolute right-1.5 top-2 inline-flex h-7 w-7 items-center justify-center rounded-lg text-white/30 opacity-0 transition hover:bg-white/[0.08] hover:text-white/75 focus:opacity-100 group-hover:opacity-100"
+                      >
+                        <MoreHorizontal size={15} />
+                      </button>
+                      {openChatMenuId === session.id && (
+                        <div className="absolute right-1.5 top-9 z-20 w-36 rounded-xl border border-white/[0.1] bg-[#171717] p-1 shadow-2xl">
+                          <button
+                            type="button"
+                            onClick={() => deleteChat(session)}
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-red-300/85 transition hover:bg-red-400/[0.09] hover:text-red-200"
+                          >
+                            <Trash2 size={14} /> Удалить чат
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ))}
               </div>
               <p className="px-2 pb-1 pt-3 text-[10px] leading-4 text-white/20">Диалоги сохраняются в этом браузере.</p>
@@ -670,7 +829,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
                 <div className="mx-auto max-w-[900px] space-y-7">
                   {autoTitle && <div className="mx-auto w-fit rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-1.5 text-xs text-emerald-200/75">Выбран из каталога: {autoTitle}</div>}
                   {messages.map((message) => message.role === "user" ? <UserBubble key={message.id}>{message.content}</UserBubble> : <AssistantBubble key={message.id}>
-                    <div className="whitespace-pre-wrap text-sm leading-6 text-white/68">{cleanAssistantText(message.content)}</div>
+                    <div className="whitespace-pre-wrap text-sm leading-6 text-white/68"><TypewriterText text={cleanAssistantText(message.content)} active={message.id === typingMessageId} /></div>
                     {message.actions?.some((action) => /^\/dashboard(?:\/|$)/.test(action.href)) && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {message.actions
@@ -679,10 +838,10 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
                           .map((action) => <Link key={action.href} to={action.href} className="inline-flex h-9 items-center rounded-xl border border-emerald-400/20 bg-emerald-400/[0.07] px-3 text-xs font-medium text-emerald-200/85 transition hover:bg-emerald-400/[0.12] hover:text-emerald-100">{action.label}</Link>)}
                       </div>
                     )}
-                    {message.analysisJobId === job?.id && result ? <div className="mt-4"><AnalysisSnapshot result={result} needsReview={resultNeedsReview} sourceUrl={sourceUrl} onReset={reset} onDownload={downloadDocx} /></div> : null}
+                    {message.analysisJobId === job?.id && result ? <div className="mt-4"><AnalysisSnapshot result={result} needsReview={resultNeedsReview} sourceUrl={sourceUrl} onReset={reset} onDownload={downloadDocx} animate={message.id === typingMessageId} /></div> : null}
                   </AssistantBubble>)}
 
-                  {loading && <AssistantBubble><div role="status" aria-busy="true" aria-label="Идёт AI-анализ" className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.045] p-5"><div className="flex items-center justify-between gap-4"><div><p className="text-sm font-medium text-emerald-200">{job?.stage || "Запускаю анализ"}</p><p className="mt-1 text-xs text-white/35">Можно обновить страницу — задача сохранена на сервере.</p></div><span className="text-xs tabular-nums text-emerald-300">{job?.progress ?? 3}%</span></div><div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-700" style={{ width: `${Math.max(3, job?.progress ?? 3)}%` }} /></div></div></AssistantBubble>}
+                  {loading && <AssistantBubble><div role="status" aria-busy="true" aria-label="Идёт AI-анализ" className="rounded-2xl border border-emerald-400/15 bg-emerald-400/[0.045] p-5"><div className="flex items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-3">{isVerifyingSources ? <AnalysisOrbit /> : <Sparkles size={18} className="shrink-0 animate-pulse text-emerald-300/70" />}<div><p className="text-sm font-medium text-emerald-200">{loadingTitle}</p><p className="mt-1 text-xs text-white/35">{loadingNote}</p></div></div><span className="text-xs tabular-nums text-emerald-300">{jobProgress}%</span></div><div className="relative mt-4 h-1 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-700" style={{ width: `${jobProgress}%` }} />{isVerifyingSources && <span className="analysis-progress-sheen" />}</div></div></AssistantBubble>}
 
                   {chatBusy && <AssistantBubble><div className="flex items-center gap-2 text-sm text-white/42"><span className="flex gap-1"><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-.2s]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-.1s]" /><i className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300" /></span>Думаю…</div></AssistantBubble>}
 
@@ -709,24 +868,29 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   );
 }
 
-function AnalysisSnapshot({ result, needsReview, sourceUrl, onReset, onDownload }: { result: AnalysisResponse; needsReview: boolean; sourceUrl?: string; onReset: () => void; onDownload: (kind: "complaint" | "report") => void }) {
+function AnalysisSnapshot({ result, needsReview, sourceUrl, onReset, onDownload, animate = false }: { result: AnalysisResponse; needsReview: boolean; sourceUrl?: string; onReset: () => void; onDownload: (kind: "complaint" | "report") => void; animate?: boolean }) {
   const lot = result.lot;
   const budget = lot.budget_kzt ?? lot.amount_kzt;
   const risk = result.legal?.overall_risk || "needs_review";
+  const [fullOpen, setFullOpen] = useState(false);
   return (
-    <div className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#111314]">
-      <div className="border-b border-white/[0.06] p-5 sm:p-6">
+    <div className={`overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#111314] ${animate ? "analysis-result-card" : ""}`}>
+      <div className="analysis-result-section border-b border-white/[0.06] p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0"><div className="mb-2 flex flex-wrap gap-2"><span className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.07] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-emerald-300">Лот {lot.lot_id}</span><span className={`rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider ${needsReview ? "border-amber-400/20 bg-amber-400/[0.06] text-amber-300" : "border-white/[0.08] text-white/40"}`}>{riskLabel(risk)}</span></div><h3 className="max-w-3xl text-xl font-medium leading-7 tracking-[-.025em] text-white">{lot.title}</h3><p className="mt-2 text-sm text-white/42">{lot.customer || "Заказчик не указан"}{lot.deadline ? ` · подача до ${lot.deadline}` : ""}</p></div>{budget ? <p className="shrink-0 text-lg font-medium text-white">{budget.toLocaleString("ru-RU")} ₸</p> : null}</div>
         {lot.summary && <p className="mt-4 max-w-3xl text-sm leading-6 text-white/55">{lot.summary}</p>}
-        {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 text-xs text-emerald-300/75 transition hover:text-emerald-200">Открыть первоисточник на Госзакупках <ExternalLink size={13} /></a>}
+        <div className="mt-4 flex flex-wrap items-center gap-2.5">
+          <button type="button" onClick={() => setFullOpen((current) => !current)} aria-expanded={fullOpen} className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.07] px-3 text-xs font-medium text-emerald-200/90 transition hover:bg-emerald-400/[0.12] hover:text-emerald-100">Открыть полный разбор и скачать документы <ChevronDown size={14} className={`transition-transform duration-300 ${fullOpen ? "rotate-180" : ""}`} /></button>
+          {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-1.5 px-2 text-xs text-emerald-300/65 transition hover:text-emerald-200">Первоисточник на Госзакупках <ExternalLink size={13} /></a>}
+        </div>
       </div>
-      <div className="grid grid-cols-3 divide-x divide-white/[0.06] border-b border-white/[0.06]"><div className="p-4 sm:px-6"><p className="text-xl font-medium text-white">{lot.requirements?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">требований</p></div><div className="p-4 sm:px-6"><p className="text-xl font-medium text-white">{lot.documents_required?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">документов</p></div><div className="p-4 sm:px-6"><p className={`text-xl font-medium ${lot.red_flags?.length ? "text-amber-300" : "text-emerald-300"}`}>{lot.red_flags?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">рисков</p></div></div>
-      <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
-        <div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-300/75">Что требуется</p><ul className="mt-3 space-y-2.5">{lot.requirements?.length ? lot.requirements.slice(0, 5).map((item, index) => <li key={`${item.code}-${index}`} className="flex gap-2.5 text-sm leading-5 text-white/58"><span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-emerald-400/20 text-[8px] text-emerald-300">✓</span><span>{item.title}{item.is_mandatory ? <b className="ml-1 font-medium text-amber-300/75">обязательно</b> : null}</span></li>) : <li className="text-sm text-white/35">Требования в сохранённом разборе не найдены.</li>}</ul></div>
+      <div className="analysis-result-section grid grid-cols-3 divide-x divide-white/[0.06] border-b border-white/[0.06]"><div className="p-4 sm:px-6"><p className="text-xl font-medium text-white">{lot.requirements?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">требований</p></div><div className="p-4 sm:px-6"><p className="text-xl font-medium text-white">{lot.documents_required?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">документов</p></div><div className="p-4 sm:px-6"><p className={`text-xl font-medium ${lot.red_flags?.length ? "text-amber-300" : "text-emerald-300"}`}>{lot.red_flags?.length || 0}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-white/28">рисков</p></div></div>
+      <div className="analysis-result-section grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
+        <div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-300/75">Что требуется</p><ul className="mt-3 space-y-3">{lot.requirements?.length ? lot.requirements.slice(0, 8).map((item, index) => <li key={`${item.code || item.name}-${index}`} className={`flex gap-2.5 text-sm leading-5 text-white/58 ${animate ? "analysis-result-line" : ""}`} style={animate ? { animationDelay: `${260 + index * 55}ms` } : undefined}><span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-emerald-400/20 text-[8px] text-emerald-300">✓</span><span><span className="text-white/75">{requirementTitle(item)}</span>{requirementIsMandatory(item) ? <b className="ml-1 font-medium text-amber-300/75">обязательно</b> : null}{requirementDescription(item) ? <span className="mt-0.5 block text-xs text-white/40">{requirementDescription(item)}</span> : null}{item.source_quote ? <q className="mt-1 block text-[11px] text-emerald-200/45">{item.source_quote}</q> : null}</span></li>) : <li className="text-sm text-white/35">Подтверждённые требования не найдены.</li>}</ul></div>
         <div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-300/75">Документы</p><ul className="mt-3 space-y-2.5">{lot.documents_required?.length ? lot.documents_required.slice(0, 5).map((item, index) => <li key={`${item}-${index}`} className="flex gap-2.5 text-sm leading-5 text-white/58"><FileCheck2 size={14} className="mt-0.5 shrink-0 text-white/30" /><span>{item}</span></li>) : <li className="text-sm text-white/35">Список документов не найден.</li>}</ul></div>
       </div>
+      {lot.source_documents?.length ? <div className="mx-5 mb-5 rounded-xl border border-white/[0.07] bg-black/20 px-4 py-3 sm:mx-6"><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-white/35">Официальные источники</p><div className="mt-2 flex flex-wrap gap-2">{lot.source_documents.map((document) => <a key={`${document.url}-${document.name}`} href={document.url} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition ${document.extracted ? "border-emerald-400/20 text-emerald-200/70 hover:bg-emerald-400/[0.06]" : "border-amber-400/20 text-amber-200/70"}`}><FileCheck2 size={13} />{document.name}{document.extracted ? " · прочитан" : " · не прочитан"}<ExternalLink size={11} /></a>)}</div></div> : null}
       {needsReview && <div className="mx-5 mb-5 rounded-xl border border-amber-400/15 bg-amber-400/[0.05] px-4 py-3 text-xs leading-5 text-amber-100/65 sm:mx-6">Часть данных требует ручной проверки: {result.incomplete_reason || "не все сведения удалось однозначно подтвердить"}.</div>}
-      <details className="group border-t border-white/[0.06]"><summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-xs font-medium text-white/50 transition hover:bg-white/[0.025] hover:text-white sm:px-6">Открыть полный разбор и скачать документы <ChevronDown size={15} className="transition group-open:rotate-180" /></summary><div className="border-t border-white/[0.05] bg-black/15 p-5 sm:p-6"><ResultView result={result} onReset={onReset} onDownload={onDownload} /></div></details>
+      <div className={`grid transition-[grid-template-rows,opacity] duration-500 ease-out ${fullOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`} aria-hidden={!fullOpen}><div className="overflow-hidden"><div className="border-t border-white/[0.05] bg-black/15 p-5 sm:p-6"><ResultView result={result} onReset={onReset} onDownload={onDownload} /></div></div></div>
     </div>
   );
 }
@@ -743,77 +907,6 @@ function riskLabel(risk?: string) {
   if (risk === "medium") return "Средний";
   if (risk === "low") return "Низкий";
   return "Не определён — нужна проверка";
-}
-
-function ProfitCalculator({ budget, lotId }: { budget: number; lotId: string }) {
-  const storageKey = `tendr_margin_inputs:${lotId}`;
-  const [cost, setCost] = useState("");
-  const [logistics, setLogistics] = useState("");
-  const [taxes, setTaxes] = useState("");
-  const [overhead, setOverhead] = useState("");
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
-      if (saved) {
-        setCost(saved.cost || "");
-        setLogistics(saved.logistics || "");
-        setTaxes(saved.taxes || "");
-        setOverhead(saved.overhead || "");
-      }
-    } catch {
-      // Повреждённые локальные данные просто игнорируются.
-    }
-  }, [storageKey]);
-
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify({ cost, logistics, taxes, overhead }));
-  }, [storageKey, cost, logistics, taxes, overhead]);
-
-  const calculation = useMemo(() => {
-    const values = [cost, logistics, taxes, overhead].map((value) => Number(value) || 0);
-    const totalCosts = values.reduce((sum, value) => sum + value, 0);
-    const profit = budget - totalCosts;
-    return { totalCosts, profit, margin: budget > 0 ? (profit / budget) * 100 : 0 };
-  }, [budget, cost, logistics, taxes, overhead]);
-  const hasInputs = [cost, logistics, taxes, overhead].some((value) => value.trim());
-
-  return (
-    <section className="rounded-lg border border-white/10 bg-[var(--bg-elevated)] p-5">
-      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-300">Калькулятор фактической маржи</p>
-          <h3 className="mt-1 text-lg font-semibold">Подставьте свои расходы</h3>
-        </div>
-        <p className="text-sm text-[var(--text-muted)]">Бюджет: {budget.toLocaleString("ru-RU")} ₸</p>
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          ["Себестоимость", cost, setCost],
-          ["Логистика", logistics, setLogistics],
-          ["Налоги", taxes, setTaxes],
-          ["Прочие расходы", overhead, setOverhead],
-        ].map(([label, value, setter]) => (
-          <label key={label as string} className="text-xs text-[var(--text-muted)]">
-            {label as string}, ₸
-            <input
-              inputMode="decimal"
-              value={value as string}
-              onChange={(event) => (setter as React.Dispatch<React.SetStateAction<string>>)(event.target.value.replace(/[^0-9.]/g, ""))}
-              placeholder="0"
-              className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-black/20 px-3 text-sm text-[var(--text)] outline-none focus:border-emerald-400/50"
-            />
-          </label>
-        ))}
-      </div>
-      <div className="mt-4 grid gap-3 rounded-xl border border-white/[0.07] bg-black/20 p-4 sm:grid-cols-3">
-        <div><p className="text-xs text-[var(--text-subtle)]">Всего расходов</p><p className="mt-1 font-semibold">{calculation.totalCosts.toLocaleString("ru-RU")} ₸</p></div>
-        <div><p className="text-xs text-[var(--text-subtle)]">Расчётная прибыль</p><p className={`mt-1 font-semibold ${calculation.profit < 0 ? "text-red-400" : "text-emerald-300"}`}>{hasInputs ? `${calculation.profit.toLocaleString("ru-RU")} ₸` : "—"}</p></div>
-        <div><p className="text-xs text-[var(--text-subtle)]">Ваша маржа</p><p className={`mt-1 font-semibold ${calculation.margin < 0 ? "text-red-400" : "text-emerald-300"}`}>{hasInputs ? `${calculation.margin.toFixed(1)}%` : "—"}</p></div>
-      </div>
-      <p className="mt-3 text-xs text-[var(--text-subtle)]">Расчёт хранится только в этом браузере и зависит от введённых вами затрат.</p>
-    </section>
-  );
 }
 
 function ResultView({
@@ -1016,7 +1109,7 @@ function ResultView({
         </div>
       )}
 
-      {lotBudget && lotBudget > 0 && <ProfitCalculator budget={lotBudget} lotId={lot.lot_id} />}
+      {lotBudget && lotBudget > 0 && <BidCalculator budgetKzt={lotBudget} lotId={lot.lot_id} lotTitle={lot.title} />}
 
       {lot.red_flags?.length > 0 && (
         <section
@@ -1055,16 +1148,18 @@ function ResultView({
             {lot.requirements.map((r, i) => (
               <li key={i} className="border-l-4 border-brand pl-3">
                 <div className="font-medium">
-                  {r.title}
-                  {r.is_mandatory && (
+                  {requirementTitle(r)}
+                  {requirementIsMandatory(r) && (
                     <span className="ml-2 text-xs text-red-600">
                       {t("analyze.requirements.mandatory")}
                     </span>
                   )}
                 </div>
                 <div className="text-sm text-slate-600 dark:text-slate-300">
-                  {r.description}
+                  {requirementDescription(r)}
                 </div>
+                {r.source_quote && <q className="mt-1 block text-xs text-emerald-700 dark:text-emerald-300/65">{r.source_quote}</q>}
+                {r.source_document && <p className="mt-1 text-[11px] text-slate-500">Источник: {r.source_document}</p>}
               </li>
             ))}
           </ul>

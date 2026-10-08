@@ -63,6 +63,7 @@ async def test_assistant_chat_is_grounded_in_owned_completed_job(monkeypatch) ->
     assert "Поставка фильтров" in captured["messages"][0].content
     assert "Никогда не придумывай" in captured["messages"][0].content
     assert "/dashboard/lots" in captured["messages"][0].content
+    assert "Расчёт заявки" in captured["messages"][0].content
     assert "до 60 слов" in captured["messages"][0].content
 
 

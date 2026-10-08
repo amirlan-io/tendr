@@ -20,9 +20,10 @@ from app.api.account import (
 )
 from app.db import Base, repo
 from app.db.models import Analysis, QuotaReservation, Subscription, User
-from app.schemas.lot import LotAnalysis, LotCreate
-from app.services.goszakup_parser import ParsedLot
-from app.services.orchestrator import LotOrchestrator
+from app.schemas.lot import LotAnalysis, LotCreate, RequirementItem
+from app.services.goszakup_parser import GoszakupParser, ParsedLot
+from app.services.official_documents import _safe_official_url
+from app.services.orchestrator import LotOrchestrator, _requirement_has_evidence
 from app.services.outreach import LeximoCallProvider, outreach_capabilities
 from app.services.scoring import estimate_margin_pct, get_customer_score
 
@@ -40,6 +41,63 @@ async def session():
 
 def test_unknown_legal_risk_never_becomes_participate() -> None:
     assert LotOrchestrator._make_recommendation(risk="needs_review", trust=95, margin_pct=40) == "review"
+
+
+def test_requirement_is_shown_only_with_verbatim_source_quote() -> None:
+    source = "Металлический каркас — труба 25х25 мм. Фанера не менее 8 мм."
+    confirmed = RequirementItem(
+        name="Каркас",
+        value="Труба 25х25 мм",
+        source_quote="Металлический каркас — труба 25х25 мм.",
+    )
+    invented = RequirementItem(
+        name="Гарантия",
+        value="Три года",
+        source_quote="Гарантия три года",
+    )
+    assert _requirement_has_evidence(confirmed, source) is True
+    assert _requirement_has_evidence(invented, source) is False
+
+
+def test_official_document_url_rejects_non_goszakup_hosts() -> None:
+    official = "https://ows.goszakup.gov.kz/download/trd_buy_lots_list/example"
+    assert _safe_official_url(official) == official
+    assert _safe_official_url("https://evil.example/document.docx") is None
+    assert _safe_official_url("http://ows.goszakup.gov.kz/document.docx") is None
+
+
+@pytest.mark.asyncio
+async def test_v3_lot_files_are_mapped_from_official_api() -> None:
+    parser = GoszakupParser()
+    await parser.close()
+    response = SimpleNamespace(
+        status_code=200,
+        json=lambda: {
+            "data": {
+                "Lots": [
+                    {
+                        "id": 43491793,
+                        "Files": [
+                            {
+                                "id": 227122962,
+                                "filePath": "https://ows.goszakup.gov.kz/download/example",
+                                "originalName": "Парты.docx",
+                                "objectId": 43491793,
+                                "nameRu": "Техническая спецификация",
+                                "nameKz": "Техникалық ерекшелік",
+                                "indexDate": "2026-10-07 19:40:39",
+                                "systemId": 3,
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    parser._client = SimpleNamespace(post=AsyncMock(return_value=response))
+    mapped = await parser._fetch_lot_files_via_graphql_v3(17686160)
+    assert mapped["43491793"][0]["original_name"] == "Парты.docx"
+    assert mapped["43491793"][0]["name_ru"] == "Техническая спецификация"
 
 
 @pytest.mark.asyncio
