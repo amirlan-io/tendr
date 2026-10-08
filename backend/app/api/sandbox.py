@@ -27,7 +27,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.supplier_agent import SupplierAgent, dedupe_requirements
+from app.agents.supplier_agent import (
+    SupplierAgent, dedupe_requirements, has_mandatory_mismatch, has_supported_match,
+)
 from app.core.supabase_auth import SupabaseUser, require_supabase_user, supabase_client_id
 from app.db import get_db
 from app.db import repo as db_repo
@@ -125,8 +127,8 @@ async def run_supplier_sandbox(
         page_fetch_top_n=payload.page_fetch_top_n,
         region_hint=payload.regions[0] if payload.regions else lot_region,
         company_terms=company_terms,
-        # Сначала дешёвые фильтры и limit, затем дорогая LLM-сверка.
-        perform_matching=False,
+        # Сверка и резервный поиск выполняются единым конвейером.
+        perform_matching=True,
     )
 
     applied, filter_stats = _apply_filters(
@@ -137,26 +139,35 @@ async def run_supplier_sandbox(
         only_direct=payload.only_direct,
         only_with_price=payload.only_with_price,
         only_with_contacts=payload.only_with_contacts,
-        budget_kzt=budget_kzt,
+        budget_kzt=None,  # Retain budget rejections in the visible audit below.
     )
-    applied = applied[: payload.limit]
-
-    # Сверяем только тот шорт-лист, который реально увидит пользователь.
-    # Раньше LLM обрабатывала все 20 карточек до фильтров и одинаковая
-    # «стоимость» вводила в заблуждение.
-    match_costs = await agent.match_requirements(applied, requirements)
-    costs.merge(match_costs)
-    agent.assess_budget(applied, requirements, budget_kzt)
+    # После отклонения первых кандидатов проверяем следующие: лимит
+    # отображения не должен скрывать подходящего поставщика в конце выдачи.
     within_budget = []
-    for candidate in applied:
-        if budget_kzt and candidate.budget_status == "over_budget":
-            filter_stats["dropped_budget"] += 1
-            continue
-        within_budget.append(candidate)
-    applied = sorted(
-        within_budget,
-        key=lambda c: (-c.score, c.domain.lower(), c.url.lower()),
-    )
+    rejected = []
+    filter_stats["dropped_mandatory"] = 0
+    filter_stats["dropped_unconfirmed"] = 0
+    for offset in range(0, len(applied), payload.limit):
+        batch = applied[offset:offset + payload.limit]
+        if not meta.get("matching_completed"):
+            costs.merge(await agent.match_requirements(batch, requirements))
+            agent.assess_budget(batch, requirements, budget_kzt)
+        for candidate in batch:
+            reason = None
+            if has_mandatory_mismatch(candidate, requirements):
+                filter_stats["dropped_mandatory"] += 1
+                reason = "mandatory_mismatch"
+            elif budget_kzt and candidate.budget_status == "over_budget":
+                filter_stats["dropped_budget"] += 1
+                reason = "over_budget"
+            elif not has_supported_match(candidate, requirements):
+                filter_stats["dropped_unconfirmed"] += 1
+                reason = "unconfirmed"
+            if reason:
+                rejected.append({**_card(candidate), "rejection_reason": reason})
+            else:
+                within_budget.append(candidate)
+    applied = _select_shortlist(within_budget, requirements, payload.limit)
 
     if payload.save_results and applied:
         await srepo.replace_candidates(
@@ -195,15 +206,21 @@ async def run_supplier_sandbox(
             "queries": meta.get("queries", []),
             "direct_queries": meta.get("direct_queries", []),
             "planned_queries": meta.get("planned_queries", []),
-            "search_call_limit": meta.get("search_call_limit", 0),
             "search_calls_attempted": meta.get("search_calls_attempted", 0),
             "resolution_gaps": meta.get("resolution_gaps", []),
+            "search_call_limit": meta.get("search_call_limit"),
+            "missing_product_codes": meta.get("missing_product_codes", []),
+            "verification_gaps": meta.get("verification_gaps", []),
+            "recovery_queries": meta.get("recovery_queries", []),
             "found_before_filters": meta.get("candidates_count", 0),
             "blocked_filtered": meta.get("blocked_filtered", 0),
             # Сколько кандидатов отсеял каждый фильтр: раньше потеря
             # 20 → 1 была видна только как разница в total.
             "filtered_out": filter_stats,
             "pages_read": costs.page_fetch_count,
+            "browser_worker_pages": sum(
+                c.sources.get("page_content") == "ssh_browser" for c in candidates
+            ),
             "personalization": context_block,
             "filters_applied": {
                 "regions": payload.regions,
@@ -228,7 +245,9 @@ async def run_supplier_sandbox(
         },
         "duration_sec": round(time.monotonic() - started, 1),
         "total": len(applied),
+        "budget_summary": agent.summarize_lot_budget(applied, requirements, budget_kzt),
         "candidates": [_card(c) for c in applied],
+        "rejected_candidates": rejected,
     }
 
 
@@ -248,9 +267,32 @@ def _card(candidate) -> dict[str, Any]:
         "phone": card["phone"],
         "estimated_total_kzt": card["estimated_total_kzt"],
         "budget_status": card["budget_status"],
+        "sources": card["sources"],
         "requirement_matches": match["requirement_matches"],
         "warnings": match["warnings"],
     }
+
+
+def _select_shortlist(candidates, requirements, limit):
+    """Give each lot position a place before filling the display limit."""
+    ranked = sorted(candidates, key=lambda c: (-c.score, c.domain.lower(), c.url.lower()))
+    selected = []
+    selected_urls = set()
+    for req in requirements:
+        offers = [(c, m) for c in ranked for m in c.requirement_matches
+                  if m.get("code") == req.code and m.get("status") in {"fits", "partial"}]
+        offers.sort(key=lambda pair: (
+            pair[1]["status"] != "fits",
+            pair[0].price_kzt is None or pair[0].sources.get("price") != pair[0].url,
+        ))
+        if offers:
+            best = offers[0][0]
+            if best.url not in selected_urls:
+                selected.append(best)
+                selected_urls.add(best.url)
+        if len(selected) >= limit:
+            break
+    return (selected + [c for c in ranked if c.url not in selected_urls])[:limit]
 
 
 def _apply_filters(

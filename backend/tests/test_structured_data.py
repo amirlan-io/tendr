@@ -354,11 +354,11 @@ def test_table_with_header():
     assert records[0].name == "Регулятор Madas FRG/2MC DN 50"
 
 
-def test_table_without_header_price_left_of_name():
+def test_table_without_header_requires_currency():
     html = _page(
         """
         <table>
-          <tr><td>33 000</td><td>Фильтр для топлива</td></tr>
+          <tr><td>33 000 ₸</td><td>Фильтр для топлива</td></tr>
         </table>
         """
     )
@@ -372,7 +372,7 @@ def test_table_row_without_numbers_skipped():
         """
         <table>
           <tr><td>Итого</td><td>нет данных</td></tr>
-          <tr><td>12 000</td><td>Товар</td></tr>
+          <tr><td>12 000 ₸</td><td>Товар</td></tr>
         </table>
         """
     )

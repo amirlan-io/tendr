@@ -122,7 +122,7 @@ async def search_suppliers(
     profile = await srepo.get_or_create_company_profile(session, user.id)
     company_terms = [str(value) for value in (profile.categories or []) if value][:5]
 
-    from app.agents.supplier_agent import SupplierAgent
+    from app.agents.supplier_agent import SupplierAgent, has_mandatory_mismatch, has_supported_match
 
     agent = SupplierAgent()
     candidates, costs, meta = await agent.find_suppliers(
@@ -135,7 +135,9 @@ async def search_suppliers(
     )
     # Известная расчётная стоимость выше бюджета не должна попадать в
     # рабочий шорт-лист. Кандидаты без цены остаются с честным «нет данных».
-    candidates = [c for c in candidates if c.budget_status != "over_budget"]
+    candidates = [c for c in candidates if c.budget_status != "over_budget"
+                  and not has_mandatory_mismatch(c, requirements)
+                  and has_supported_match(c, requirements)]
 
     rows = await srepo.replace_candidates(
         session,

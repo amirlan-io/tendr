@@ -295,17 +295,19 @@ def test_recovery_query_keeps_mandatory_regulator_specs() -> None:
 @pytest.mark.asyncio
 async def test_remaining_search_call_targets_unresolved_requirement(monkeypatch) -> None:
     from app.agents.supplier_agent import Costs
+    from app.agents import supplier_agent as module
+    from types import SimpleNamespace
 
+    monkeypatch.setattr(module, "get_settings", lambda: SimpleNamespace(
+        supplier_search_max_calls=2, tavily_api_key="", browser_use_api_key=""))
     agent = SupplierAgent()
+    agent._tavily_client = object()
     req = Requirement(
         code="2",
         title="Регулятор давления",
         description="Стальной, фланцевый, проход 80 мм, давление 60,3 Мпа",
     )
     calls: list[str] = []
-
-    async def fake_build_queries(*_args, **_kwargs):
-        return ["Регулятор давления 60,3 Мпа 80 мм фланцевый"], Costs()
 
     async def fake_search_web(queries, **_kwargs):
         query = queries[0]
@@ -321,12 +323,28 @@ async def test_remaining_search_call_targets_unresolved_requirement(monkeypatch)
             url = "https://supplier.kz/regulator-603"
         return ([{"title": "Регулятор давления", "url": url, "content": content, "score": 1.0}], Costs(tavily_calls=1, tavily_attempts=1))
 
-    monkeypatch.setattr(agent, "build_queries", fake_build_queries)
+    async def fake_pages(cards, **_kwargs):
+        for candidate in cards:
+            if "45 000" in candidate.evidence_text:
+                candidate.price_kzt = 45_000
+                candidate.sources["price"] = candidate.url
+        return Costs()
+
+    async def fake_match(cards, requirements):
+        for candidate in cards:
+            matched, total = evidence_coverage(req, candidate.evidence_text)
+            candidate.requirement_matches = [{"code": req.code,
+                "status": "fits" if matched == total else "unknown"}]
+        return Costs()
+
+    monkeypatch.setattr(agent, "enrich_with_pages", fake_pages)
+    monkeypatch.setattr(agent, "match_requirements", fake_match)
     monkeypatch.setattr(agent, "search_web", fake_search_web)
     candidates, costs, meta = await agent.find_suppliers(
         [req],
-        enrich_browser=False,
-        perform_matching=False,
+        enrich_browser=True,
+        perform_matching=True,
+        allow_browser_fallback=False,
     )
 
     assert len(calls) == 2

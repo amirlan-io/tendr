@@ -199,7 +199,12 @@ def get_llm() -> LLMProvider:
             _provider = primary
     else:
         # openai-compatible = alemLLM (qwen3-6) по умолчанию
-        primary = _make_alem_from_settings(s)
+        if s.llm_provider == "openai-compatible":
+            from app.llm.openai_compat import OpenAICompatProvider
+            primary = OpenAICompatProvider(api_key=s.llm_api_key, base_url=s.llm_base_url,
+                                           model=s.llm_model, embed_model=s.llm_embedding_model)
+        else:
+            primary = _make_alem_from_settings(s)
         if s.llm_api_key_fallback:
             # Mistral как fallback — используем LLM_API_KEY_FALLBACK (Mistral-ключ)
             fallback = MistralProvider(api_key=s.llm_api_key_fallback)

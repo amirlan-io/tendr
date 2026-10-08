@@ -1,0 +1,7 @@
+{
+  "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+  "model": "bu-mini",
+  "task": "read a public product card; no login or purchase",
+  "error_type": "BrowserUseError",
+  "error_summary": "Task failed: 402: You need at least $1.00 in credits. Current balance: $0.00"
+}

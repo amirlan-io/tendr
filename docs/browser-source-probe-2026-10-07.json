@@ -1,0 +1,6 @@
+{
+  "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+  "task": "read a public product card; no login or purchase",
+  "error_type": "BrowserUseError",
+  "error_summary": "Task failed: 403: Model 'gpt-5.4-mini' is not available on the free plan. Choose a free-plan model or buy credits to unlock all models."
+}

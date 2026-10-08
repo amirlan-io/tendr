@@ -1,0 +1,848 @@
+{
+  "base_commit": "95dd0b0",
+  "local_code_fixes": true,
+  "model": "ag/gemini-3.7-flash-low",
+  "scope": "synthetic specifications, real LLM/Tavily/pages, isolated SQLite, no saved shortlist or outreach",
+  "runs": [
+    {
+      "name": "sandbox_filter_and_regulator",
+      "seconds": 116.0,
+      "result": {
+        "lot_id": "benchmark-synthetic",
+        "lot_url": null,
+        "requirements": [
+          {
+            "code": "filter",
+            "title": "Топливный фильтр",
+            "description": "Для ДВС легкового автомобиля. Количество 10 шт.",
+            "mandatory": true
+          },
+          {
+            "code": "regulator",
+            "title": "Регулятор давления",
+            "description": "Стальной, фланцевый, проход 80 мм, давление 60,3 МПа. Количество 1 шт.",
+            "mandatory": true
+          }
+        ],
+        "trace": {
+          "queries": [
+            "Топливный фильтр автомобиля",
+            "Регулятор давления 80 мм 60,3 МПа Стальной фланцевый",
+            "Топливный фильтр Казахстан",
+            "Топливный фильтр автомобиля цена Казахстан"
+          ],
+          "direct_queries": [],
+          "search_call_limit": 4,
+          "missing_product_codes": [
+            "filter",
+            "regulator"
+          ],
+          "verification_gaps": [
+            {
+              "code": "filter",
+              "title": "Топливный фильтр",
+              "status": "specs_unconfirmed",
+              "reason": "Характеристики не подтверждены или не соответствуют ТЗ."
+            },
+            {
+              "code": "regulator",
+              "title": "Регулятор давления",
+              "status": "specs_unconfirmed",
+              "reason": "Характеристики не подтверждены или не соответствуют ТЗ."
+            }
+          ],
+          "recovery_queries": [
+            {
+              "code": "filter",
+              "query": "Топливный фильтр автомобиля цена Казахстан",
+              "reason": "specs_unconfirmed"
+            }
+          ],
+          "found_before_filters": 18,
+          "blocked_filtered": 0,
+          "filtered_out": {
+            "dropped_region": 0,
+            "dropped_price": 0,
+            "dropped_direct": 0,
+            "dropped_no_price": 0,
+            "dropped_no_contacts": 0,
+            "dropped_budget": 0,
+            "unknown_city_kept": 0,
+            "dropped_mandatory": 4,
+            "dropped_unconfirmed": 13
+          },
+          "pages_read": 8,
+          "browser_worker_pages": 0,
+          "personalization": "",
+          "filters_applied": {
+            "regions": [],
+            "price_range": [
+              null,
+              null
+            ],
+            "only_direct": false,
+            "only_with_price": false,
+            "only_with_contacts": false,
+            "budget_kzt": 48000.0,
+            "lot_region": ""
+          }
+        },
+        "costs": {
+          "llm_usd": 0.009,
+          "tavily_usd": 0.032,
+          "browser_usd": 0.0,
+          "total_usd": 0.041,
+          "is_estimate": true,
+          "llm_calls": 5,
+          "tavily_calls": 4,
+          "browser_calls": 0
+        },
+        "duration_sec": 116.0,
+        "total": 1,
+        "budget_summary": {
+          "status": "incomplete",
+          "selected_goods_kzt": null,
+          "budget_kzt": 48000.0,
+          "missing_codes": [
+            "filter",
+            "regulator"
+          ],
+          "selected_offers": [],
+          "delivery_included": false
+        },
+        "candidates": [
+          {
+            "supplier": "топливный фильтр грубой очистки - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр грубой очистки - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B3%D1%80%D1%83%D0%B1%D0%BE%D0%B9-%D0%BE%D1%87%D0%B8%D1%81%D1%82%D0%BA%D0%B8",
+            "score": 25,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B3%D1%80%D1%83%D0%B1%D0%BE%D0%B9-%D0%BE%D1%87%D0%B8%D1%81%D1%82%D0%BA%D0%B8"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "partial",
+                "comment": "Найдено «Топливный фильтр Parker», «Фильтр грубой очистки топлива Г-53,3307 в сборе», но применимость конкретно для ДВС легкового автомобиля не подтверждена для конкретного товара.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B3%D1%80%D1%83%D0%B1%D0%BE%D0%B9-%D0%BE%D1%87%D0%B8%D1%81%D1%82%D0%BA%D0%B8"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "В источнике регулятор давления отсутствует",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B3%D1%80%D1%83%D0%B1%D0%BE%D0%B9-%D0%BE%D1%87%D0%B8%D1%81%D1%82%D0%BA%D0%B8"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          }
+        ],
+        "rejected_candidates": [
+          {
+            "supplier": "Регулятор частоты в Алматинской области, стр. 2 — Сравнить цены и купить на Flagma.kz",
+            "domain": "flagma.kz",
+            "title": "Регулятор частоты в Алматинской области, стр. 2 — Сравнить цены и купить на Flagma.kz",
+            "url": "https://flagma.kz/products/almatinskayaoblast/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D1%87%D0%B0%D1%81%D1%82%D0%BE%D1%82%D1%8B/page-2",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/products/almatinskayaoblast/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D1%87%D0%B0%D1%81%D1%82%D0%BE%D1%82%D1%8B/page-2"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице каталога товар отсутствует.",
+                "source_url": "https://flagma.kz/products/almatinskayaoblast/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D1%87%D0%B0%D1%81%D1%82%D0%BE%D1%82%D1%8B/page-2"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Каталог товаров. Присутствуют разрозненные позиции («Регулятор давления чугунный фланцевый 80мм», «Регуляторы давления чугунные фланцевые»), единая карточка товара отсутствует.",
+                "source_url": "https://flagma.kz/products/almatinskayaoblast/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D1%87%D0%B0%D1%81%D1%82%D0%BE%D1%82%D1%8B/page-2"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Регулятор давления в Алматы — Сравнить цены и ...",
+            "domain": "flagma.kz",
+            "title": "Регулятор давления в Алматы — Сравнить цены и ...",
+            "url": "https://flagma.kz/products/almaty/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/products/almaty/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике топливный фильтр отсутствует",
+                "source_url": "https://flagma.kz/products/almaty/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 4 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://flagma.kz/products/almaty/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Регулятор перепада давления в Алматы — Сравнить цены и купить на Flagma.kz",
+            "domain": "flagma.kz",
+            "title": "Регулятор перепада давления в Алматы — Сравнить цены и купить на Flagma.kz",
+            "url": "https://flagma.kz/products/almaty/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/products/almaty/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице отсутствует топливный фильтр",
+                "source_url": "https://flagma.kz/products/almaty/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Каталог объявлений Flagma; единый товар со всеми параметрами (стальной, фланцевый, проход 80 мм, давление 60,3 МПа) отсутствует",
+                "source_url": "https://flagma.kz/products/almaty/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Топливный фильтр сепаратор в Алматы — Сравнить цены и купить на Flagma.kz",
+            "domain": "flagma.kz",
+            "title": "Топливный фильтр сепаратор в Алматы — Сравнить цены и купить на Flagma.kz",
+            "url": "https://flagma.kz/products/almaty/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+%D1%81%D0%B5%D0%BF%D0%B0%D1%80%D0%B0%D1%82%D0%BE%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/products/almaty/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+%D1%81%D0%B5%D0%BF%D0%B0%D1%80%D0%B0%D1%82%D0%BE%D1%80"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница представляет собой каталог объявлений разных товаров (для спецтехники: экскаваторов и погрузчиков KOMATSU, HYUNDAI, JCB, Hitachi), единая карточка конкретного товара для ДВС легкового автомобиля отсутствует.",
+                "source_url": "https://flagma.kz/products/almaty/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+%D1%81%D0%B5%D0%BF%D0%B0%D1%80%D0%B0%D1%82%D0%BE%D1%80"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице отсутствует регулятор давления.",
+                "source_url": "https://flagma.kz/products/almaty/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+%D1%81%D0%B5%D0%BF%D0%B0%D1%80%D0%B0%D1%82%D0%BE%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Регулятор расхода и давления в Гвардейском — Сравнить цены и купить на Flagma.kz",
+            "domain": "flagma.kz",
+            "title": "Регулятор расхода и давления в Гвардейском — Сравнить цены и купить на Flagma.kz",
+            "url": "https://flagma.kz/products/gvardeyskiy/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D1%80%D0%B0%D1%81%D1%85%D0%BE%D0%B4%D0%B0+%D0%B8+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/products/gvardeyskiy/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D1%80%D0%B0%D1%81%D1%85%D0%BE%D0%B4%D0%B0+%D0%B8+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице отсутствует топливный фильтр",
+                "source_url": "https://flagma.kz/products/gvardeyskiy/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D1%80%D0%B0%D1%81%D1%85%D0%BE%D0%B4%D0%B0+%D0%B8+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Страница представляет собой каталог объявлений Flagma; характеристики материала, типа соединения, прохода 80 мм и давления 60,3 МПа не подтверждены для единого товара",
+                "source_url": "https://flagma.kz/products/gvardeyskiy/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D1%80%D0%B0%D1%81%D1%85%D0%BE%D0%B4%D0%B0+%D0%B8+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Ограничитель давления в Казахстане, стр. 3 — Сравнить цены и купить на Flagma.kz",
+            "domain": "flagma.kz",
+            "title": "Ограничитель давления в Казахстане, стр. 3 — Сравнить цены и купить на Flagma.kz",
+            "url": "https://flagma.kz/products/q=%D0%BE%D0%B3%D1%80%D0%B0%D0%BD%D0%B8%D1%87%D0%B8%D1%82%D0%B5%D0%BB%D1%8C+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F/page-3",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/products/q=%D0%BE%D0%B3%D1%80%D0%B0%D0%BD%D0%B8%D1%87%D0%B8%D1%82%D0%B5%D0%BB%D1%8C+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F/page-3"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице каталога товар отсутствует.",
+                "source_url": "https://flagma.kz/products/q=%D0%BE%D0%B3%D1%80%D0%B0%D0%BD%D0%B8%D1%87%D0%B8%D1%82%D0%B5%D0%BB%D1%8C+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F/page-3"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Каталог товаров. Встречаются позиции «Регулятор давления чугунный фланцевый 80мм», но конкретная карточка отсутствует, характеристики материала (чугунный вместо стального) и давления не определены для единого товара.",
+                "source_url": "https://flagma.kz/products/q=%D0%BE%D0%B3%D1%80%D0%B0%D0%BD%D0%B8%D1%87%D0%B8%D1%82%D0%B5%D0%BB%D1%8C+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F/page-3"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Топливный фильтр man в Казахстане",
+            "domain": "flagma.kz",
+            "title": "Топливный фильтр man в Казахстане",
+            "url": "https://flagma.kz/products/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+man",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/products/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+man"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "no",
+                "comment": "Представлен топливный фильтр «на гусеничный экскаватор Hitachi ZX330», а не для легкового автомобиля.",
+                "source_url": "https://flagma.kz/products/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+man"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Информация о товаре отсутствует на странице.",
+                "source_url": "https://flagma.kz/products/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+man"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Регулятор перепада давления в разделе Регуляторы давления газа в Шымкенте — Сравнить цены и купить на Flagma.kz",
+            "domain": "flagma.kz",
+            "title": "Регулятор перепада давления в разделе Регуляторы давления газа в Шымкенте — Сравнить цены и купить на Flagma.kz",
+            "url": "https://flagma.kz/products/regulyatory-davleniya-gaza/shymkent/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/products/regulyatory-davleniya-gaza/shymkent/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике представлен каталог регуляторов давления, топливный фильтр для ДВС легкового автомобиля отсутствует",
+                "source_url": "https://flagma.kz/products/regulyatory-davleniya-gaza/shymkent/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "no",
+                "comment": "В каталоге есть «Регулятор давления чугунный фланцевый 80мм», что противоречит требованию к материалу (стальной). Давление 60,3 МПа не подтверждено.",
+                "source_url": "https://flagma.kz/products/regulyatory-davleniya-gaza/shymkent/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Регулятор давления муфтовый для холодной и горячей воды — Купить в Алматы на Flagma.kz #1779315",
+            "domain": "flagma.kz",
+            "title": "Регулятор давления муфтовый для холодной и горячей воды — Купить в Алматы на Flagma.kz #1779315",
+            "url": "https://flagma.kz/regulyator-davleniya-muftovy-holodnoy-goryachey-o1779315.html",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Алматы",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://flagma.kz/regulyator-davleniya-muftovy-holodnoy-goryachey-o1779315.html"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Карточка содержит информацию о регуляторе давления, топливный фильтр отсутствует.",
+                "source_url": "https://flagma.kz/regulyator-davleniya-muftovy-holodnoy-goryachey-o1779315.html"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "no",
+                "comment": "В источнике указано: «Материал (основной): Латунь», «Присоединение: Муфтовое», «Давление условное PN, МПа (кгс/см2): 2,5 (25)», что прямо противоречит требованиям ТЗ (стальной, фланцевый, давление 60,3 МПа).",
+                "source_url": "https://flagma.kz/regulyator-davleniya-muftovy-holodnoy-goryachey-o1779315.html"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Купить SF-Filter топливный фильтр SK3104 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить SF-Filter топливный фильтр SK3104 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/sf-filter-toplivnyi-fil-tr-sk3104-140027922",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://kaspi.kz/shop/p/sf-filter-toplivnyi-fil-tr-sk3104-140027922"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "no",
+                "comment": "В источнике указано: «Подходит для техники: Погрузчик», «Марка автомобиля JCB Модель автомобиля 3CX SM», что не соответствует требованию для ДВС легкового автомобиля.",
+                "source_url": "https://kaspi.kz/shop/p/sf-filter-toplivnyi-fil-tr-sk3104-140027922"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Карточка содержит информацию о топливном фильтре, регулятор давления отсутствует.",
+                "source_url": "https://kaspi.kz/shop/p/sf-filter-toplivnyi-fil-tr-sk3104-140027922"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "топливный фильтр - Купить автозапчасти и аксессуары Астана - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - Купить автозапчасти и аксессуары Астана - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница является листингом/каталогом разных товаров OLX, а не отдельной карточкой товара",
+                "source_url": "https://www.olx.kz/zapchasti/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице отсутствует регулятор давления",
+                "source_url": "https://www.olx.kz/zapchasti/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "фильтр топливный - Купить авто фильтры Актюбинская область - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "фильтр топливный - Купить авто фильтры Актюбинская область - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/akt/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Актобе",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/akt/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница является каталогом объявлений, конкретный товар не описан как единая позиция.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/akt/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Информация о товаре отсутствует на странице.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/akt/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр тойота - Купить авто фильтры - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр тойота - Купить авто фильтры - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%B9%D0%BE%D1%82%D0%B0",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Астана",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%B9%D0%BE%D1%82%D0%B0"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница является каталогом объявлений, конкретный товар не описан как единая позиция.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%B9%D0%BE%D1%82%D0%B0"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Информация о товаре отсутствует на странице.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%B9%D0%BE%D1%82%D0%B0"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - Купить автозапчасти и аксессуары Павлодар - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - Купить автозапчасти и аксессуары Павлодар - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/pavlodar/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/pavlodar/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Каталог объявлений общего поиска («Топливный фильтр хонда цивик 8 поколение», «Топливный фильтр на Тойота»). Конкретная единая карточка товара отсутствует.",
+                "source_url": "https://www.olx.kz/zapchasti/pavlodar/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице каталога товар отсутствует.",
+                "source_url": "https://www.olx.kz/zapchasti/pavlodar/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Караганда",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Каталог объявлений общего поиска OLX, конкретный товар с полными характеристиками не представлен как единая карточка",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице отсутствует регулятор давления",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр дизель - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр дизель - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B4%D0%B8%D0%B7%D0%B5%D0%BB%D1%8C",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B4%D0%B8%D0%B7%D0%B5%D0%BB%D1%8C"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Каталог объявлений общего поиска («Фильтр топливный Hyundai Staria/Kia Carnival 31922CG900 Дизель», «2 топливных фильтра (дизель) - Land Rover»). Единая карточка конкретного товара отсутствует.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B4%D0%B8%D0%B7%D0%B5%D0%BB%D1%8C"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице каталога товар отсутствует.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B4%D0%B8%D0%B7%D0%B5%D0%BB%D1%8C"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-топливный-фильтр",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Караганда",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/q-топливный-фильтр"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница является листингом/каталогом множества объявлений, а не карточкой одного товара; недостаточно подтверждённой информации о конкретном товаре.",
+                "source_url": "https://www.olx.kz/zapchasti/q-топливный-фильтр"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице отсутствует регулятор давления.",
+                "source_url": "https://www.olx.kz/zapchasti/q-топливный-фильтр"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          }
+        ]
+      }
+    }
+  ]
+}

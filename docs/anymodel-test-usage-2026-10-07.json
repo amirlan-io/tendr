@@ -1,0 +1,6 @@
+{
+  "initial_balance": 4977545,
+  "final_balance": 4945247,
+  "balance_delta": 32298,
+  "scope": "All session AnyModel calls, including comparisons, interrupted and completed benchmarks; not a USD estimate"
+}

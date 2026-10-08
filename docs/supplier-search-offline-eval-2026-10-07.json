@@ -1,0 +1,38 @@
+{
+  "mode": "offline replay of one live basic search; no API calls",
+  "previous_full_sandbox_tavily_calls": 8,
+  "current_call_limit": 4,
+  "regulator_queries": [
+    "Регулятор давления 80 мм 60,3 МПа Стальной фланцевый",
+    "Регулятор давления фланцевый 80 мм Казахстан"
+  ],
+  "live_results_seen": 5,
+  "relevant_results_kept": 4,
+  "fully_verified_from_snippets": 0,
+  "assessments": [
+    {
+      "url": "https://prom-water.ru/oborudovanie/regulyatory-davleniya-du-80",
+      "hints_found": 2,
+      "hints_total": 4,
+      "source_rank": 1
+    },
+    {
+      "url": "https://www.gazprommash.ru/production/catalog/pressure_regulator/rdu-80",
+      "hints_found": 0,
+      "hints_total": 4,
+      "source_rank": 1
+    },
+    {
+      "url": "https://www.c-o-k.ru/library/catalogs/adl/21317/70013.pdf",
+      "hints_found": 0,
+      "hints_total": 4,
+      "source_rank": 1
+    },
+    {
+      "url": "https://roost.ru/%D0%BA%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D1%80%D1%83%D1%81%D1%82%2095.pdf",
+      "hints_found": 0,
+      "hints_total": 4,
+      "source_rank": 1
+    }
+  ]
+}

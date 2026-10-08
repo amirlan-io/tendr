@@ -871,8 +871,11 @@ def _detect_price_column(header_row: Any) -> int | None:
 
 
 def _guess_price_cell(texts: list[str]) -> int | None:
-    """Без шапки: цена — единственная ячейка, которая целиком парсится в число."""
-    hits = [i for i, t in enumerate(texts) if normalize_price(t) is not None and t.strip()]
+    """Без шапки принимаем только число с явным обозначением тенге."""
+    hits = [
+        i for i, t in enumerate(texts)
+        if normalize_price(t) is not None and _detect_currency(t)[0] == "KZT"
+    ]
     if len(hits) != 1:
         return None
     return hits[0]
@@ -909,6 +912,20 @@ def _norm_words(text: str) -> list[str]:
     return [w for w in _norm_key(text).split() if w]
 
 
+def pick_product(products: list[ProductRecord], term: str) -> ProductRecord | None:
+    """Выбрать запись с ценой нужного товара, сохраняя связь с наличием."""
+    term_words = _norm_words(str(term)) if term else []
+    if not term_words:
+        return None
+    for record in products:
+        name_words = _norm_words(record.name)
+        if (name_words and all(word in name_words for word in term_words)
+                and not _is_foreign_currency(record.currency)
+                and record.price_kzt is not None and record.price_kzt > 0):
+            return record
+    return None
+
+
 def pick_price(products: list[ProductRecord], term: str) -> float | None:
     """Выбрать цену товара, название которого содержит ``term``.
 
@@ -923,24 +940,8 @@ def pick_price(products: list[ProductRecord], term: str) -> float | None:
     берётся цена следующего совпадения — так мы отдаём что-то проверенное, а не
     пустоту. Если цен нет ни у одного совпадения — возвращается ``None``.
     """
-    if not products or not term or not str(term).strip():
-        return None
-    term_words = _norm_words(str(term))
-    if not term_words:
-        return None
-
-    for record in products:
-        name_words = _norm_words(record.name)
-        if not name_words:
-            continue
-        if not all(word in name_words for word in term_words):
-            continue
-        # Вторая линия защиты: цена в чужой валюте не является ценой в тенге.
-        if _is_foreign_currency(record.currency):
-            continue
-        if record.price_kzt is not None and record.price_kzt > 0:
-            return record.price_kzt
-    return None
+    record = pick_product(products, term)
+    return record.price_kzt if record else None
 
 
 # ---------------------------------------------------------------------------

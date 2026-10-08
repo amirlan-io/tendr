@@ -85,9 +85,8 @@ class Settings(BaseSettings):
     # === Tavily (поиск товаров) ===
     tavily_api_key: str = ""
     tavily_max_results: int = 10
-    # Общий бюджет поисковых попыток на один лот, включая неудачные.
-    # Небольшой лимит заставляет агент тратить повторный запрос только на
-    # позиции, которые не закрыты доказательствами с карточки товара.
+    # Upper bound per supplier search; basic queries cost fewer credits than
+    # the old unconditional advanced searches.
     supplier_search_max_calls: int = 4
     # Провайдер эмбеддингов: "local" (sentence-transformers) или "llm"
     embedding_provider: Literal["local", "llm"] = "llm"
@@ -135,6 +134,12 @@ class Settings(BaseSettings):
     # ограничивает значение жёстким пределом, поэтому опечатка в .env
     # не превратится в неограниченный счёт.
     browser_use_max_cost_usd: float = 1.0
+
+    # Optional SSH browser worker. Credentials stay on the application host,
+    # never in the repository or in a browser request.
+    browser_worker_ssh_target: str = ""
+    browser_worker_ssh_key_file: str = ""
+    browser_worker_ssh_known_hosts: str = ""
 
     # === Freemium ===
     free_tier_applications_per_month: int = 3

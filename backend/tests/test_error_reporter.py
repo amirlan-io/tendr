@@ -98,7 +98,8 @@ def test_rate_limit_caps_flood() -> None:
     assert sent == RATE_LIMIT_PER_HOUR
 
 
-def test_old_entries_expire() -> None:
+def test_old_entries_expire(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.error_reporter.time.monotonic", lambda: 7200.0)
     reporter = ErrorReporter(bot_token="", admin_ids=[])
     reporter._seen["old"] = 0.0  # очень давно по monotonic-шкале
     reporter._sent_times = [0.0]

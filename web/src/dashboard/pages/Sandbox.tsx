@@ -57,6 +57,7 @@ interface SandboxResult {
       matched_specs: number;
       total_specs: number;
     }>;
+    verification_gaps?: Array<{ code: string; title: string; status: string; reason: string }>;
     found_before_filters: number;
     blocked_filtered: number;
     pages_read: number;
@@ -77,6 +78,7 @@ interface SandboxResult {
   duration_sec: number;
   total: number;
   candidates: SandboxCandidate[];
+  rejected_candidates?: Array<SandboxCandidate & { rejection_reason: string }>;
 }
 
 const STATUS_LABEL: Record<MatchStatus, string> = {
@@ -255,30 +257,19 @@ function SandboxOutput({ result }: { result: SandboxResult }) {
       <section className="rounded-2xl border border-white/[0.08] bg-[#0a1115]/90 p-5">
         <h2 className="text-sm font-medium text-white/80">Ход работы агента</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Запросов пробовано" value={`${trace.search_calls_attempted} из ${trace.search_call_limit}`} />
+          <Stat label="Запросов пробовано" value={trace.search_call_limit != null ? `${trace.search_calls_attempted ?? costs.tavily_calls} из ${trace.search_call_limit}` : String(trace.queries.length + trace.direct_queries.length)} />
           <Stat label="Найдено до фильтров" value={String(trace.found_before_filters)} />
           <Stat label="Прочитано страниц" value={String(trace.pages_read)} />
           <Stat label="Прошло фильтры" value={String(result.total)} />
         </div>
-        {trace.resolution_gaps.length > 0 && (
-          <div className="mt-4">
-            <p className="mb-2 text-xs text-white/35">Покрытие позиций ТЗ:</p>
-            <ul className="grid gap-2 lg:grid-cols-2">
-              {trace.resolution_gaps.map((gap) => {
-                const resolved = gap.status === "resolved";
-                return (
-                  <li key={`${gap.code}-${gap.title}`} className={`rounded-lg border px-3 py-2.5 text-xs ${resolved ? "border-emerald-400/15 bg-emerald-400/[0.04]" : "border-amber-400/15 bg-amber-400/[0.04]"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="font-medium text-white/70">{gap.title}</span>
-                      <span className={resolved ? "text-emerald-300/80" : "text-amber-300/80"}>
-                        {resolved ? "Подтверждено" : "Нужен поиск"}
-                      </span>
-                    </div>
-                    <p className="mt-1 leading-5 text-white/40">{gap.reason}</p>
-                  </li>
-                );
-              })}
-            </ul>
+        {!!trace.verification_gaps?.length && (
+          <div className="mt-4 space-y-2 text-xs">
+            <p className="text-white/50">Проверка найденных товаров до фильтров:</p>
+            {trace.verification_gaps.map((gap) => (
+              <p key={gap.code} className={gap.status === "ready" ? "text-emerald-300" : "text-amber-300"}>
+                {gap.title}: {gap.reason}
+              </p>
+            ))}
           </div>
         )}
         <div className="mt-4 grid gap-4 text-xs lg:grid-cols-2">
@@ -297,7 +288,7 @@ function SandboxOutput({ result }: { result: SandboxResult }) {
             <p className="mb-1.5 text-white/35">Оценка расходов (не факт списания)</p>
             <dl className="space-y-1 text-white/55">
               <Row label={`LLM · ${costs.llm_calls} выз.`} value={`≈ $${costs.llm_usd.toFixed(4)}`} />
-              <Row label={`Tavily · ${costs.tavily_attempts} попыт., ${costs.tavily_calls} успеш.`} value={`≈ $${costs.tavily_usd.toFixed(4)}`} />
+              <Row label={`Tavily · ${costs.tavily_attempts ?? costs.tavily_calls} попыт.`} value={`≈ $${costs.tavily_usd.toFixed(4)}`} />
               <Row label={`Browser Use · ${costs.browser_calls} выз.`} value={`≈ $${costs.browser_usd.toFixed(4)}`} />
               <Row label="Итого" value={`$${costs.total_usd.toFixed(4)}`} strong />
               <Row label="Время" value={`${result.duration_sec} с`} />
@@ -311,13 +302,25 @@ function SandboxOutput({ result }: { result: SandboxResult }) {
         </div>
       </section>
 
+      {Boolean(result.rejected_candidates?.length) && (
+        <details className="rounded-xl border border-amber-400/20 bg-amber-400/[0.03] p-4">
+          <summary className="cursor-pointer text-sm text-amber-200">Отклонённые кандидаты ({result.rejected_candidates!.length})</summary>
+          <ul className="mt-3 space-y-2 text-xs text-white/55">
+            {result.rejected_candidates!.map((candidate) => (
+              <li key={`${candidate.domain}-${candidate.url}`}>
+                {candidate.title} — {candidate.rejection_reason === "over_budget" ? "Стоимость выше бюджета" : candidate.rejection_reason === "unconfirmed" ? "Не хватает подтверждённых данных" : "Не соответствует обязательным требованиям"}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-white/80">
           Кандидаты ({result.total})
         </h2>
         {result.candidates.length === 0 && (
           <p className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-6 text-center text-sm text-white/35">
-            Под фильтры ничего не подошло. Ослабьте условия или отключите чтение страниц.
+            Подтверждённых предложений нет. Проверьте требования и причины отклонения; включите чтение страниц для уточнения данных.
           </p>
         )}
         {result.candidates.map((c) => (

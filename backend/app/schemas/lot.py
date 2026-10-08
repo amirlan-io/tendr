@@ -397,6 +397,10 @@ class MarginCalculationResult(BaseModel):
 class RequirementItem(BaseModel):
     """Одно требование из ТЗ лота."""
 
+    code: str = ""
+    quantity: float | None = None
+    unit: str = ""
+
     name: str
     value: str
     is_critical: bool = False
@@ -448,6 +452,7 @@ class LotAnalysis(BaseModel):
     delivery_address: str = ""
     delivery_days: int | None = None
     payment_terms: str = ""
+    delivery_terms: str = ""
     procurement_method: str = "tender"
 
     # Техническое задание

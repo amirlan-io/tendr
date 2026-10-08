@@ -1,0 +1,208 @@
+{
+  "base_commit": "95dd0b0",
+  "local_code_fixes": true,
+  "model": "qwen/qwen3.8-max",
+  "scope": "synthetic specifications, real LLM/Tavily/pages, isolated SQLite, no saved shortlist or outreach",
+  "runs": [
+    {
+      "name": "documenter_office_requirements",
+      "seconds": 10.5,
+      "result": {
+        "lot_id": "benchmark-office",
+        "title": "Поставка 2 офисных столов",
+        "customer": "Тестовая компания",
+        "source_url": null,
+        "amount_kzt": 100000.0,
+        "currency": "KZT",
+        "deadline": null,
+        "delivery_address": "Астана",
+        "delivery_days": 10,
+        "payment_terms": "Оплата в течение 30 календарных дней после приёмки.",
+        "delivery_terms": "Доставка и сборка включены в стоимость, в течение 10 календарных дней.",
+        "procurement_method": "other",
+        "technical_specification": "ТЕСТОВОЕ ТЗ, не реальная закупка. Заказчик: Тестовая компания.\nБюджет: 100 000 тенге. Поставка 2 офисных столов в Астану.\nОбязательные требования:\n1. Размер столешницы 1400х700 мм.\n2. Высота 750 мм.\n3. Материал столешницы ЛДСП толщиной 25 мм.\n4. Металлический каркас.\n5. Гарантия 24 месяца.\n6. Доставка и сборка включены в стоимость, в течение 10 календарных дней.\n7. Сертификат соответствия приложить к заявке.\nОплата в течение 30 календарных дней после приёмки. Новые товары.\n",
+        "requirements": [
+          {
+            "code": "item_1",
+            "quantity": 2.0,
+            "unit": "шт.",
+            "source_quote": "",
+            "name": "Стол офисный",
+            "value": "Размер столешницы 1400х700 мм. Высота 750 мм. Материал столешницы ЛДСП толщиной 25 мм. Металлический каркас. Гарантия 24 месяца. Новые товары. Количество 2 шт.",
+            "is_critical": true,
+            "category": "goods"
+          }
+        ],
+        "qualification_requirements": [],
+        "documents_required": [
+          "Сертификат соответствия"
+        ],
+        "evaluation_criteria": {},
+        "red_flags": [],
+        "warnings": [
+          "Цитата для позиции «Стол офисный» не подтверждена дословно; сверьте исходное ТЗ."
+        ],
+        "legal_compliance": "ok",
+        "compliance_notes": "",
+        "customer_score": null,
+        "margin_estimate": null,
+        "recommendation": "review",
+        "summary": "Тестовое ТЗ на поставку 2 новых офисных столов с доставкой и сборкой в Астану. Бюджет 100 000 тенге."
+      }
+    },
+    {
+      "name": "documenter_seven_products",
+      "seconds": 16.2,
+      "result": {
+        "lot_id": "benchmark-seven",
+        "title": "Поставка компьютерной и офисной техники",
+        "customer": "Тестовая компания",
+        "source_url": null,
+        "amount_kzt": 1000000.0,
+        "currency": "KZT",
+        "deadline": null,
+        "delivery_address": "Астана",
+        "delivery_days": 10,
+        "payment_terms": "Оплата через 30 дней после приёмки.",
+        "delivery_terms": "Поставка в Астану в течение 10 дней.",
+        "procurement_method": "other",
+        "technical_specification": "Заказчик: Тестовая компания. Бюджет 1000000 тенге.\nПоставка в Астану в течение 10 дней. Оплата через 30 дней после приёмки.\n1. Ноутбук: RAM 16 ГБ, SSD 512 ГБ, экран 15,6 дюйма. Количество 4 шт.\n2. Монитор: IPS, диагональ 24 дюйма, HDMI. Количество 4 шт.\n3. Принтер: лазерный, A4, двусторонняя печать. Количество 2 шт.\n4. ИБП: 1000 ВА, USB. Количество 3 шт.\n5. Коммутатор: 24 порта Gigabit Ethernet. Количество 1 шт.\n6. Проектор: яркость 3500 люмен, Full HD. Количество 1 шт.\n7. Сканер: A4, автоподача 50 листов. Количество 2 шт.\nК заявке приложить сертификат соответствия.",
+        "requirements": [
+          {
+            "code": "item_1",
+            "quantity": 4.0,
+            "unit": "шт.",
+            "source_quote": "1. Ноутбук: RAM 16 ГБ, SSD 512 ГБ, экран 15,6 дюйма. Количество 4 шт.",
+            "name": "Ноутбук",
+            "value": "RAM 16 ГБ, SSD 512 ГБ, экран 15,6 дюйма. Количество 4 шт.",
+            "is_critical": true,
+            "category": "goods"
+          },
+          {
+            "code": "item_2",
+            "quantity": 4.0,
+            "unit": "шт.",
+            "source_quote": "2. Монитор: IPS, диагональ 24 дюйма, HDMI. Количество 4 шт.",
+            "name": "Монитор",
+            "value": "IPS, диагональ 24 дюйма, HDMI. Количество 4 шт.",
+            "is_critical": true,
+            "category": "goods"
+          },
+          {
+            "code": "item_3",
+            "quantity": 2.0,
+            "unit": "шт.",
+            "source_quote": "3. Принтер: лазерный, A4, двусторонняя печать. Количество 2 шт.",
+            "name": "Принтер",
+            "value": "лазерный, A4, двусторонняя печать. Количество 2 шт.",
+            "is_critical": true,
+            "category": "goods"
+          },
+          {
+            "code": "item_4",
+            "quantity": 3.0,
+            "unit": "шт.",
+            "source_quote": "4. ИБП: 1000 ВА, USB. Количество 3 шт.",
+            "name": "ИБП",
+            "value": "1000 ВА, USB. Количество 3 шт.",
+            "is_critical": true,
+            "category": "goods"
+          },
+          {
+            "code": "item_5",
+            "quantity": 1.0,
+            "unit": "шт.",
+            "source_quote": "5. Коммутатор: 24 порта Gigabit Ethernet. Количество 1 шт.",
+            "name": "Коммутатор",
+            "value": "24 порта Gigabit Ethernet. Количество 1 шт.",
+            "is_critical": true,
+            "category": "goods"
+          },
+          {
+            "code": "item_6",
+            "quantity": 1.0,
+            "unit": "шт.",
+            "source_quote": "6. Проектор: яркость 3500 люмен, Full HD. Количество 1 шт.",
+            "name": "Проектор",
+            "value": "яркость 3500 люмен, Full HD. Количество 1 шт.",
+            "is_critical": true,
+            "category": "goods"
+          },
+          {
+            "code": "item_7",
+            "quantity": 2.0,
+            "unit": "шт.",
+            "source_quote": "7. Сканер: A4, автоподача 50 листов. Количество 2 шт.",
+            "name": "Сканер",
+            "value": "A4, автоподача 50 листов. Количество 2 шт.",
+            "is_critical": true,
+            "category": "goods"
+          }
+        ],
+        "qualification_requirements": [],
+        "documents_required": [
+          "сертификат соответствия"
+        ],
+        "evaluation_criteria": {},
+        "red_flags": [],
+        "warnings": [],
+        "legal_compliance": "ok",
+        "compliance_notes": "",
+        "customer_score": null,
+        "margin_estimate": null,
+        "recommendation": "review",
+        "summary": "Закупка ноутбуков, мониторов, принтеров, ИБП, коммутатора, проектора и сканеров для Тестовой компании с поставкой в Астану."
+      }
+    },
+    {
+      "name": "known_product_page_positive_control",
+      "seconds": 16.8,
+      "result": {
+        "card": {
+          "name": "Стол письменный 1500*700*750",
+          "supplier": "Арлан",
+          "domain": "arlanstyle.kz",
+          "url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+          "price_kzt": 41700.0,
+          "in_stock": true,
+          "city": "Алматы",
+          "delivery_days": null,
+          "email": "arlan.style.kz@gmail.com",
+          "phone": "+7 (701) 760-67-11",
+          "image_url": "",
+          "certificates": [],
+          "warranty": "",
+          "sources": {
+            "email": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+            "phone": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+            "page_content": "direct_html",
+            "price": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+            "price_source": "structured_data"
+          },
+          "is_middleman": false,
+          "domain_kind": "direct",
+          "estimated_total_kzt": 83400.0,
+          "budget_status": "within_budget"
+        },
+        "match": {
+          "requirement_matches": [
+            {
+              "code": "desk",
+              "title": "Стол письменный",
+              "status": "fits",
+              "comment": "«Стол письменный, прямоугольный. Размеры: 1500*700*750мм», «Толщина столешницы 16 мм», «Столешница ламинированная ДСП (ЛДСП)», «Опоры стола ламинированная ДСП», «Минимальный заказ: 2 шт.»",
+              "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+            }
+          ],
+          "score": 100,
+          "warnings": [
+            "Сертификаты не указаны — запросите подтверждение.",
+            "Гарантия не указана.",
+            "Цена указана без стоимости доставки."
+          ]
+        },
+        "pages_read": 1
+      }
+    }
+  ]
+}

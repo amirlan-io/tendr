@@ -176,134 +176,36 @@ class ProductSearchAgent(Agent):
             request: описание потребности + критерии
             lot_id: для логирования
         """
-        # 1. Генерируем поисковые запросы через LLM
-        query_prompt = (
-            f"Описание потребности: {request.query}\n"
-            f"Бюджет: {request.budget_kzt or 'не указан'} тг\n"
-            f"Количество: {request.quantity or 'не указано'}\n\n"
-            "Сгенерируй 3-5 поисковых запросов на русском и казахском для поиска "
-            'в казахстанских интернет-магазинах. Верни JSON: {"queries": ["..."]}'
+        # Одинаковые правила доказательной сверки для поиска товаров и поставщиков.
+        from app.agents.supplier_agent import (
+            SupplierAgent, Requirement, has_mandatory_mismatch, has_supported_match,
         )
-        queries_data = await self._chat_json(query_prompt)
-        queries = []
-        if queries_data and isinstance(queries_data, dict):
-            queries = queries_data.get("queries", [])
-        if not queries:
-            queries = [request.query]
-
-        # 2. Ищем через Tavily
-        all_results: list[dict] = []
-        if self._tavily_client:
-            for q in queries[:6]:  # до 6 запросов
-                try:
-                    response = self._tavily_client.search(
-                        query=q,
-                        search_depth="advanced",
-                        max_results=10,  # до 10 результатов
-                        include_domains=[
-                            "kaspi.kz",
-                            "sulpak.kz",
-                            "technodom.kz",
-                            "olx.kz",
-                            "shop.kz",
-                            "mechta.kz",
-                            "whitewind.kz",
-                            "bifi.kz",
-                            "flip.kz",
-                            "marwin.kz",
-                            "omniparts.kz",
-                            "vernal.kz",
-                            "klimatech.kz",
-                            "lamoda.kz",
-                        ],
-                    )
-                    for r in response.get("results", []):
-                        all_results.append(
-                            {
-                                "title": r.get("title", ""),
-                                "url": r.get("url", ""),
-                                "content": r.get("content", ""),
-                                "score": r.get("score", 0),
-                            }
-                        )
-                except Exception as e:
-                    logger.warning("Tavily search failed for '{}': {}", q, e)
-        else:
-            # Заглушка если Tavily не сконфигурирован
-            return ProductSearchResult(
-                lot_id=lot_id,
-                query=request.query,
-                products=[],
-                search_queries=queries,
-                summary="Tavily API не сконфигурирован. Добавьте TAVILY_API_KEY в .env",
-            )
-
-        # Убираем дубликаты по URL
-        seen_urls: set[str] = set()
-        unique_results = []
-        for r in all_results:
-            url = r.get("url", "")
-            if url and url not in seen_urls:
-                seen_urls.add(url)
-                unique_results.append(r)
-
-        if not unique_results:
-            return ProductSearchResult(
-                lot_id=lot_id,
-                query=request.query,
-                products=[],
-                search_queries=queries,
-                summary="Ничего не найдено. Попробуйте переформулировать запрос.",
-            )
-
-        # 3. AI фильтрует и ранжирует результаты
-        results_text = "\n\n".join(
-            f"[{i + 1}] {r['title']}\nURL: {r['url']}\n{r['content'][:300]}\n"
-            for i, r in enumerate(unique_results[:10])
+        description = request.additional_info or ""
+        if request.quantity:
+            description += f" Количество {request.quantity} шт."
+        requirements = [Requirement("product", request.query, description, True)]
+        agent = SupplierAgent()
+        candidates, costs, meta = await agent.find_suppliers(
+            requirements, budget_kzt=request.budget_kzt, enrich_browser=True,
+            page_fetch_top_n=5, allow_browser_fallback=False,
         )
-
-        filter_prompt = (
-            f"Запрос пользователя: {request.query}\n"
-            f"Бюджет: {request.budget_kzt or 'не указан'} тг\n"
-            f"Количество: {request.quantity or 'не указано'}\n"
-            f"Дополнительно: {request.additional_info or '—'}\n\n"
-            f"Результаты поиска ({len(unique_results)} шт):\n{results_text}\n\n"
-            "Выбери топ-5 наиболее подходящих товаров. Верни JSON."
+        usable = [c for c in candidates if has_supported_match(c, requirements)
+                  and not has_mandatory_mismatch(c, requirements)
+                  and c.budget_status != "over_budget"]
+        products = [ProductItem(
+            name=c.title, price_kzt=c.price_kzt, url=c.url, store=c.supplier,
+            match_score=c.score,
+            match_reason=" ".join(m.get("comment", "") for m in c.requirement_matches)[:500],
+            concerns=list(c.warnings),
+        ) for c in usable[:5]]
+        queries = meta.get("queries", [])
+        summary = (
+            f"Найдено {len(products)} кандидатов с подтверждёнными данными; "
+            f"полностью соответствуют ТЗ: {sum(c.score == 100 for c in usable[:5])}. "
+            "Неизвестные характеристики, наличие и доставка требуют уточнения."
         )
-        filtered = await self._chat_json(filter_prompt, max_tokens=6000)
-
-        products: list[ProductItem] = []
-        if filtered and isinstance(filtered, dict):
-            for p in filtered.get("products", []):
-                if not isinstance(p, dict):
-                    continue
-                price = p.get("price_kzt")
-                if price is None and p.get("price_text"):
-                    price = _parse_price(str(p["price_text"]))
-                if price is None and p.get("price"):
-                    price = _parse_price(str(p["price"]))
-                products.append(
-                    ProductItem(
-                        name=_s(p.get("name"))[:200],
-                        price_kzt=price,
-                        price_text=_s(p.get("price_text") or p.get("price"))[:100],
-                        url=_s(p.get("url"))[:500],
-                        store=_s(p.get("store"))[:100],
-                        rating=p.get("rating")
-                        if isinstance(p.get("rating"), (int, float))
-                        else None,
-                        reviews_count=p.get("reviews_count")
-                        if isinstance(p.get("reviews_count"), int)
-                        else None,
-                        match_score=int(p.get("match_score", 0))
-                        if isinstance(p.get("match_score"), (int, float))
-                        else 0,
-                        match_reason=_s(p.get("match_reason"))[:500],
-                        concerns=p.get("concerns") or [],
-                    )
-                )
-        summary = (_s(filtered.get("summary")) if filtered else (
-            f"Найдено {len(unique_results)} результатов, но AI не смог отфильтровать"))
+        if not agent._tavily_client:
+            summary = "Tavily API не сконфигурирован. Добавьте TAVILY_API_KEY в .env"
 
         # === ШАГ 4 (опционально): Browser-Use ===
         # Если в запросе указан browser_action — запускаем браузер для top-N
