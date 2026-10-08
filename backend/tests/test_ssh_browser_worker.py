@@ -1,3 +1,5 @@
+import importlib.util
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -11,9 +13,14 @@ URL = "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
 
 
 def test_kaspi_canonical_trailing_slash_is_same_product():
-    from scripts.ssh_browser_worker import same_product_page
-    assert same_product_page(URL, URL + "/")
-    assert not same_product_page(URL, "https://kaspi.kz/shop/p/another-product/")
+    worker_path = Path(__file__).resolve().parents[2] / "scripts" / "ssh_browser_worker.py"
+    spec = importlib.util.spec_from_file_location("tendr_ssh_browser_worker", worker_path)
+    assert spec and spec.loader
+    worker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(worker)
+
+    assert worker.same_product_page(URL, URL + "/")
+    assert not worker.same_product_page(URL, "https://kaspi.kz/shop/p/another-product/")
 
 
 @pytest.mark.parametrize("url", [

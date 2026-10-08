@@ -8,8 +8,6 @@ import re
 import sys
 from urllib.parse import urlsplit
 
-from playwright.async_api import async_playwright
-
 
 def supported(url: str) -> bool:
     try:
@@ -28,6 +26,10 @@ def same_product_page(requested: str, loaded: str) -> bool:
 
 
 async def read(url: str, city: str) -> dict:
+    # Playwright нужен только на удалённом browser-worker. Ленивый импорт
+    # позволяет проверять чистые URL-функции без установки браузера в backend.
+    from playwright.async_api import async_playwright
+
     if not supported(url):
         raise ValueError("unsupported URL")
     async with async_playwright() as playwright:
