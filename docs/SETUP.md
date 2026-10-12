@@ -39,6 +39,12 @@ pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
 
+Если в `.env` выбран `EMBEDDING_PROVIDER=local`, установите локальную модель:
+
+```bash
+pip install -e ".[local-embeddings]"
+```
+
 Проверка: http://localhost:8000/health
 
 ## 4. Индексация нормативной базы в RAG
