@@ -12,6 +12,12 @@ from app.llm import get_llm
 router = APIRouter(tags=["health"])
 
 
+@router.get("/health/live")
+async def health_live(settings: Settings = Depends(get_settings)) -> dict[str, str]:
+    """Cheap liveness probe that never calls paid or external providers."""
+    return {"status": "ok", "app": settings.app_name}
+
+
 async def _db_ping() -> None:
     from sqlalchemy import text
 
@@ -113,3 +119,28 @@ async def health_llm() -> dict:
     llm = get_llm()
     ok = await llm.healthcheck()
     return {"provider": llm.name, "ok": ok}
+
+
+@router.get("/health/capabilities")
+async def health_capabilities(settings: Settings = Depends(get_settings)) -> dict:
+    """Expose safe feature readiness flags without returning credentials."""
+    stripe_ready = bool(
+        settings.stripe_secret_key
+        and settings.stripe_webhook_secret
+        and settings.stripe_price_plus
+        and settings.stripe_price_pro
+        and settings.stripe_price_ultra
+    )
+    smtp_ready = bool(settings.smtp_host and settings.smtp_from_email)
+    calls_ready = bool(settings.leximo_api_token and settings.leximo_agent_id)
+    return {
+        "supplier_search": {
+            "available": bool(settings.tavily_api_key),
+            "provider": "tavily" if settings.tavily_api_key else None,
+        },
+        "billing": {"available": stripe_ready, "provider": "stripe" if stripe_ready else None},
+        "email": {"available": smtp_ready, "provider": "smtp" if smtp_ready else None},
+        "calls": {"available": calls_ready, "provider": "leximo" if calls_ready else None},
+        "monitoring": {"available": bool(settings.sentry_dsn)},
+        "remote_browser": {"available": bool(settings.browser_worker_ssh_target)},
+    }

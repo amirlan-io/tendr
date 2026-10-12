@@ -6,7 +6,11 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 
-from app.core.supabase_auth import get_optional_supabase_user, supabase_client_id
+from app.core.supabase_auth import (
+    get_optional_supabase_user,
+    require_supabase_user,
+    supabase_client_id,
+)
 
 CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 MIN_CLIENT_ID_LEN = 16
@@ -74,6 +78,17 @@ async def require_client_id(request: Request) -> str:
         raise HTTPException(status_code=400, detail="Invalid client identifier")
     # Гость хранится под собственным пространством имён.
     return f"{GUEST_PREFIX}{raw}"
+
+
+async def require_authenticated_client_id(request: Request) -> str:
+    """Return a stable identity only for a verified Supabase session.
+
+    Cost-bearing and private workspace endpoints must use this dependency.
+    Keeping it separate from ``require_client_id`` lets the public lot catalog
+    remain readable without accidentally opening AI quotas to disposable guest
+    identifiers.
+    """
+    return supabase_client_id(await require_supabase_user(request))
 
 
 def generate_client_id() -> str:

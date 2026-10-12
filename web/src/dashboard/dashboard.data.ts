@@ -4,6 +4,7 @@ import type {
   SavedLot,
   Tariff,
 } from "./dashboard.types";
+import { loadWorkspaceState, saveWorkspaceState } from "../workspaceState";
 
 export const DASHBOARD_NAV: NavItem[] = [
   { to: "/dashboard", label: "Обзор", description: "Рабочий стол", icon: "home" },
@@ -89,6 +90,13 @@ function writeJson(key: string, value: unknown[]): void {
   }
 }
 
+function syncNamespace(namespace: string, value: unknown[]): void {
+  void saveWorkspaceState(namespace, value).catch(() => {
+    // Локальная копия остаётся offline-fallback; повторная синхронизация
+    // произойдёт при следующем изменении или открытии кабинета.
+  });
+}
+
 function isSavedLot(v: unknown): v is SavedLot {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -114,18 +122,21 @@ export function saveLot(lot: SavedLot): SavedLot[] {
   items.unshift({ ...lot, stage: lot.stage || "found" });
   const next = items.slice(0, MAX_SAVED);
   writeJson(SAVED_LOTS_KEY, next);
+  syncNamespace("saved_lots", next);
   return next;
 }
 
 export function updateSavedLotStage(id: number, stage: SavedLot["stage"]): SavedLot[] {
   const next = loadSavedLots().map((item) => item.id === id ? { ...item, stage } : item);
   writeJson(SAVED_LOTS_KEY, next);
+  syncNamespace("saved_lots", next);
   return next;
 }
 
 export function removeSavedLot(id: number): SavedLot[] {
   const next = loadSavedLots().filter((i) => i.id !== id);
   writeJson(SAVED_LOTS_KEY, next);
+  syncNamespace("saved_lots", next);
   return next;
 }
 
@@ -145,11 +156,30 @@ export function trackDocumentDownload(doc: PreparedDocument): PreparedDocument[]
   items.unshift(doc);
   const next = items.slice(0, MAX_DOCS);
   writeJson(DOCUMENTS_KEY, next);
+  syncNamespace("documents", next);
   return next;
 }
 
 export function removeDocument(id: string): PreparedDocument[] {
   const next = loadDocuments().filter((i) => i.id !== id);
   writeJson(DOCUMENTS_KEY, next);
+  syncNamespace("documents", next);
   return next;
+}
+
+export async function hydrateCabinetFromServer(): Promise<{
+  savedLots: SavedLot[];
+  documents: PreparedDocument[];
+}> {
+  const [remoteLots, remoteDocuments] = await Promise.all([
+    loadWorkspaceState<unknown[]>("saved_lots"),
+    loadWorkspaceState<unknown[]>("documents"),
+  ]);
+  const savedLots = (remoteLots ?? loadSavedLots()).filter(isSavedLot).slice(0, MAX_SAVED);
+  const documents = (remoteDocuments ?? loadDocuments())
+    .filter(isPreparedDocument)
+    .slice(0, MAX_DOCS);
+  writeJson(SAVED_LOTS_KEY, savedLots);
+  writeJson(DOCUMENTS_KEY, documents);
+  return { savedLots, documents };
 }

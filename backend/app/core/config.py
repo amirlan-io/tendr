@@ -72,6 +72,8 @@ class Settings(BaseSettings):
 
     # === Redis ===
     redis_url: str = "redis://localhost:6379/0"
+    analysis_job_mode: Literal["local", "redis"] = "local"
+    analysis_job_queue_name: str = "tendr:analysis:jobs"
 
     # === LLM ===
     llm_provider: Literal["mistral", "alem", "openai-compatible"] = "mistral"
@@ -232,7 +234,13 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a non-empty allowed_frontend_origins list")
             if any(host in {"localhost", "127.0.0.1", "0.0.0.0", "testserver", "*"} for host in hosts):
                 raise ValueError("Localhost/testserver hosts are not allowed in production")
-            if any(origin.lower().startswith(("http://localhost", "http://127.0.0.1", "https://localhost", "https://127.0.0.1")) for origin in origins):
+            local_origins = (
+                "http://localhost",
+                "http://127.0.0.1",
+                "https://localhost",
+                "https://127.0.0.1",
+            )
+            if any(origin.lower().startswith(local_origins) for origin in origins):
                 raise ValueError("Localhost origins are not allowed in production")
             if any(origin == "*" for origin in origins):
                 raise ValueError("Wildcard CORS is not allowed in production")
@@ -240,6 +248,24 @@ class Settings(BaseSettings):
             configured_key = (self.admin_api_key or "").strip().lower()
             if configured_key and configured_key in placeholder_keys:
                 raise ValueError("Production admin_api_key cannot use a placeholder value")
+            if not self.database_url.startswith("postgresql+"):
+                raise ValueError("Production requires PostgreSQL DATABASE_URL")
+            if not self.database_url_sync.startswith("postgresql://"):
+                raise ValueError("Production requires PostgreSQL DATABASE_URL_SYNC")
+            if self.analysis_job_mode != "redis" or not self.redis_url.strip():
+                raise ValueError("Production requires Redis-backed analysis jobs")
+            if not self.analysis_job_storage_dir.strip():
+                raise ValueError("Production requires a persistent shared ANALYSIS_JOB_STORAGE_DIR")
+            required = {
+                "SUPABASE_URL": self.supabase_url,
+                "SUPABASE_PUBLISHABLE_KEY": self.supabase_publishable_key,
+                "LLM_API_KEY": self.llm_api_key,
+                "GOSZAKUP_API_TOKEN": self.goszakup_api_token,
+                "TAVILY_API_KEY": self.tavily_api_key,
+            }
+            missing = [name for name, value in required.items() if not str(value).strip()]
+            if missing:
+                raise ValueError(f"Production core services are not configured: {', '.join(missing)}")
         return self
 
     @property

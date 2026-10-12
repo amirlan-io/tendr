@@ -21,6 +21,7 @@ import {
   UserBubble,
 } from "../components/ui/tendr-ai-chat";
 import { BidCalculator } from "../components/BidCalculator";
+import { loadWorkspaceState, saveWorkspaceState } from "../workspaceState";
 import { resolveLotSourceUrl } from "../dashboard/components/LotSourceLink";
 
 type Requirement = {
@@ -335,6 +336,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const [job, setJob] = useState<AnalysisJob | null>(null);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>(initialChatState.sessions);
   const [activeChatId, setActiveChatId] = useState(initialChatState.activeId);
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(
     initialChatState.sessions.find((item) => item.id === initialChatState.activeId)?.messages || [],
   );
@@ -352,6 +354,33 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
   const conversationEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let active = true;
+    void loadWorkspaceState<{ sessions?: ChatSession[]; activeId?: string }>("ai_chats")
+      .then((remote) => {
+        if (!active || !remote || !Array.isArray(remote.sessions)) return;
+        const sessions = remote.sessions
+          .filter((item) => item && typeof item.id === "string" && Array.isArray(item.messages))
+          .map((item) => ({ ...item, messages: item.messages.filter(isChatMessage).slice(-40) }))
+          .slice(0, 30);
+        if (!sessions.length) return;
+        const activeId = sessions.some((item) => item.id === remote.activeId)
+          ? remote.activeId!
+          : sessions[0].id;
+        setChatSessions(sessions);
+        setActiveChatId(activeId);
+        setMessages(sessions.find((item) => item.id === activeId)?.messages || []);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setWorkspaceHydrated(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceHydrated) return;
     const now = new Date().toISOString();
     setChatSessions((current) => {
       const next = current.map((session) => session.id === activeChatId
@@ -364,12 +393,16 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
         : session);
       localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next.slice(0, 30)));
       localStorage.setItem(ACTIVE_CHAT_KEY, activeChatId);
+      void saveWorkspaceState("ai_chats", {
+        sessions: next.slice(0, 30),
+        activeId: activeChatId,
+      }).catch(() => undefined);
       return next;
     });
     if (typeof conversationEndRef.current?.scrollIntoView === "function") {
       conversationEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [messages, loading, chatBusy, result, activeChatId]);
+  }, [messages, loading, chatBusy, result, activeChatId, workspaceHydrated]);
 
   function applyCompletedJob(done: AnalysisJob, animateResponse = true) {
     if (!done.result) {

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.agents.b2g import B2GAgent
-from app.core.client_id import require_client_id
+from app.core.client_id import require_authenticated_client_id
 from app.db import get_db
 from app.db import repo as db_repo
 from app.db.models import (
@@ -32,12 +32,8 @@ router = APIRouter(prefix="/b2g", tags=["b2g"])
 
 
 async def _user_for_request(session: AsyncSession, request: Request) -> User:
-    """Резолвим юзера по X-Client-Id (cookie).
-
-    This is not a full authorization mechanism; in production a server-side
-    session should be used instead.
-    """
-    cid = await require_client_id(request)
+    """Resolve a workspace owner only from a verified Supabase session."""
+    cid = await require_authenticated_client_id(request)
     stmt = select(User).where(User.web_client_id == cid)
     user = (await session.execute(stmt)).scalar_one_or_none()
     if not user:
@@ -215,10 +211,8 @@ async def list_members(
         .all()
     )
     items = []
-    # client_id намеренно НЕ отдаётся: у авторизованного пользователя он
-    # равен supabase_<uuid>, а require_client_id принимает такой же формат
-    # без токена. Выдача превращала любого участника вкладки в держателя
-    # чужой личности для всех гостевых эндпоинтов (аудит 2026-10-03).
+    # client_id намеренно НЕ отдаётся: идентификатор остаётся внутренней
+    # привязкой к подтверждённой Supabase-сессии.
     if owner:
         items.append(
             {

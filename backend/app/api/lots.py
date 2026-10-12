@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.client_id import require_client_id
+from app.core.client_id import require_authenticated_client_id, require_client_id
 from app.core.config import get_settings
 from app.db import get_db
 from app.db import repo as db_repo
@@ -597,7 +597,7 @@ async def _run_lot_search(
 
 @router.get("/history")
 async def get_lot_history(
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=DEFAULT_HISTORY_LIMIT, ge=1, le=MAX_HISTORY_LIMIT),
     offset: int = Query(default=0, ge=0),
@@ -622,7 +622,7 @@ async def get_lot_history(
 async def download_lot_document(
     lot_id: int,
     kind: str = Query(..., min_length=1, max_length=32),
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Скачать безопасный документ жалобы или отчёта по лоту текущего клиента."""
@@ -803,7 +803,7 @@ def _assistant_navigation_actions(answer: str) -> list[dict[str, str]]:
 @router.post("/assistant/chat")
 async def chat_with_tender_assistant(
     payload: AssistantChatRequest,
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Answer follow-up questions using only the user's saved tender analysis."""
@@ -909,7 +909,7 @@ async def _analysis_job_user(db: AsyncSession, client_id: str) -> User:
 @router.post("/analysis-jobs", status_code=202)
 async def create_analysis_job(
     req: AnalyzeLotRequest,
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a durable URL analysis and return immediately for polling."""
@@ -949,13 +949,13 @@ async def create_analysis_job(
     db.add(job)
     await db.commit()
     await db.refresh(job)
-    schedule_analysis_job(job.id)
+    await schedule_analysis_job(job.id)
     return _analysis_job_payload(job)
 
 
 @router.post("/analysis-jobs/upload", status_code=202)
 async def create_upload_analysis_job(
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
     file: Optional[UploadFile] = None,
 ):
@@ -1012,13 +1012,13 @@ async def create_upload_analysis_job(
     except Exception:
         stored_path.unlink(missing_ok=True)
         raise
-    schedule_analysis_job(job.id)
+    await schedule_analysis_job(job.id)
     return _analysis_job_payload(job)
 
 
 @router.get("/analysis-jobs/active")
 async def get_active_analysis_job(
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
 ):
     user = await db_repo.get_user_by_web_id(db, client_id)
@@ -1037,7 +1037,7 @@ async def get_active_analysis_job(
 @router.get("/analysis-jobs/{job_id}")
 async def get_analysis_job(
     job_id: str,
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
 ):
     user = await db_repo.get_user_by_web_id(db, client_id)
@@ -1119,7 +1119,7 @@ async def get_lot(lot_id: int, db: AsyncSession = Depends(get_db)) -> LotItem:
 @router.post("/analyze")
 async def analyze_lot_url(
     req: AnalyzeLotRequest,
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Полный AI-анализ лота: Documenter + Legal + Customer Score + Margin.
@@ -1223,7 +1223,7 @@ async def analyze_lot_url(
 
 @router.post("/analyze-upload")
 async def analyze_lot_upload(
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
     file: Optional[UploadFile] = None,
 ):
@@ -1338,7 +1338,7 @@ async def analyze_lot_upload(
 async def create_partnership(
     lot_id: int,
     req: PartnershipRequest,
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
     db: AsyncSession = Depends(get_db),
 ) -> PartnershipResponse:
     """

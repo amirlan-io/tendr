@@ -17,6 +17,7 @@ import {
   decideApproval,
   explainBlock,
   fetchOutreachCapabilities,
+  fetchPlatformCapabilities,
   fetchLotRequirements,
   fetchShortlist,
   friendlyError,
@@ -32,6 +33,7 @@ import type {
   EmailDraft,
   LotRequirements,
   OutreachCapabilities,
+  PlatformCapabilities,
   SupplierCandidate,
 } from "../suppliers.types";
 import { SupplierCandidateCard } from "../components/SupplierCandidateCard";
@@ -58,11 +60,13 @@ export function SuppliersPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [lotInfo, setLotInfo] = useState<LotRequirements | null>(null);
   const [capabilities, setCapabilities] = useState<OutreachCapabilities | null>(null);
+  const [platformCapabilities, setPlatformCapabilities] = useState<PlatformCapabilities | null>(null);
 
   useEffect(() => {
     const lot = new URLSearchParams(window.location.search).get("lot_id");
     if (lot) setLotId(lot);
     void fetchOutreachCapabilities().then(setCapabilities).catch(() => setCapabilities(null));
+    void fetchPlatformCapabilities().then(setPlatformCapabilities).catch(() => setPlatformCapabilities(null));
   }, []);
 
   const runSearch = useCallback(async () => {
@@ -234,6 +238,13 @@ export function SuppliersPage() {
         </div>
       </section>
 
+      {platformCapabilities?.supplier_search?.available === false && (
+        <p role="status" className="rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-4 py-3 text-sm leading-6 text-amber-100">
+          Поиск поставщиков временно недоступен: на сервере не подключён поисковый провайдер.
+          Добавьте <code className="rounded bg-black/25 px-1.5 py-0.5">TAVILY_API_KEY</code> и перезапустите backend.
+        </p>
+      )}
+
       <form
         className="flex flex-col gap-2 sm:flex-row"
         onSubmit={(e) => {
@@ -254,7 +265,7 @@ export function SuppliersPage() {
         />
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || platformCapabilities?.supplier_search?.available === false}
           className="rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-[#03110b] transition hover:bg-emerald-300 disabled:opacity-50"
         >
           {loading ? "Ищем поставщиков…" : "Найти поставщиков"}

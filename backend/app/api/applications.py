@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from io import BytesIO
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.agents.application_generator import (
@@ -17,12 +16,16 @@ from app.schemas.lot import (
     MarginCalculationRequest,
     MarginCalculationResult,
 )
+from app.core.supabase_auth import SupabaseUser, require_supabase_user
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
 
 @router.post("/generate-docx")
-async def generate_docx(payload: ApplicationRequest) -> StreamingResponse:
+async def generate_docx(
+    payload: ApplicationRequest,
+    _auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+) -> StreamingResponse:
     """Сгенерировать DOCX заявки на участие.
 
     Возвращает готовый файл для скачивания.
@@ -52,7 +55,10 @@ async def generate_docx(payload: ApplicationRequest) -> StreamingResponse:
 
 
 @router.post("/calculate-margin", response_model=MarginCalculationResult)
-async def calculate(payload: MarginCalculationRequest) -> MarginCalculationResult:
+async def calculate(
+    payload: MarginCalculationRequest,
+    _auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+) -> MarginCalculationResult:
     """Рассчитать оптимальную цену для участия в лоте.
 
     Учитывает:

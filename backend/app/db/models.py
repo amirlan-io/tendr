@@ -87,6 +87,27 @@ class User(Base):
     )
 
 
+class WorkspaceState(Base):
+    """Small user-owned UI state synchronized across browsers."""
+
+    __tablename__ = "workspace_states"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    namespace: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict | list] = mapped_column(JSONType, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "namespace", name="uq_workspace_states_user_namespace"),
+        Index("ix_workspace_states_user_namespace", "user_id", "namespace"),
+    )
+
+
 class QuotaReservation(Base):
     """БД-резервирование квоты на текущий месяц."""
 

@@ -514,6 +514,10 @@ html.dark .lava-background {
     /* Кабинет использует строгую чёрно-графитовую оболочку; цвет остаётся только у статусов. */
     .dashboard-shell .button-primary { @apply bg-white text-[#111112] shadow-none hover:bg-white/90 focus-visible:outline-white; }
     .dashboard-shell .button-secondary { @apply border-white/[0.08] bg-white/[0.035] shadow-none hover:border-white/[0.14] hover:bg-white/[0.06] focus-visible:outline-white; }
+    .dashboard-shell :where(a, button, input, textarea, select):focus-visible {
+        outline: 2px solid rgb(110 231 183 / .9);
+        outline-offset: 2px;
+    }
 }
 
 @media (max-width: 639px) {

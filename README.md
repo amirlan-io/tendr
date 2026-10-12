@@ -78,7 +78,7 @@
 
 ## 🚀 Текущий статус
 
-### Что работает (MVP, июнь 2026)
+### Что работает (MVP, октябрь 2026)
 
 | Фича | Статус |
 |------|--------|
@@ -88,7 +88,7 @@
 | RAG по Закону РК «О госзакупках» | ✅ 190 чанков в Qdrant |
 | Telegram-бот (URL/ID/файл, i18n ru/kk) | ✅ Готов |
 | Веб-интерфейс (главная, анализ, история) | ✅ Готов |
-| PostgreSQL + Alembic (6 таблиц) | ✅ Готов |
+| PostgreSQL + Alembic | ✅ Готово; SQLite только для локальной разработки |
 | Скоринг заказчика (trust 0-100) | ✅ Готов |
 | Оценка маржинальности (20+ категорий) | ✅ Готов |
 | DOCX-генерация жалобы + отчёта | ✅ Готов |
@@ -98,12 +98,14 @@
 | Dark mode + адаптивный дизайн | ✅ Готов |
 | i18n ru/kk на сайте и в боте | ✅ Готов |
 
-### В работе
+### Требует production-настройки
 
-- [ ] Токен goszakup API (запрошен, ожидаем)
-- [ ] B2G Agent — помощь заказчику с ТЗ
+- [ ] Проверить действующий токен Госзакупок на сервере
+- [ ] Добавить `TAVILY_API_KEY` для поиска поставщиков
+- [ ] Добавить Stripe price/webhook keys для покупки тарифов
+- [ ] Добавить SMTP и/или Leximo для связи с поставщиками
+- [ ] Добавить Sentry DSN для мониторинга
 - [ ] Автоматическая рассылка discovery (крон)
-- [ ] Kaspi Pay для подписок (к выпуску)
 - [ ] OCR для сканов PDF (Mistral OCR)
 
 ## 🛠️ Технологический стек
@@ -117,16 +119,16 @@
 - python-docx (генерация DOCX)
 
 **LLM:**
-- **Primary:** Mistral Large (`mistral-large-latest`) через API
-- **Fallback:** alemLLM `qwen3-6` (казахстанская модель) через `https://llm.alem.ai/v1`
+- **Primary:** OpenAI-compatible Qwen/AlemLLM (настраивается через `.env`)
+- **Fallback:** резервный API-провайдер из `LLM_API_KEY_FALLBACK`
 - **Embeddings:** Mistral `mistral-embed` (dim=1024)
 - **FailoverProvider** — автоматическое переключение после 3 ошибок
 
 **Bot:** aiogram 3, FSM, inline-клавиатуры, i18n ru/kk
 
-**Web:** React 18, Vite 5, TypeScript, Tailwind CSS 3, кастомные CSS-переменные для тёмной/светлой темы
+**Web:** React 18, Vite 8, TypeScript, Tailwind CSS 3
 
-**Инфра:** Docker Compose (Qdrant + Redis), systemd (для деплоя), Cloudflare Tunnel (для HTTPS)
+**Инфра:** PostgreSQL 16, Redis queue/rate limits, Qdrant, отдельный analysis worker, Docker Compose
 
 ## 📁 Структура проекта
 

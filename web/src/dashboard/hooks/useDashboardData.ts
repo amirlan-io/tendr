@@ -5,7 +5,7 @@ import {
   saveHistory,
   type HistoryItem,
 } from "../../historyStore";
-import { loadDocuments, loadSavedLots } from "../dashboard.data";
+import { hydrateCabinetFromServer, loadDocuments, loadSavedLots } from "../dashboard.data";
 import type { PreparedDocument, QuotaInfo, SavedLot } from "../dashboard.types";
 
 type ServerHistory = {
@@ -131,6 +131,22 @@ export function useLocalCabinet() {
   const refresh = useCallback(() => {
     setSavedLots(loadSavedLots());
     setDocuments(loadDocuments());
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void hydrateCabinetFromServer()
+      .then((state) => {
+        if (!active) return;
+        setSavedLots(state.savedLots);
+        setDocuments(state.documents);
+      })
+      .catch(() => {
+        // Local data remains available while offline.
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   return { savedLots, documents, refresh };

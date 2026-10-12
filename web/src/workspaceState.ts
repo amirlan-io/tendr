@@ -1,0 +1,24 @@
+import { api } from "./clientId";
+
+type WorkspaceEnvelope<T> = {
+  namespace: string;
+  payload: T | null;
+  updated_at: string | null;
+};
+
+export async function loadWorkspaceState<T>(namespace: string): Promise<T | null> {
+  const response = await api<WorkspaceEnvelope<T>>(
+    `/api/account/workspace/${encodeURIComponent(namespace)}`,
+  );
+  return response.payload ?? null;
+}
+
+export async function saveWorkspaceState<T extends Record<string, unknown> | unknown[]>(
+  namespace: string,
+  payload: T,
+): Promise<void> {
+  await api(`/api/account/workspace/${encodeURIComponent(namespace)}`, {
+    method: "PUT",
+    body: JSON.stringify({ payload }),
+  });
+}

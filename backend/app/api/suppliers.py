@@ -125,6 +125,8 @@ async def search_suppliers(
     from app.agents.supplier_agent import SupplierAgent, has_mandatory_mismatch, has_supported_match
 
     agent = SupplierAgent()
+    if not agent._tavily_client:
+        raise HTTPException(status_code=503, detail="SEARCH_PROVIDER_NOT_CONFIGURED")
     candidates, costs, meta = await agent.find_suppliers(
         requirements,
         budget_kzt=float(budget_kzt) if isinstance(budget_kzt, (int, float)) else None,

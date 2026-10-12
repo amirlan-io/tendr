@@ -78,6 +78,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             or request.url.path.startswith("/api/outreach")
             or request.url.path.startswith("/api/lots/analysis-jobs")
             or request.url.path.startswith("/api/lots/assistant")
+            or request.url.path.startswith("/api/b2g")
+            or request.url.path.startswith("/api/browser")
+            or request.url.path.startswith("/api/products")
         ):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
@@ -99,6 +102,15 @@ async def lifespan(app: FastAPI):
 
 def create_app(*, test_mode: bool = False) -> FastAPI:
     settings = get_settings()
+    if settings.sentry_dsn:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.app_env,
+            traces_sample_rate=0.1 if settings.app_env == "prod" else 0.0,
+            send_default_pii=False,
+        )
     allow_docs = settings.app_env in {"dev", "test"} or test_mode or settings.enable_openapi_in_prod
     app = FastAPI(
         title="Tendr API",

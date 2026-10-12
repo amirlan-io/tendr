@@ -14,7 +14,12 @@ from loguru import logger
 
 from app.agents.base import Agent
 from app.core.config import get_settings
-from app.schemas.lot import ProductItem, ProductSearchRequest, ProductSearchResult
+from app.schemas.lot import (
+    DeepSearchRequest,
+    ProductItem,
+    ProductSearchRequest,
+    ProductSearchResult,
+)
 
 
 def _s(value, default: str = "") -> str:
@@ -293,7 +298,7 @@ class ProductSearchAgent(Agent):
 
     async def run_deep(
         self,
-        request: "DeepSearchRequest",  # type: ignore
+        request: DeepSearchRequest,
         session=None,
         *,
         lot_id: str = "deep_search",

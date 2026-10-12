@@ -82,6 +82,10 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   BILLING_PROVIDER_ERROR: "Платёжный сервис временно недоступен. Попробуйте позже.",
   EMAIL_PROVIDER_NOT_CONFIGURED: "Отправка писем не настроена. Можно скопировать черновик и отправить вручную.",
   CALL_PROVIDER_NOT_CONFIGURED: "Сервис звонков не настроен. Можно позвонить вручную по номеру поставщика.",
+  SEARCH_PROVIDER_NOT_CONFIGURED:
+    "Поиск поставщиков пока не подключён. Владельцу проекта нужно добавить серверный ключ Tavily.",
+  RATE_LIMIT_UNAVAILABLE:
+    "Защита сервиса временно недоступна. Попробуйте снова через несколько секунд.",
   "Not found": "Данные не найдены.",
   "Lot not found": "Данные не найдены.",
   "Invalid client identifier": "Некорректный запрос. Проверьте введённые данные.",

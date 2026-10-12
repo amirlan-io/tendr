@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Calculator, CheckCircle2, ShieldCheck } from "lucide-react";
+import { loadWorkspaceState, saveWorkspaceState } from "../workspaceState";
 
 export type BidInputs = {
   quantity: string;
@@ -116,19 +117,34 @@ export function BidCalculator({
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    let active = true;
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) || "null") as Partial<BidInputs> | null;
       setInputs(saved ? { ...EMPTY_INPUTS, ...saved } : EMPTY_INPUTS);
     } catch {
       setInputs(EMPTY_INPUTS);
-    } finally {
-      setLoaded(true);
     }
-  }, [storageKey]);
+    void loadWorkspaceState<Partial<BidInputs>>(`bid-${lotId}`)
+      .then((remote) => {
+        if (active && remote) setInputs({ ...EMPTY_INPUTS, ...remote });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [lotId, storageKey]);
 
   useEffect(() => {
-    if (loaded) localStorage.setItem(storageKey, JSON.stringify(inputs));
-  }, [inputs, loaded, storageKey]);
+    if (!loaded) return;
+    localStorage.setItem(storageKey, JSON.stringify(inputs));
+    const timer = window.setTimeout(() => {
+      void saveWorkspaceState(`bid-${lotId}`, inputs).catch(() => undefined);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [inputs, loaded, lotId, storageKey]);
 
   const calculation = useMemo(() => calculateBid(inputs, budgetKzt), [inputs, budgetKzt]);
   const confirmations = [

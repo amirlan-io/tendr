@@ -9,6 +9,7 @@ import { DashboardMobileNav } from "./DashboardMobileNav";
 import { EmbedProvider } from "./Embedded";
 import { DASHBOARD_NAV } from "./dashboard.data";
 import { AssistantDock } from "./components/AssistantDock";
+import { useModalFocus } from "../hooks/useModalFocus";
 
 function displayNameOf(email: string | null, metaName: unknown): string {
   if (typeof metaName === "string" && metaName.trim()) return metaName.trim();
@@ -30,6 +31,7 @@ export function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const searchDialogRef = useModalFocus<HTMLElement>(searchOpen, () => setSearchOpen(false));
 
   const email = user?.email ?? null;
   const metaName = (user?.user_metadata as Record<string, unknown> | undefined)?.["full_name"];
@@ -127,6 +129,7 @@ export function DashboardLayout() {
           }}
         >
           <section
+            ref={searchDialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Поиск по кабинету"
@@ -151,13 +154,13 @@ export function DashboardLayout() {
                 type="button"
                 aria-label="Закрыть поиск"
                 onClick={() => setSearchOpen(false)}
-                className="rounded-md p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/75"
+                className="flex h-11 w-11 items-center justify-center rounded-md text-white/55 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
               >
                 <X aria-hidden className="h-4 w-4" />
               </button>
             </div>
             <div className="max-h-[430px] overflow-y-auto p-2">
-              <p className="px-2 pb-2 pt-1 text-[9px] font-medium uppercase tracking-[.14em] text-white/22">
+              <p className="px-2 pb-2 pt-1 text-[11px] font-medium uppercase tracking-[.14em] text-white/50">
                 Разделы кабинета
               </p>
               {searchResults.length > 0 ? (
@@ -174,7 +177,7 @@ export function DashboardLayout() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-[12px] font-medium text-white/80">{item.label}</span>
-                        <span className="mt-0.5 block truncate text-[10px] text-white/30">{item.description}</span>
+                        <span className="mt-0.5 block truncate text-xs text-white/55">{item.description}</span>
                       </span>
                       <ArrowUpRight aria-hidden className="h-3.5 w-3.5 text-white/18 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white/55" />
                     </Link>
@@ -186,7 +189,7 @@ export function DashboardLayout() {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-2.5 text-[9px] text-white/22">
+            <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-2.5 text-[11px] text-white/50">
               <span>Enter — перейти</span>
               <span>Esc — закрыть</span>
             </div>

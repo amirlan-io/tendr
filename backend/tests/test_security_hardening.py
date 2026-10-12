@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
 from app.api import admin as admin_api, browser_actions, lots as lots_api
-from app.core.client_id import generate_client_id, require_client_id, validate_client_id
+from app.core.client_id import (
+    generate_client_id,
+    require_authenticated_client_id,
+    require_client_id,
+    validate_client_id,
+)
 from app.db import Base
 from app.db import repo as db_repo
 from app.db.models import User
@@ -22,6 +27,21 @@ from app.main import app
 from app.services.goszakup_parser import GoszakupParser
 
 client = TestClient(app)
+
+
+@pytest.fixture
+def authenticated_browser_client():
+    """Exercise protected browser routes without contacting Supabase."""
+    async def _identity(request: Request) -> str:
+        return request.headers.get(
+            "X-Test-User", "supabase_00000000000000000000000000000001"
+        )
+
+    app.dependency_overrides[require_authenticated_client_id] = _identity
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(require_authenticated_client_id, None)
 
 
 def test_extract_reference_rejects_untrusted_host() -> None:
@@ -325,16 +345,16 @@ def test_openapi_routes_do_not_double_prefix_api() -> None:
     assert not offending_paths, f"Duplicate API prefix detected: {offending_paths}"
 
 
-def test_browser_run_requires_client_id() -> None:
+def test_browser_run_requires_authenticated_session() -> None:
     response = client.post(
         "/api/browser/run",
         json={"task": "check_lot_status", "lot_id": "17549503-1"},
     )
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid client identifier"
+    assert response.status_code == 401
+    assert response.json()["detail"] == "AUTH_REQUIRED"
 
 
-def test_browser_session_owner_access_is_enforced() -> None:
+def test_browser_session_owner_access_is_enforced(authenticated_browser_client) -> None:
     browser_actions._BROWSER_SESSIONS.clear()
     browser_actions._BROWSER_CLIENT_ACTIVE.clear()
     browser_actions._BROWSER_CLIENT_ACTIVITY.clear()
@@ -387,7 +407,7 @@ def test_browser_session_owner_access_is_enforced() -> None:
 
         other_client = client.get(
             f"/api/browser/status/{session_id}",
-            headers={"X-Client-Id": "web_abcdefghijklmno"},
+            headers={"X-Test-User": "supabase_00000000000000000000000000000002"},
         )
         assert other_client.status_code == 404
         assert other_client.json()["detail"] == "Session not found"
@@ -395,7 +415,7 @@ def test_browser_session_owner_access_is_enforced() -> None:
         monkeypatch.undo()
 
 
-def test_browser_run_rejects_invalid_lot_id() -> None:
+def test_browser_run_rejects_invalid_lot_id(authenticated_browser_client) -> None:
     response = client.post(
         "/api/browser/run",
         json={"task": "check_lot_status", "lot_id": "not-a-lot"},
@@ -404,7 +424,7 @@ def test_browser_run_rejects_invalid_lot_id() -> None:
     assert response.status_code == 422
 
 
-def test_browser_run_rejects_blocked_host() -> None:
+def test_browser_run_rejects_blocked_host(authenticated_browser_client) -> None:
     response = client.post(
         "/api/browser/run",
         json={"task": "check_lot_status", "lot_id": "17549503-1", "url": "https://evil.com"},
@@ -413,7 +433,7 @@ def test_browser_run_rejects_blocked_host() -> None:
     assert response.status_code == 422
 
 
-def test_browser_run_rejects_rate_limit() -> None:
+def test_browser_run_rejects_rate_limit(authenticated_browser_client) -> None:
     browser_actions._BROWSER_SESSIONS.clear()
     browser_actions._BROWSER_CLIENT_ACTIVE.clear()
     browser_actions._BROWSER_CLIENT_ACTIVITY.clear()
@@ -451,7 +471,7 @@ def test_browser_run_rejects_rate_limit() -> None:
         monkeypatch.undo()
 
 
-def test_browser_run_returns_safe_error_on_internal_exception() -> None:
+def test_browser_run_returns_safe_error_on_internal_exception(authenticated_browser_client) -> None:
     browser_actions._BROWSER_SESSIONS.clear()
     browser_actions._BROWSER_CLIENT_ACTIVE.clear()
     browser_actions._BROWSER_CLIENT_ACTIVITY.clear()

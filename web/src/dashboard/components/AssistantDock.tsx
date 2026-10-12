@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Bot, ExternalLink, Send, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { api, ApiError } from "../../clientId";
+import { useModalFocus } from "../../hooks/useModalFocus";
 
 type DockMessage = {
   id: string;
@@ -43,6 +44,7 @@ export function AssistantDock() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<DockMessage[]>(loadMessages);
+  const dialogRef = useModalFocus<HTMLElement>(open, () => setOpen(false));
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-12)));
@@ -85,13 +87,14 @@ export function AssistantDock() {
       </button>
 
       {open && (
-        <section role="dialog" aria-modal="true" aria-label="Помощник Tendr" className="fixed bottom-3 right-3 z-[80] flex h-[min(620px,calc(100vh-24px))] w-[min(390px,calc(100vw-24px))] flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0d0d0e] shadow-[0_28px_90px_rgba(0,0,0,.75)]">
+        <div className="fixed inset-0 z-[80] bg-black/55 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.currentTarget === event.target) setOpen(false); }}>
+        <section ref={dialogRef} role="dialog" aria-modal="true" aria-label="Помощник Tendr" className="fixed bottom-3 right-3 flex h-[min(620px,calc(100vh-24px))] w-[min(390px,calc(100vw-24px))] flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0d0d0e] shadow-[0_28px_90px_rgba(0,0,0,.75)]">
           <header className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3.5">
             <div className="flex items-center gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-400/[0.1] text-emerald-300"><Bot size={16} /></span>
-              <div><h2 className="text-xs font-semibold text-white">Помощник Tendr</h2><p className="mt-0.5 text-[10px] text-white/28">Знает текущий раздел</p></div>
+              <div><h2 className="text-sm font-semibold text-white">Помощник Tendr</h2><p className="mt-0.5 text-xs text-white/55">Знает текущий раздел</p></div>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Закрыть помощника" className="rounded-lg p-2 text-white/35 hover:bg-white/[0.05] hover:text-white"><X size={15} /></button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Закрыть помощника" className="flex h-11 w-11 items-center justify-center rounded-lg text-white/55 hover:bg-white/[0.05] hover:text-white"><X size={17} /></button>
           </header>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
@@ -123,6 +126,7 @@ export function AssistantDock() {
             </div>
           </form>
         </section>
+        </div>
       )}
     </>
   );

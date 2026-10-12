@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import httpx
@@ -16,24 +16,28 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.admin_auth import require_admin_key
-from app.core.client_id import require_client_id
 from app.core.config import get_settings
 from app.core.supabase_auth import (
     SupabaseUser,
-    get_optional_supabase_user,
     require_supabase_user,
     supabase_client_id,
 )
 from app.db import get_db
 from app.db import repo as db_repo
-from app.db.models import Analysis, DiscoverySubscription, Payment, Subscription, User
+from app.db.models import (
+    Analysis,
+    DiscoverySubscription,
+    Payment,
+    Subscription,
+    User,
+    WorkspaceState,
+)
 
 router = APIRouter(prefix="/account", tags=["account"])
 
 
 async def _user(session: AsyncSession, request: Request):
-    auth_user = await get_optional_supabase_user(request)
-    cid = supabase_client_id(auth_user) if auth_user else await require_client_id(request)
+    cid = supabase_client_id(await require_supabase_user(request))
     user = await db_repo.get_user_by_web_id(session, cid)
     if not user:
         user = await db_repo.get_or_create_user(session, web_client_id=cid)
@@ -103,6 +107,65 @@ async def update_profile(
         user.language = payload.language
     await session.flush()
     return {"ok": True, "user_id": user.id}
+
+
+class WorkspaceStateRequest(BaseModel):
+    payload: dict[str, Any] | list[Any]
+
+
+@router.get("/workspace/{namespace}")
+async def get_workspace_state(
+    namespace: str,
+    auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    if not namespace.replace("_", "").replace("-", "").isalnum() or len(namespace) > 64:
+        raise HTTPException(status_code=400, detail="INVALID_WORKSPACE_NAMESPACE")
+    user = await db_repo.get_or_create_user(
+        session, web_client_id=supabase_client_id(auth_user)
+    )
+    row = await session.scalar(
+        select(WorkspaceState).where(
+            WorkspaceState.user_id == user.id,
+            WorkspaceState.namespace == namespace,
+        )
+    )
+    return {
+        "namespace": namespace,
+        "payload": row.payload if row else None,
+        "updated_at": row.updated_at.isoformat() if row and row.updated_at else None,
+    }
+
+
+@router.put("/workspace/{namespace}")
+async def put_workspace_state(
+    namespace: str,
+    body: WorkspaceStateRequest,
+    auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    if not namespace.replace("_", "").replace("-", "").isalnum() or len(namespace) > 64:
+        raise HTTPException(status_code=400, detail="INVALID_WORKSPACE_NAMESPACE")
+    encoded = json.dumps(body.payload, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded.encode("utf-8")) > 1024 * 1024:
+        raise HTTPException(status_code=413, detail="WORKSPACE_STATE_TOO_LARGE")
+    user = await db_repo.get_or_create_user(
+        session, web_client_id=supabase_client_id(auth_user)
+    )
+    row = await session.scalar(
+        select(WorkspaceState).where(
+            WorkspaceState.user_id == user.id,
+            WorkspaceState.namespace == namespace,
+        )
+    )
+    if row is None:
+        row = WorkspaceState(user_id=user.id, namespace=namespace, payload=body.payload)
+        session.add(row)
+    else:
+        row.payload = body.payload
+        row.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    await session.flush()
+    return {"ok": True, "namespace": namespace}
 
 
 PLAN_CATALOG = {
@@ -233,7 +296,7 @@ def _stripe_period(subscription: dict[str, Any], *, now: datetime) -> tuple[date
         if not valid:
             return fallback
         selected = max(valid) if latest else min(valid)
-        return datetime.fromtimestamp(selected, timezone.utc).replace(tzinfo=None)
+        return datetime.fromtimestamp(selected, UTC).replace(tzinfo=None)
 
     return (
         _timestamp(starts, now, latest=False),
@@ -296,7 +359,7 @@ async def _deactivate_stripe_subscription(
             Subscription.user_id == user.id,
             Subscription.id != subscription.id,
             Subscription.is_active.is_(True),
-            Subscription.expires_at > datetime.now(timezone.utc).replace(tzinfo=None),
+            Subscription.expires_at > datetime.now(UTC).replace(tzinfo=None),
         ).limit(1)
     )
     if other.scalar_one_or_none() is None:
@@ -382,7 +445,7 @@ async def stripe_billing_webhook(
                     period_ends.append(int(end))
         if period_ends:
             subscription.expires_at = datetime.fromtimestamp(
-                max(period_ends), timezone.utc
+                max(period_ends), UTC
             ).replace(tzinfo=None)
         subscription.is_active = True
         user = await session.get(User, subscription.user_id)

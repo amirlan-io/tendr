@@ -222,6 +222,15 @@ export interface OutreachCapabilities {
   manual_fallback: boolean;
 }
 
+export interface PlatformCapabilities {
+  supplier_search: { available: boolean; provider: string | null };
+  billing: { available: boolean; provider: string | null };
+  email: { available: boolean; provider: string | null };
+  calls: { available: boolean; provider: string | null };
+  monitoring: { available: boolean };
+  remote_browser: { available: boolean };
+}
+
 /** Человекочитаемые подписи статусов сверки (F2: объяснение первично). */
 export const MATCH_STATUS_LABEL: Record<MatchStatus, string> = {
   fits: "Подходит",

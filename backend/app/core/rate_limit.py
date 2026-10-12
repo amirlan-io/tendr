@@ -20,12 +20,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections import defaultdict, deque
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+from app.core.config import get_settings
 
 #: Префиксы эндпоинтов, которые тратят деньги (LLM, Tavily, Browser Use).
 #: Лимит применяется только к ним: публичное чтение каталога лотов должно
@@ -64,9 +67,31 @@ def _sweep(now: float) -> None:
 
 
 def _client_key(request: Request) -> str:
-    """Ключ ограничения: адрес источника, а не подделываемый заголовок."""
+    """Prefer a hashed bearer identity, otherwise use the source address."""
+    authorization = request.headers.get("Authorization", "").strip()
+    if authorization.lower().startswith("bearer "):
+        digest = hashlib.sha256(authorization.encode("utf-8")).hexdigest()[:32]
+        return f"account:{digest}"
     client = request.client
-    return client.host if client else "unknown"
+    return f"ip:{client.host if client else 'unknown'}"
+
+
+async def _redis_count(key: str, now: float) -> tuple[int, int]:
+    """Increment a shared fixed-window counter and return count/retry seconds."""
+    from redis.asyncio import Redis
+
+    settings = get_settings()
+    bucket = int(now // WINDOW_SECONDS)
+    redis_key = f"tendr:rate:{bucket}:{key}"
+    client = Redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        count = int(await client.incr(redis_key))
+        if count == 1:
+            await client.expire(redis_key, WINDOW_SECONDS + 2)
+    finally:
+        await client.aclose()
+    retry_after = max(1, WINDOW_SECONDS - int(now % WINDOW_SECONDS))
+    return count, retry_after
 
 
 def reset_rate_limits() -> None:
@@ -82,13 +107,36 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not any(path.startswith(prefix) for prefix in RATE_LIMITED_PREFIXES):
             return await call_next(request)
 
+        now = time.time()
+        key = _client_key(request)
+        settings = get_settings()
+
+        if settings.app_env == "prod":
+            try:
+                count, retry_after = await _redis_count(key, now)
+            except Exception:
+                # Fail closed: an unavailable limiter must not turn paid APIs
+                # into unlimited public endpoints.
+                return JSONResponse(
+                    status_code=503,
+                    content={"detail": "RATE_LIMIT_UNAVAILABLE"},
+                    headers={"Retry-After": "5"},
+                )
+            if count > REQUESTS_PER_WINDOW:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "RATE_LIMITED"},
+                    headers={"Retry-After": str(retry_after)},
+                )
+            return await call_next(request)
+
+        # Development/test fallback: one-process sliding window.
         now = time.monotonic()
         global _LAST_SWEEP
         if now - _LAST_SWEEP > WINDOW_SECONDS:
             _LAST_SWEEP = now
             _sweep(now)
 
-        key = _client_key(request)
         hits = _HITS[key]
         cutoff = now - WINDOW_SECONDS
         while hits and hits[0] <= cutoff:

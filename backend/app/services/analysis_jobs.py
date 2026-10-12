@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -34,7 +34,19 @@ def analysis_job_storage_dir() -> Path:
     return root
 
 
-def schedule_analysis_job(job_id: str) -> None:
+async def schedule_analysis_job(job_id: str) -> None:
+    """Run locally in development or enqueue for a dedicated Redis worker."""
+    settings = get_settings()
+    if settings.analysis_job_mode == "redis":
+        from redis.asyncio import Redis
+
+        client = Redis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            await client.rpush(settings.analysis_job_queue_name, job_id)
+        finally:
+            await client.aclose()
+        return
+
     task = asyncio.create_task(run_analysis_job(job_id), name=f"analysis-job-{job_id}")
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
@@ -70,7 +82,7 @@ async def recover_analysis_jobs() -> None:
                         job.status = "failed"
                         job.error_code = "UPLOAD_EXPIRED"
                         job.stage = "Загруженный файл больше недоступен"
-                        job.completed_at = datetime.utcnow()
+                        job.completed_at = datetime.now(UTC).replace(tzinfo=None)
                         if job.reservation_key:
                             await db_repo.release_user_quota(
                                 session,
@@ -81,7 +93,7 @@ async def recover_analysis_jobs() -> None:
                 resumable.append(job.id)
             await session.commit()
         for job_id in resumable:
-            schedule_analysis_job(job_id)
+            await schedule_analysis_job(job_id)
     except Exception as exc:  # missing migration must not make the whole API unavailable
         logger.warning("Could not recover analysis jobs: {}", exc)
 
@@ -193,7 +205,7 @@ async def run_analysis_job(job_id: str) -> None:
                 )
                 job.result_json = payload
                 job.analysis_id = analysis.id if analysis else None
-                job.completed_at = datetime.utcnow()
+                job.completed_at = datetime.now(UTC).replace(tzinfo=None)
             await session.commit()
     except asyncio.CancelledError:
         # Preserve an uploaded source so the row can be requeued during startup.
@@ -216,7 +228,7 @@ async def run_analysis_job(job_id: str) -> None:
                     "UPLOAD_EXPIRED" if isinstance(exc, FileNotFoundError) else "ANALYSIS_FAILED"
                 )
                 job.stage = "Не удалось завершить анализ"
-                job.completed_at = datetime.utcnow()
+                job.completed_at = datetime.now(UTC).replace(tzinfo=None)
                 await session.commit()
     finally:
         if kind == "upload" and cleanup_upload:
