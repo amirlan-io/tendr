@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
 from app.api import admin as admin_api, browser_actions, lots as lots_api
-from app.core.client_id import generate_client_id, require_client_id, validate_client_id
+from app.core.client_id import (
+    generate_client_id,
+    require_authenticated_client_id,
+    require_client_id,
+    validate_client_id,
+)
 from app.db import Base
 from app.db import repo as db_repo
 from app.db.models import User
@@ -22,6 +27,21 @@ from app.main import app
 from app.services.goszakup_parser import GoszakupParser
 
 client = TestClient(app)
+
+
+@pytest.fixture
+def authenticated_browser_client():
+    """Exercise protected browser routes without contacting Supabase."""
+    async def _identity(request: Request) -> str:
+        return request.headers.get(
+            "X-Test-User", "supabase_00000000000000000000000000000001"
+        )
+
+    app.dependency_overrides[require_authenticated_client_id] = _identity
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(require_authenticated_client_id, None)
 
 
 def test_extract_reference_rejects_untrusted_host() -> None:
@@ -99,7 +119,12 @@ def test_alembic_single_head_and_quota_migration_is_isolated() -> None:
     script = ScriptDirectory.from_config(alembic_cfg)
     heads = script.get_heads()
     assert len(heads) == 1
-    assert heads == ["d19b5a2f3b91"]
+    # Голова сдвинулась на серверное workspace-состояние; важно, что цепочка
+    # остаётся линейной и новая миграция наследует Supplier Agent.
+    assert heads == ["c91e4b4aa210"]
+    assert script.get_revision("c91e4b4aa210").down_revision == "e4a91f0b2c77"
+    assert script.get_revision("e4a91f0b2c77").down_revision == "a7c31e9d5b21"
+    assert script.get_revision("a7c31e9d5b21").down_revision == "d19b5a2f3b91"
 
     revision = script.get_revision("d19b5a2f3b91")
     assert revision.down_revision == "lots_partnerships_001"
@@ -253,7 +278,34 @@ async def test_require_client_id_accepts_valid_values() -> None:
             "headers": [(b"x-client-id", b"web_1234567890abcd")],
         }
     )
-    assert await require_client_id(request) == "web_1234567890abcd"
+    # Гость попадает в собственное пространство имён (`gst_`), поэтому его
+    # значение никогда не совпадёт с `supabase_*` авторизованного аккаунта.
+    assert await require_client_id(request) == "gst_web_1234567890abcd"
+
+
+@pytest.mark.asyncio
+async def test_require_client_id_rejects_authenticated_identity_as_guest() -> None:
+    """Гость не может выдать себя за авторизованного пользователя.
+
+    Идентификатор авторизованного — `supabase_<uuid>`. Если бы гостевой путь
+    его принимал, знание чужого UUID (например, из списка участников вкладки)
+    давало бы доступ к чужим данным без токена (аудит 2026-10-03, P0 #1).
+    """
+    for forged in (
+        b"supabase_064f71e5787b44b3a16bd4d41d957d99",
+        b"SUPABASE_064f71e5787b44b3a16bd4d41d957d99",
+    ):
+        request = Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/",
+                "headers": [(b"x-client-id", forged)],
+            }
+        )
+        with pytest.raises(HTTPException) as exc:
+            await require_client_id(request)
+        assert exc.value.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -294,16 +346,16 @@ def test_openapi_routes_do_not_double_prefix_api() -> None:
     assert not offending_paths, f"Duplicate API prefix detected: {offending_paths}"
 
 
-def test_browser_run_requires_client_id() -> None:
+def test_browser_run_requires_authenticated_session() -> None:
     response = client.post(
         "/api/browser/run",
         json={"task": "check_lot_status", "lot_id": "17549503-1"},
     )
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid client identifier"
+    assert response.status_code == 401
+    assert response.json()["detail"] == "AUTH_REQUIRED"
 
 
-def test_browser_session_owner_access_is_enforced() -> None:
+def test_browser_session_owner_access_is_enforced(authenticated_browser_client) -> None:
     browser_actions._BROWSER_SESSIONS.clear()
     browser_actions._BROWSER_CLIENT_ACTIVE.clear()
     browser_actions._BROWSER_CLIENT_ACTIVITY.clear()
@@ -356,7 +408,7 @@ def test_browser_session_owner_access_is_enforced() -> None:
 
         other_client = client.get(
             f"/api/browser/status/{session_id}",
-            headers={"X-Client-Id": "web_abcdefghijklmno"},
+            headers={"X-Test-User": "supabase_00000000000000000000000000000002"},
         )
         assert other_client.status_code == 404
         assert other_client.json()["detail"] == "Session not found"
@@ -364,7 +416,7 @@ def test_browser_session_owner_access_is_enforced() -> None:
         monkeypatch.undo()
 
 
-def test_browser_run_rejects_invalid_lot_id() -> None:
+def test_browser_run_rejects_invalid_lot_id(authenticated_browser_client) -> None:
     response = client.post(
         "/api/browser/run",
         json={"task": "check_lot_status", "lot_id": "not-a-lot"},
@@ -373,7 +425,7 @@ def test_browser_run_rejects_invalid_lot_id() -> None:
     assert response.status_code == 422
 
 
-def test_browser_run_rejects_blocked_host() -> None:
+def test_browser_run_rejects_blocked_host(authenticated_browser_client) -> None:
     response = client.post(
         "/api/browser/run",
         json={"task": "check_lot_status", "lot_id": "17549503-1", "url": "https://evil.com"},
@@ -382,7 +434,7 @@ def test_browser_run_rejects_blocked_host() -> None:
     assert response.status_code == 422
 
 
-def test_browser_run_rejects_rate_limit() -> None:
+def test_browser_run_rejects_rate_limit(authenticated_browser_client) -> None:
     browser_actions._BROWSER_SESSIONS.clear()
     browser_actions._BROWSER_CLIENT_ACTIVE.clear()
     browser_actions._BROWSER_CLIENT_ACTIVITY.clear()
@@ -420,7 +472,7 @@ def test_browser_run_rejects_rate_limit() -> None:
         monkeypatch.undo()
 
 
-def test_browser_run_returns_safe_error_on_internal_exception() -> None:
+def test_browser_run_returns_safe_error_on_internal_exception(authenticated_browser_client) -> None:
     browser_actions._BROWSER_SESSIONS.clear()
     browser_actions._BROWSER_CLIENT_ACTIVE.clear()
     browser_actions._BROWSER_CLIENT_ACTIVITY.clear()
@@ -561,7 +613,6 @@ def test_validate_upload_file_rejects_empty_file() -> None:
 
 
 def test_validate_upload_file_rejects_oversize_chunked() -> None:
-    settings = type("Settings", (), {"max_upload_bytes": 64})()
     async def _read_chunks():
         file = UploadFile(filename="big.txt", file=io.BytesIO(b"x" * 128))
         payload = await lots_api.read_upload_file_safely(file, max_bytes=64)
@@ -602,7 +653,6 @@ def test_validate_upload_file_rejects_invalid_extension_mime_or_signature() -> N
 
 
 def test_validate_upload_file_rejects_zip_bomb_and_path_traversal() -> None:
-    settings = type("Settings", (), {"max_upload_bytes": 10 * 1024 * 1024})()
     payload = b"PK\x03\x04"
     with pytest.raises(lots_api.UploadValidationError):
         lots_api._validate_zip_container(payload)
@@ -1034,6 +1084,53 @@ def test_history_route_returns_only_current_user_records() -> None:
 
     import asyncio
     asyncio.run(_run())
+
+
+def test_lot_source_url_prefers_stored_link_and_falls_back_to_id() -> None:
+    """История должна отдавать ссылку на оригинал объявления.
+
+    Раньше поле url не возвращалось вовсе, и переход на сам лот
+    на goszakup был невозможен ни из истории, ни из документов.
+    """
+    stored = SimpleNamespace(
+        lot_id="17726443",
+        source_url="https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1",
+    )
+    assert (
+        lots_api._lot_source_url(stored, {})
+        == "https://v3bl.goszakup.gov.kz/ru/announce/index/17726443-1"
+    )
+
+    # Загруженный ТЗ: url — это `upload:имя.pdf`, ссылка строится из ID.
+    uploaded = SimpleNamespace(lot_id="17726443", source_url="upload:tz.pdf")
+    assert lots_api._lot_source_url(uploaded, {}) == (
+        "https://goszakup.gov.kz/ru/announce/index/17726443"
+    )
+
+    # Некорректные значения не должны превращаться в ссылку.
+    assert lots_api._lot_source_url(SimpleNamespace(lot_id="b2g-1", source_url=""), {}) is None
+    assert lots_api._lot_source_url(SimpleNamespace(lot_id="12345", source_url=None), {}) is None
+    assert lots_api._lot_source_url(SimpleNamespace(lot_id="17726443", source_url="http://x.kz"), {}) == (
+        "https://goszakup.gov.kz/ru/announce/index/17726443"
+    )
+
+
+def test_history_item_contains_source_url() -> None:
+    item = SimpleNamespace(
+        lot_id="17726443",
+        title="Фильтры",
+        customer="КГП",
+        method="tender",
+        overall_risk="high",
+        n_requirements=3,
+        n_red_flags=1,
+        source_url=None,
+        created_at=__import__("datetime").datetime(2024, 1, 2, 3, 4, 5),
+        result_json={"lot": {"title": "Фильтры"}, "legal": {"overall_risk": "high"}},
+    )
+    assert lots_api._safe_history_item(item)["url"] == (
+        "https://goszakup.gov.kz/ru/announce/index/17726443"
+    )
 
 
 def test_download_route_rejects_unknown_kind_and_missing_document() -> None:

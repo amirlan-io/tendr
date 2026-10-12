@@ -1,0 +1,196 @@
+{
+  "source_report": "docs/supplier-recovery-live-2026-10-08.json",
+  "seconds": 30.0,
+  "additional_search_calls": 1,
+  "recovery_queries": [
+    {
+      "code": "regulator",
+      "query": "Регулятор давления 80 мм 60,3 МПа Стальной фланцевый цена Казахстан",
+      "reason": "specs_unconfirmed"
+    }
+  ],
+  "verification_gaps": [
+    {
+      "code": "filter",
+      "title": "Топливный фильтр",
+      "status": "specs_unconfirmed",
+      "reason": "Характеристики не подтверждены или не соответствуют ТЗ."
+    },
+    {
+      "code": "regulator",
+      "title": "Регулятор давления",
+      "status": "specs_unconfirmed",
+      "reason": "Характеристики не подтверждены или не соответствуют ТЗ."
+    }
+  ],
+  "new_candidates": [
+    {
+      "name": "Регулятор давления прямого действия \"до себя\" DN - 80 мм РА-В 80, КПСР купить от 798802 KZT | Lunda - регуляторы перепада давления",
+      "supplier": "Регулятор давления прямого действия \"до себя\" DN - 80 мм РА-В 80, КПСР купить от 798802 KZT | Lunda - регуляторы перепада давления",
+      "domain": "lunda.kz",
+      "url": "https://lunda.kz/catalog/category/c13510/product/regulyator-dn-kpsr_159221.html",
+      "price_kzt": 804344.0,
+      "in_stock": null,
+      "city": "",
+      "delivery_days": null,
+      "email": "",
+      "phone": "",
+      "image_url": "",
+      "certificates": [],
+      "warranty": "",
+      "sources": {
+        "search": "https://lunda.kz/catalog/category/c13510/product/regulyator-dn-kpsr_159221.html",
+        "page_content": "direct_html",
+        "price": "https://lunda.kz/catalog/category/c13510/product/regulyator-dn-kpsr_159221.html",
+        "price_source": "structured_data"
+      },
+      "is_middleman": false,
+      "domain_kind": "direct",
+      "estimated_total_kzt": 804344.0,
+      "budget_status": "over_budget",
+      "requirement_matches": [
+        {
+          "code": "filter",
+          "title": "Топливный фильтр",
+          "status": "unknown",
+          "comment": "На странице представлен регулятор давления прямого действия, информация о топливном фильтре отсутствует.",
+          "source_url": "https://lunda.kz/catalog/category/c13510/product/regulyator-dn-kpsr_159221.html"
+        },
+        {
+          "code": "regulator",
+          "title": "Регулятор давления",
+          "status": "no",
+          "comment": "Несоответствие материалу и давлению: корпус из серого чугуна («Материал корпуса: Серый чугун»), максимальное рабочее давление 16 бар (1,6 МПа) («Макс. рабочее давление, бар: 16»), вместо требуемых стали и 60,3 МПа. Проход 80 мм («Ду, мм: 80») и фланцевое присоединение («Присоединение: Фланцевое») подтверждены.",
+          "source_url": "https://lunda.kz/catalog/category/c13510/product/regulyator-dn-kpsr_159221.html"
+        }
+      ]
+    },
+    {
+      "name": "Регуляторы давления Ду 80 | купить фланцевый редуктор для воды | цена в Москве",
+      "supplier": "Регуляторы давления Ду 80 | купить фланцевый редуктор для воды | цена в Москве",
+      "domain": "prom-water.ru",
+      "url": "https://prom-water.ru/oborudovanie/regulyatory-davleniya-du-80",
+      "price_kzt": null,
+      "in_stock": null,
+      "city": "",
+      "delivery_days": null,
+      "email": "info+4643147@prom-water.ru",
+      "phone": "+7 (831) 203-25-95",
+      "image_url": "",
+      "certificates": [],
+      "warranty": "",
+      "sources": {
+        "search": "https://prom-water.ru/oborudovanie/regulyatory-davleniya-du-80",
+        "email": "https://prom-water.ru/oborudovanie/regulyatory-davleniya-du-80",
+        "phone": "https://prom-water.ru/oborudovanie/regulyatory-davleniya-du-80"
+      },
+      "is_middleman": false,
+      "domain_kind": "unknown",
+      "estimated_total_kzt": null,
+      "budget_status": "unknown",
+      "requirement_matches": [
+        {
+          "code": "filter",
+          "title": "Топливный фильтр",
+          "status": "unknown",
+          "comment": "На странице отсутствует информация о топливном фильтре.",
+          "source_url": "https://prom-water.ru/oborudovanie/regulyatory-davleniya-du-80"
+        },
+        {
+          "code": "regulator",
+          "title": "Регулятор давления",
+          "status": "unknown",
+          "comment": "В тексте страницы отсутствуют технические характеристики конкретного товара (материал, тип присоединения, рабочее давление).",
+          "source_url": "https://prom-water.ru/oborudovanie/regulyatory-davleniya-du-80"
+        }
+      ]
+    },
+    {
+      "name": "Регуляторы давления – купить в Алматы и с доставкой по Казахстану. Цены, характеристики, фото в интернет-магазине bb-engineering.kz",
+      "supplier": "Регуляторы давления – купить в Алматы и с доставкой по Казахстану. Цены, характеристики, фото в интернет-магазине bb-engineering.kz",
+      "domain": "bb-engineering.kz",
+      "url": "https://bb-engineering.kz/regulyatory-davleniya",
+      "price_kzt": null,
+      "in_stock": null,
+      "city": "Алматы",
+      "delivery_days": null,
+      "email": "",
+      "phone": "",
+      "image_url": "",
+      "certificates": [],
+      "warranty": "",
+      "sources": {
+        "search": "https://bb-engineering.kz/regulyatory-davleniya"
+      },
+      "is_middleman": false,
+      "domain_kind": "unknown",
+      "estimated_total_kzt": null,
+      "budget_status": "unknown",
+      "requirement_matches": [
+        {
+          "code": "filter",
+          "title": "Топливный фильтр",
+          "status": "unknown",
+          "comment": "На странице отсутствует информация о топливном фильтре.",
+          "source_url": "https://bb-engineering.kz/regulyatory-davleniya"
+        },
+        {
+          "code": "regulator",
+          "title": "Регулятор давления",
+          "status": "unknown",
+          "comment": "В тексте страницы отсутствуют характеристики конкретной модели регулятора давления (материал, проход, давление, тип присоединения).",
+          "source_url": "https://bb-engineering.kz/regulyatory-davleniya"
+        }
+      ]
+    },
+    {
+      "name": "Эстер Пирс: Регулятор не будет защищать инвесторов мемкоина TRUMP | США SEC | CryptoRank.io",
+      "supplier": "Эстер Пирс: Регулятор не будет защищать инвесторов мемкоина TRUMP | США SEC | CryptoRank.io",
+      "domain": "cryptorank.io",
+      "url": "https://cryptorank.io/ru/news/feed/a9dcb-ester-pirs-regulyator-ne-budet-zashchishchat-investorov-memkoina-trump",
+      "price_kzt": null,
+      "in_stock": null,
+      "city": "",
+      "delivery_days": null,
+      "email": "",
+      "phone": "",
+      "image_url": "",
+      "certificates": [],
+      "warranty": "",
+      "sources": {
+        "search": "https://cryptorank.io/ru/news/feed/a9dcb-ester-pirs-regulyator-ne-budet-zashchishchat-investorov-memkoina-trump"
+      },
+      "is_middleman": false,
+      "domain_kind": "unknown",
+      "estimated_total_kzt": null,
+      "budget_status": "unknown",
+      "requirement_matches": [
+        {
+          "code": "filter",
+          "title": "Топливный фильтр",
+          "status": "unknown",
+          "comment": "Страница новостей о криптовалютах, информация о товаре отсутствует.",
+          "source_url": "https://cryptorank.io/ru/news/feed/a9dcb-ester-pirs-regulyator-ne-budet-zashchishchat-investorov-memkoina-trump"
+        },
+        {
+          "code": "regulator",
+          "title": "Регулятор давления",
+          "status": "unknown",
+          "comment": "Страница новостей о криптовалютах, информация о товаре отсутствует.",
+          "source_url": "https://cryptorank.io/ru/news/feed/a9dcb-ester-pirs-regulyator-ne-budet-zashchishchat-investorov-memkoina-trump"
+        }
+      ]
+    }
+  ],
+  "budget_summary": {
+    "status": "incomplete",
+    "selected_goods_kzt": null,
+    "budget_kzt": 48000,
+    "missing_codes": [
+      "filter",
+      "regulator"
+    ],
+    "selected_offers": [],
+    "delivery_included": false
+  }
+}

@@ -1,0 +1,824 @@
+{
+  "commit": "95dd0b0",
+  "model": "qwen3-8",
+  "scope": "synthetic specifications, real LLM/Tavily/pages, isolated SQLite, no saved shortlist or outreach",
+  "runs": [
+    {
+      "name": "documenter_7_requirements",
+      "seconds": 4.1,
+      "result": {
+        "lot_id": "benchmark-office",
+        "title": "Поставка 2 офисных столов в Астану",
+        "customer": "Тестовая компания",
+        "source_url": null,
+        "amount_kzt": null,
+        "currency": "KZT",
+        "deadline": null,
+        "delivery_address": "",
+        "delivery_days": null,
+        "payment_terms": "",
+        "procurement_method": "tender",
+        "technical_specification": "",
+        "requirements": [
+          {
+            "name": "Габариты стола",
+            "value": "Размер столешницы 1400х700 мм, высота 750 мм.",
+            "is_critical": true,
+            "category": ""
+          },
+          {
+            "name": "Материалы",
+            "value": "Столешница из ЛДСП толщиной 25 мм, металлический каркас.",
+            "is_critical": true,
+            "category": ""
+          },
+          {
+            "name": "Гарантия и логистика",
+            "value": "Гарантия 24 месяца, доставка и сборка в течение 10 дней.",
+            "is_critical": true,
+            "category": ""
+          }
+        ],
+        "qualification_requirements": [],
+        "documents_required": [
+          "Сертификат соответствия"
+        ],
+        "evaluation_criteria": {},
+        "red_flags": [],
+        "warnings": [],
+        "legal_compliance": "ok",
+        "compliance_notes": "",
+        "customer_score": null,
+        "margin_estimate": null,
+        "recommendation": "review",
+        "summary": "Поставка двух офисных столов с ЛДСП столешницей и металлическим каркасом в Астану с доставкой и сборкой."
+      }
+    },
+    {
+      "name": "sandbox_office_desks",
+      "seconds": 94.0,
+      "result": {
+        "lot_id": "benchmark-synthetic",
+        "lot_url": null,
+        "requirements": [
+          {
+            "code": "desk",
+            "title": "Стол офисный",
+            "description": "Размер 1400х700 мм, высота 750 мм, ЛДСП 25 мм, металлический каркас, гарантия 24 месяца. Количество 2 шт.",
+            "mandatory": true
+          }
+        ],
+        "trace": {
+          "queries": [
+            "Стол офисный 700 мм 750 мм 25 мм 2 шт",
+            "Стол офисный 700 мм 750 мм 25 мм 2 шт Астана",
+            "Стол офисный",
+            "Стол офисный Астана"
+          ],
+          "direct_queries": [
+            "Стол офисный 700 мм 750 мм 25 мм 2 шт производитель казахстан",
+            "Стол офисный оптом напрямую от производителя"
+          ],
+          "found_before_filters": 20,
+          "blocked_filtered": 0,
+          "filtered_out": {
+            "dropped_region": 2,
+            "dropped_price": 0,
+            "dropped_direct": 0,
+            "dropped_no_price": 0,
+            "dropped_no_contacts": 0,
+            "dropped_budget": 0,
+            "unknown_city_kept": 17
+          },
+          "pages_read": 5,
+          "personalization": "",
+          "filters_applied": {
+            "regions": [
+              "Астана"
+            ],
+            "price_range": [
+              null,
+              null
+            ],
+            "only_direct": false,
+            "only_with_price": false,
+            "only_with_contacts": false,
+            "budget_kzt": 100000.0,
+            "lot_region": ""
+          }
+        },
+        "costs": {
+          "llm_usd": 0.0027,
+          "tavily_usd": 0.048,
+          "browser_usd": 0.0,
+          "total_usd": 0.0507,
+          "is_estimate": true,
+          "llm_calls": 6,
+          "tavily_calls": 6,
+          "browser_calls": 0
+        },
+        "duration_sec": 94.0,
+        "total": 5,
+        "candidates": [
+          {
+            "supplier": "Садовая, пляжная мебель в Коргалжыне",
+            "domain": "flagma.kz",
+            "title": "Садовая, пляжная мебель в Коргалжыне",
+            "url": "https://flagma.kz/products/sadovaya-plyazhnaya-mebel/korgalzhyn",
+            "score": 64,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "1.1",
+                "title": "Размер 1400х700 мм, высота 750 мм",
+                "status": "fits",
+                "comment": "В источнике указано: 'Размеры стола: 1400*700*750 мм'",
+                "source_url": "https://flagma.kz/products/sadovaya-plyazhnaya-mebel/korgalzhyn"
+              },
+              {
+                "code": "1.2",
+                "title": "ЛДСП 25 мм",
+                "status": "partial",
+                "comment": "В источнике указано: 'Материал: ... меламин 25 мм'. Меламинированная плита (ЛДСП) соответствует толщине, но точное обозначение материала (ЛДСП) в тексте не расшифровано, указан только тип покрытия/основы 'меламин'.",
+                "source_url": "https://flagma.kz/products/sadovaya-plyazhnaya-mebel/korgalzhyn"
+              },
+              {
+                "code": "1.3",
+                "title": "Металлический каркас",
+                "status": "fits",
+                "comment": "В источнике указано: 'Материал: Сталь...'. Сталь является металлическим материалом.",
+                "source_url": "https://flagma.kz/products/sadovaya-plyazhnaya-mebel/korgalzhyn"
+              },
+              {
+                "code": "1.4",
+                "title": "Гарантия 24 месяца",
+                "status": "unknown",
+                "comment": "В предоставленном фрагменте и карточке поставщика информация о гарантии отсутствует.",
+                "source_url": "https://flagma.kz/products/sadovaya-plyazhnaya-mebel/korgalzhyn"
+              },
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Нет данных от поставщика.",
+                "source_url": "https://flagma.kz/products/sadovaya-plyazhnaya-mebel/korgalzhyn"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Офисный стол в Астане — Сравнить цены и купить на ...",
+            "domain": "flagma.kz",
+            "title": "Офисный стол в Астане — Сравнить цены и купить на ...",
+            "url": "https://flagma.kz/products/astana/q=%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9+%D1%81%D1%82%D0%BE%D0%BB",
+            "score": 59,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "1.1",
+                "title": "Размер 1400х700 мм, высота 750 мм",
+                "status": "fits",
+                "comment": "В фрагменте указано: 'Размеры стола: 1400*700*750 мм'",
+                "source_url": "https://flagma.kz/products/astana/q=%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9+%D1%81%D1%82%D0%BE%D0%BB"
+              },
+              {
+                "code": "1.2",
+                "title": "ЛДСП 25 мм",
+                "status": "partial",
+                "comment": "В фрагменте указано: 'Материал: ... меламин 25 мм'. Меламинированная плита (ЛДСП) соответствует толщине, но точное обозначение материала (ЛДСП) в тексте заменено на 'меламин', что является общим термином для покрытия.",
+                "source_url": "https://flagma.kz/products/astana/q=%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9+%D1%81%D1%82%D0%BE%D0%BB"
+              },
+              {
+                "code": "1.3",
+                "title": "Металлический каркас",
+                "status": "fits",
+                "comment": "В фрагменте указано: 'Материал: Сталь...'. Наличие стали в составе материалов стола подразумевает металлический каркас/опору.",
+                "source_url": "https://flagma.kz/products/astana/q=%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9+%D1%81%D1%82%D0%BE%D0%BB"
+              },
+              {
+                "code": "1.4",
+                "title": "Гарантия 24 месяца",
+                "status": "unknown",
+                "comment": "В предоставленном фрагменте информация о гарантии отсутствует.",
+                "source_url": "https://flagma.kz/products/astana/q=%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9+%D1%81%D1%82%D0%BE%D0%BB"
+              },
+              {
+                "code": "1.5",
+                "title": "Количество 2 шт.",
+                "status": "unknown",
+                "comment": "В предоставленном фрагменте информация о наличии на складе или минимальном количестве заказа отсутствует.",
+                "source_url": "https://flagma.kz/products/astana/q=%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9+%D1%81%D1%82%D0%BE%D0%BB"
+              },
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Нет данных от поставщика.",
+                "source_url": "https://flagma.kz/products/astana/q=%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9+%D1%81%D1%82%D0%BE%D0%BB"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Стол письменный 1500*700*750",
+            "domain": "arlanstyle.kz",
+            "title": "Стол письменный 1500*700*750",
+            "url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+            "score": 49,
+            "domain_kind": "direct",
+            "price_kzt": 1.0,
+            "city": "",
+            "email": "",
+            "phone": "+7 (701) 760-67-11",
+            "estimated_total_kzt": 2.0,
+            "budget_status": "within_budget",
+            "requirement_matches": [
+              {
+                "code": "1.1",
+                "title": "Размер 1400х700 мм",
+                "status": "no",
+                "comment": "В названии товара и на странице указан размер 1500*700 мм, что не соответствует требованию 1400х700 мм.",
+                "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+              },
+              {
+                "code": "1.2",
+                "title": "Высота 750 мм",
+                "status": "fits",
+                "comment": "В названии товара указана высота 750 мм.",
+                "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+              },
+              {
+                "code": "1.3",
+                "title": "ЛДСП 25 мм",
+                "status": "unknown",
+                "comment": "В предоставленном фрагменте источника информация о материале столешницы и её толщине отсутствует.",
+                "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+              },
+              {
+                "code": "1.4",
+                "title": "Металлический каркас",
+                "status": "unknown",
+                "comment": "В предоставленном фрагменте источника информация о типе каркаса отсутствует.",
+                "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+              },
+              {
+                "code": "1.5",
+                "title": "Гарантия 24 месяца",
+                "status": "unknown",
+                "comment": "В предоставленном фрагменте источника информация о гарантийном сроке отсутствует.",
+                "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+              },
+              {
+                "code": "1.6",
+                "title": "Количество 2 шт.",
+                "status": "fits",
+                "comment": "На странице указано: 'Минимальный заказ — 2 шт.', что соответствует требуемому количеству.",
+                "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+              },
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Нет данных от поставщика.",
+                "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Цена указана без стоимости доставки.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Стол рабочий Кул-104 1500*700*750 Н стандартные ...",
+            "domain": "astana.zeta.kz",
+            "title": "Стол рабочий Кул-104 1500*700*750 Н стандартные ...",
+            "url": "https://astana.zeta.kz/catalog/mebel/korpusnaya_mebel/stoly_child/stol_rabochiy_kul_104_1500_700_750_n_standartnye_tsveta",
+            "score": 40,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "Астана",
+            "email": "",
+            "phone": "+77473631212",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "1.1",
+                "title": "Размер 1400х700 мм",
+                "status": "no",
+                "comment": "В названии товара указано размер 1500*700 мм, что не соответствует требуемым 1400х700 мм.",
+                "source_url": "https://astana.zeta.kz/catalog/mebel/korpusnaya_mebel/stoly_child/stol_rabochiy_kul_104_1500_700_750_n_standartnye_tsveta"
+              },
+              {
+                "code": "1.2",
+                "title": "Высота 750 мм",
+                "status": "fits",
+                "comment": "В названии товара указана высота 750 мм.",
+                "source_url": "https://astana.zeta.kz/catalog/mebel/korpusnaya_mebel/stoly_child/stol_rabochiy_kul_104_1500_700_750_n_standartnye_tsveta"
+              },
+              {
+                "code": "1.3",
+                "title": "ЛДСП 25 мм",
+                "status": "unknown",
+                "comment": "В предоставленном фрагменте источника информация о материале столешницы и её толщине отсутствует.",
+                "source_url": "https://astana.zeta.kz/catalog/mebel/korpusnaya_mebel/stoly_child/stol_rabochiy_kul_104_1500_700_750_n_standartnye_tsveta"
+              },
+              {
+                "code": "1.4",
+                "title": "Металлический каркас",
+                "status": "unknown",
+                "comment": "В предоставленном фрагменте источника информация о типе каркаса отсутствует.",
+                "source_url": "https://astana.zeta.kz/catalog/mebel/korpusnaya_mebel/stoly_child/stol_rabochiy_kul_104_1500_700_750_n_standartnye_tsveta"
+              },
+              {
+                "code": "1.5",
+                "title": "Гарантия 24 месяца",
+                "status": "unknown",
+                "comment": "В предоставленных данных поле 'Гарантия' пустое, информация о сроке гарантии отсутствует.",
+                "source_url": "https://astana.zeta.kz/catalog/mebel/korpusnaya_mebel/stoly_child/stol_rabochiy_kul_104_1500_700_750_n_standartnye_tsveta"
+              },
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Нет данных от поставщика.",
+                "source_url": "https://astana.zeta.kz/catalog/mebel/korpusnaya_mebel/stoly_child/stol_rabochiy_kul_104_1500_700_750_n_standartnye_tsveta"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Стеллаж в Астане — Сравнить цены и купить на ...",
+            "domain": "flagma.kz",
+            "title": "Стеллаж в Астане — Сравнить цены и купить на ...",
+            "url": "https://flagma.kz/products/astana/q=%D1%81%D1%82%D0%B5%D0%BB%D0%BB%D0%B0%D0%B6",
+            "score": 25,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "1.1",
+                "title": "Размер 1400х700 мм",
+                "status": "no",
+                "comment": "В источнике указаны размеры стеллажей (L=700 мм), а не офисных столов. Товар не соответствует категории.",
+                "source_url": "https://flagma.kz/products/astana/q=%D1%81%D1%82%D0%B5%D0%BB%D0%BB%D0%B0%D0%B6"
+              },
+              {
+                "code": "1.2",
+                "title": "Высота 750 мм",
+                "status": "unknown",
+                "comment": "В фрагменте упоминается цифра 750, но в контексте размеров стеллажей, а не высоты стола. Данные по столу отсутствуют.",
+                "source_url": "https://flagma.kz/products/astana/q=%D1%81%D1%82%D0%B5%D0%BB%D0%BB%D0%B0%D0%B6"
+              },
+              {
+                "code": "1.3",
+                "title": "Материал столешницы ЛДСП 25 мм",
+                "status": "no",
+                "comment": "Поставщик предлагает стеллажи, а не столы из ЛДСП. Материал не указан для стола.",
+                "source_url": "https://flagma.kz/products/astana/q=%D1%81%D1%82%D0%B5%D0%BB%D0%BB%D0%B0%D0%B6"
+              },
+              {
+                "code": "1.4",
+                "title": "Металлический каркас",
+                "status": "unknown",
+                "comment": "Информация о каркасе стола отсутствует, так как товар — стеллаж.",
+                "source_url": "https://flagma.kz/products/astana/q=%D1%81%D1%82%D0%B5%D0%BB%D0%BB%D0%B0%D0%B6"
+              },
+              {
+                "code": "1.5",
+                "title": "Гарантия 24 месяца",
+                "status": "unknown",
+                "comment": "Информация о гарантии на столы отсутствует.",
+                "source_url": "https://flagma.kz/products/astana/q=%D1%81%D1%82%D0%B5%D0%BB%D0%BB%D0%B0%D0%B6"
+              },
+              {
+                "code": "1.6",
+                "title": "Количество 2 шт.",
+                "status": "unknown",
+                "comment": "Информация о наличии конкретных столов в количестве 2 шт. отсутствует.",
+                "source_url": "https://flagma.kz/products/astana/q=%D1%81%D1%82%D0%B5%D0%BB%D0%BB%D0%B0%D0%B6"
+              },
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Нет данных от поставщика.",
+                "source_url": "https://flagma.kz/products/astana/q=%D1%81%D1%82%D0%B5%D0%BB%D0%BB%D0%B0%D0%B6"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "sandbox_filter_and_regulator",
+      "seconds": 90.9,
+      "result": {
+        "lot_id": "benchmark-synthetic",
+        "lot_url": null,
+        "requirements": [
+          {
+            "code": "filter",
+            "title": "Топливный фильтр",
+            "description": "Для ДВС легкового автомобиля. Количество 10 шт.",
+            "mandatory": true
+          },
+          {
+            "code": "regulator",
+            "title": "Регулятор давления",
+            "description": "Стальной, фланцевый, проход 80 мм, давление 60,3 МПа. Количество 1 шт.",
+            "mandatory": true
+          }
+        ],
+        "trace": {
+          "queries": [
+            "Регулятор давления 80 мм 60,3 МПа 1 шт Стальной",
+            "Топливный фильтр 10 шт автомобиля",
+            "Топливный фильтр",
+            "Регулятор давления"
+          ],
+          "direct_queries": [
+            "Топливный фильтр 10 шт автомобиля производитель казахстан",
+            "Регулятор давления 80 мм 60,3 МПа 1 шт Стальной производитель казахстан",
+            "Топливный фильтр оптом напрямую от производителя",
+            "Регулятор давления оптом напрямую от производителя"
+          ],
+          "found_before_filters": 20,
+          "blocked_filtered": 0,
+          "filtered_out": {
+            "dropped_region": 0,
+            "dropped_price": 0,
+            "dropped_direct": 0,
+            "dropped_no_price": 0,
+            "dropped_no_contacts": 0,
+            "dropped_budget": 0,
+            "unknown_city_kept": 0
+          },
+          "pages_read": 5,
+          "personalization": "",
+          "filters_applied": {
+            "regions": [],
+            "price_range": [
+              null,
+              null
+            ],
+            "only_direct": false,
+            "only_with_price": false,
+            "only_with_contacts": false,
+            "budget_kzt": 48000.0,
+            "lot_region": ""
+          }
+        },
+        "costs": {
+          "llm_usd": 0.0027,
+          "tavily_usd": 0.064,
+          "browser_usd": 0.0,
+          "total_usd": 0.0667,
+          "is_estimate": true,
+          "llm_calls": 6,
+          "tavily_calls": 8,
+          "browser_calls": 0
+        },
+        "duration_sec": 90.9,
+        "total": 5,
+        "candidates": [
+          {
+            "supplier": "регулятор давления - OLX.kz",
+            "domain": "olx.kz",
+            "title": "регулятор давления - OLX.kz",
+            "url": "https://www.olx.kz/list/q-%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80-%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F",
+            "score": 35,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Нет данных от поставщика.",
+                "source_url": "https://www.olx.kz/list/q-%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80-%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Нет данных от поставщика.",
+                "source_url": "https://www.olx.kz/list/q-%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80-%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ]
+          },
+          {
+            "supplier": "Топливный фильтр donaldson в Усть-Каменогорске",
+            "domain": "flagma.kz",
+            "title": "Топливный фильтр donaldson в Усть-Каменогорске",
+            "url": "https://flagma.kz/products/ustkamenogorsk/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+donaldson",
+            "score": 18,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 2 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://flagma.kz/products/ustkamenogorsk/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+donaldson"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "no",
+                "comment": "Представленная карточка поставщика содержит только информацию о топливном фильтре. Товар 'Регулятор давления' в данном источнике отсутствует.",
+                "source_url": "https://flagma.kz/products/ustkamenogorsk/q=%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9+%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80+donaldson"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ]
+          },
+          {
+            "supplier": "Регуляторы давления общепромышленные",
+            "domain": "fluid.kz",
+            "title": "Регуляторы давления общепромышленные",
+            "url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie",
+            "score": 18,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "mail@fluid.kz",
+            "phone": "+77770433181",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "no",
+                "comment": "Компания специализируется на промышленной гидравлике и пневматике (регуляторы давления). В предоставленном фрагменте и на странице нет данных о продаже топливных фильтров для легковых автомобилей.",
+                "source_url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Компания предлагает категорию 'Регуляторы давления общепромышленные', что соответствует типу товара. Однако в предоставленных данных отсутствуют конкретные характеристики (материал, тип присоединения, проход, рабочее давление) и наличие на складе. Требуется проверка конкретного артикула на сайте.",
+                "source_url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Не подтверждено обязательных пунктов: 2."
+            ]
+          },
+          {
+            "supplier": "Регулятор перепада давления в Атырау",
+            "domain": "flagma.kz",
+            "title": "Регулятор перепада давления в Атырау",
+            "url": "https://flagma.kz/products/atyrau/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "no",
+                "comment": "Представленная карточка товара относится к регулятору перепада давления, а не к топливному фильтру для ДВС.",
+                "source_url": "https://flagma.kz/products/atyrau/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "no",
+                "comment": "Товар является регулятором перепада давления для систем охлаждения/отопления, что не соответствует требованиям к стальному фланцевому регулятору с давлением 60,3 МПа и проходом 80 мм.",
+                "source_url": "https://flagma.kz/products/atyrau/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%B0%D0%B4%D0%B0+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ]
+          },
+          {
+            "supplier": "Регулятор давления газа в разделе Запчасти и ...",
+            "domain": "flagma.kz",
+            "title": "Регулятор давления газа в разделе Запчасти и ...",
+            "url": "https://flagma.kz/products/zapchasti-i-komplektuyushchie-dlya-kotlov/aktobe/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F+%D0%B3%D0%B0%D0%B7%D0%B0/page-2",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "no",
+                "comment": "Предложенный товар является регулятором давления газа (Honeywell HUPF100B310), а не топливным фильтром для ДВС. Категория товара не соответствует требованию.",
+                "source_url": "https://flagma.kz/products/zapchasti-i-komplektuyushchie-dlya-kotlov/aktobe/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F+%D0%B3%D0%B0%D0%B7%D0%B0/page-2"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "no",
+                "comment": "Товар Honeywell HUPF100B310 предназначен для стабилизации давления газа в системах отопления/газоснабжения. Максимальное рабочее давление таких регуляторов обычно составляет 0.5-1.0 МПа (5-10 бар), что несопоставимо с требуемым 60.3 МПа (603 бар). Также тип подключения (фланцевый, проход 80 мм) не подтвержден для данной модели, которая обычно имеет резьбовое подключение.",
+                "source_url": "https://flagma.kz/products/zapchasti-i-komplektuyushchie-dlya-kotlov/aktobe/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F+%D0%B3%D0%B0%D0%B7%D0%B0/page-2"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "product_search_office_desks",
+      "seconds": 41.4,
+      "result": {
+        "lot_id": "benchmark-office",
+        "query": "Стол офисный 1400х700 мм Астана",
+        "products": [
+          {
+            "name": "Компьютерный стол игровой 140 см на 60 см новый",
+            "price_kzt": 45000.0,
+            "price_text": "",
+            "url": "https://www.olx.kz/dom-i-sad/mebel/ofisnaya-mebel/stoly/astana/q-компьютерный-стол",
+            "store": "OLX.kz",
+            "rating": null,
+            "reviews_count": 0,
+            "match_score": 65,
+            "match_reason": "Длина стола 140 см соответствует требованию (1400 мм). Указано, что стол новый. Однако глубина 60 см (600 мм) меньше требуемых 700 мм (700 мм).",
+            "concerns": [
+              "Глубина стола 600 мм, требуется 700 мм",
+              "Не подтверждено наличие металлического каркаса и толщины ЛДСП 25 мм",
+              "Не подтверждена гарантия 24 месяца"
+            ],
+            "browser_verified_price": null,
+            "browser_verified_at": null,
+            "browser_session_id": null
+          },
+          {
+            "name": "Компьютерный стол с полками | 100×50×75 см | Астана",
+            "price_kzt": 25000.0,
+            "price_text": "",
+            "url": "https://olx.kz/dom-i-sad/mebel/ofisnaya-mebel/q-стол-компьютерный-астана",
+            "store": "OLX.kz",
+            "rating": null,
+            "reviews_count": 0,
+            "match_score": 40,
+            "match_reason": "Высота стола 75 см (750 мм) соответствует требованию. Однако размеры 100×50 см значительно меньше требуемых 1400×700 мм.",
+            "concerns": [
+              "Длина стола 1000 мм, требуется 1400 мм",
+              "Глубина стола 500 мм, требуется 700 мм",
+              "Не подтверждено наличие металлического каркаса и толщины ЛДСП 25 мм"
+            ],
+            "browser_verified_price": null,
+            "browser_verified_at": null,
+            "browser_session_id": null
+          },
+          {
+            "name": "Компьютерный письменный офисный столы",
+            "price_kzt": 35000.0,
+            "price_text": "",
+            "url": "https://www.olx.kz/dom-i-sad/mebel/ofisnaya-mebel/astana/q-компьютерный-стол",
+            "store": "OLX.kz",
+            "rating": null,
+            "reviews_count": 0,
+            "match_score": 50,
+            "match_reason": "Указано как офисный стол, что соответствует категории. Однако конкретные размеры (1400х700 мм) и характеристики (ЛДСП 25 мм, металлический каркас) в сниппете не указаны.",
+            "concerns": [
+              "Не подтверждены размеры 1400х700 мм",
+              "Не подтверждено наличие металлического каркаса и толщины ЛДСП 25 мм",
+              "Не подтверждена гарантия 24 месяца"
+            ],
+            "browser_verified_price": null,
+            "browser_verified_at": null,
+            "browser_session_id": null
+          },
+          {
+            "name": "Стол письменный компьютерный с пеналом полочным",
+            "price_kzt": 40000.0,
+            "price_text": "",
+            "url": "https://www.olx.kz/dom-i-sad/mebel/astana/q-компьютерный-стол",
+            "store": "OLX.kz",
+            "rating": null,
+            "reviews_count": 0,
+            "match_score": 45,
+            "match_reason": "Указано как письменный компьютерный стол, что может соответствовать категории. Однако конкретные размеры (1400х700 мм) и характеристики (ЛДСП 25 мм, металлический каркас) в сниппете не указаны.",
+            "concerns": [
+              "Не подтверждены размеры 1400х700 мм",
+              "Не подтверждено наличие металлического каркаса и толщины ЛДСП 25 мм",
+              "Не подтверждена гарантия 24 месяца"
+            ],
+            "browser_verified_price": null,
+            "browser_verified_at": null,
+            "browser_session_id": null
+          },
+          {
+            "name": "Офисный стол, тумба",
+            "price_kzt": 30000.0,
+            "price_text": "",
+            "url": "https://olx.kz/dom-i-sad/mebel/ofisnaya-mebel/q-офисный-стол",
+            "store": "OLX.kz",
+            "rating": null,
+            "reviews_count": 0,
+            "match_score": 55,
+            "match_reason": "Указано как офисный стол, что соответствует категории. Однако конкретные размеры (1400х700 мм) и характеристики (ЛДСП 25 мм, металлический каркас) в сниппете не указаны.",
+            "concerns": [
+              "Не подтверждены размеры 1400х700 мм",
+              "Не подтверждено наличие металлического каркаса и толщины ЛДСП 25 мм",
+              "Не подтверждена гарантия 24 месяца"
+            ],
+            "browser_verified_price": null,
+            "browser_verified_at": null,
+            "browser_session_id": null
+          }
+        ],
+        "search_queries": [
+          "офисный стол 1400х700 Астана купить",
+          "стол рабочий 1400 на 700 Astana",
+          "кеңсе үстелі 1400х700 Астана сатып алу",
+          "офисная мебель стол 1400х700 до 100000 тенге",
+          "стол компьютерный 1400х700 kaspi sulpak astana"
+        ],
+        "summary": "Общая сводка: найдено 5 товаров, 0 полностью соответствуют требованиям (размеры 1400х700 мм, ЛДСП 25 мм, металлический каркас, гарантия 24 месяца). Большинство товаров имеют несоответствующие размеры или не подтвержденные характеристики.",
+        "browser_actions_count": 0,
+        "browser_total_cost_usd": 0.0,
+        "browser_total_duration_sec": 0.0
+      }
+    }
+  ]
+}

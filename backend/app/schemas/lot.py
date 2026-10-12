@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_serializer, model_validator
@@ -54,6 +54,10 @@ class LotSearchRequest(BaseModel):
     platform: str = Field(default="", description="Площадка (пусто = все)")
     category: Literal["", "товар", "работа", "услуга"] = Field(default="")
     procurement_method: str = Field(default="")
+    procurement_method_ids: list[int] = Field(
+        default_factory=list,
+        description="Официальные ID способов закупки из V3",
+    )
     customer_bin: str = Field(
         default="",
         max_length=12,
@@ -65,7 +69,12 @@ class LotSearchRequest(BaseModel):
     )
     min_amount_kzt: float = Field(default=0)
     max_amount_kzt: float = Field(default=0)
-    status: str = Field(default="all", description="all / published / active")
+    status: Literal["active", "published", "offers", "archive", "all"] = Field(
+        default="active",
+        description="По умолчанию только лоты, в которых ещё можно участвовать",
+    )
+    published_from: date | None = Field(default=None, description="Дата публикации от")
+    published_to: date | None = Field(default=None, description="Дата публикации до")
     only_urgent: bool = Field(default=False, description="Только < 3 дней до дедлайна")
     only_with_amount: bool = Field(
         default=False, description="Только лоты с указанной суммой"
@@ -85,6 +94,7 @@ class LotSearchRequest(BaseModel):
         description="Сколько первых лотов анализировать через AI.",
     )
     limit: int = Field(default=50, ge=1, le=200)
+    cursor: int | None = Field(default=None, ge=1, description="Курсор V3 для следующей страницы")
 
 
 class LotSearchResult(BaseModel):
@@ -94,6 +104,12 @@ class LotSearchResult(BaseModel):
     total: int
     source: str  # "zakup.gov.kz" или "mock"
     is_mock: bool = False  # True если данные демо (пока нет реального токена)
+    next_cursor: int | None = None
+    has_more: bool = False
+    total_is_exact: bool = True
+    fetched_at: datetime | None = None
+    last_updated_at: datetime | None = None
+    scope: Literal["active", "published", "offers", "archive", "all"] = "active"
 
 
 class PartnershipRequest(BaseModel):
@@ -318,14 +334,14 @@ class MarginCalculationRequest(BaseModel):
     маппятся в новые через model_validator(mode='before').
     """
 
-    unit_cost_kzt: float = Field(..., description="Себестоимость единицы (тенге)")
-    desired_margin_pct: float = Field(default=15, description="Желаемая маржа (%)")
+    unit_cost_kzt: float = Field(..., ge=0, description="Себестоимость единицы без НДС (тенге)")
+    desired_margin_pct: float = Field(default=15, ge=0, lt=100, description="Желаемая маржа от выручки без НДС (%)")
     competitor_price_kzt: float | None = Field(
-        default=None, description="Цена конкурента (если известна)"
+        default=None, gt=0, description="Публичная сопоставимая цена с НДС (если известна)"
     )
-    vat_rate: float = Field(default=12, description="Ставка НДС (%)")
-    logistics_per_unit_kzt: float = Field(default=0, description="Логистика на единицу (тенге)")
-    overhead_per_unit_kzt: float = Field(default=0, description="Накладные расходы на единицу (тенге)")
+    vat_rate: float = Field(default=12, ge=0, le=100, description="Ставка НДС (%)")
+    logistics_per_unit_kzt: float = Field(default=0, ge=0, description="Логистика на единицу без НДС (тенге)")
+    overhead_per_unit_kzt: float = Field(default=0, ge=0, description="Накладные расходы на единицу без НДС (тенге)")
     # Обратная совместимость со старым форматом
     cost_price: float | None = Field(default=None)
     desired_margin_percent: float | None = Field(default=None)
@@ -381,10 +397,29 @@ class MarginCalculationResult(BaseModel):
 class RequirementItem(BaseModel):
     """Одно требование из ТЗ лота."""
 
+    code: str = ""
+    quantity: float | None = None
+    unit: str = ""
+
     name: str
     value: str
     is_critical: bool = False
     category: str = ""  # техническое, квалификационное, и т.д.
+    # Дословное подтверждение из официальной карточки/вложения. Требование без
+    # проверяемой цитаты не должно выглядеть в UI как подтверждённый факт.
+    source_quote: str = ""
+    source_document: str = ""
+
+
+class SourceDocument(BaseModel):
+    """Официальный файл, приложенный к позиции закупки."""
+
+    name: str
+    document_type: str = ""
+    url: str
+    extracted: bool = False
+    text_chars: int = 0
+    error: str = ""
 
 
 class ProcurementMethod(str):
@@ -408,12 +443,16 @@ class LotAnalysis(BaseModel):
     lot_id: str
     title: str
     customer: str = ""
+    # Ссылка на исходное объявление на goszakup. UI даёт по ней переход
+    # на оригинал — без неё результат анализа «замкнут» на нашу страницу.
+    source_url: str | None = None
     amount_kzt: float | None = None
     currency: str = "KZT"
     deadline: str | None = None
     delivery_address: str = ""
     delivery_days: int | None = None
     payment_terms: str = ""
+    delivery_terms: str = ""
     procurement_method: str = "tender"
 
     # Техническое задание
@@ -425,6 +464,7 @@ class LotAnalysis(BaseModel):
 
     # Документы
     documents_required: list[str] = Field(default_factory=list)
+    source_documents: list[SourceDocument] = Field(default_factory=list)
 
     # Оценка
     evaluation_criteria: dict[str, Any] = Field(default_factory=dict)
@@ -472,6 +512,12 @@ class LegalCheckItem(BaseModel):
     rule_id: str | None = None
     rule_title: str | None = None
     law_reference: str | None = None
+    # Ссылки на источник нормы и цитату для прозрачной проверки
+    article: str | None = None
+    source: str | None = None
+    quote: str | None = None
+    citation_url: str | None = None
+    legal_text_revision: str | None = None
 
 
 class LegalCheckResult(BaseModel):
@@ -492,6 +538,7 @@ class LegalCheckResult(BaseModel):
     complaint_draft: str | dict | None = None  # черновик жалобы
     summary: str = ""
     can_complain_to_counting_committee: bool = False
+    corpus_revision: str | None = None
 
 
 # ═════ B2G (workspace) ═════
@@ -567,6 +614,10 @@ class CustomerScore(BaseModel):
     avg_risk: str | None = None
     source: str = "unknown"
     notes: str = ""
+    is_estimate: bool = True
+    evidence_count: int = 0
+    method: str = "internal_analyses"
+    disclaimer: str = "Оценка основана на внутренних анализах Tendr и не подтверждает надёжность заказчика."
 
 
 class MarginEstimate(BaseModel):
@@ -575,6 +626,10 @@ class MarginEstimate(BaseModel):
     estimated_margin_pct: float = 0.0  # процент маржи
     category: str = ""
     confidence: str = "low"  # low / medium / high
+    is_estimate: bool = True
+    method: str = "category_baseline"
+    assumptions: list[str] = Field(default_factory=list)
+    disclaimer: str = "Ориентир по категории, а не расчёт вашей фактической прибыли."
 
 
 # ═════ Deep Search Result ═════

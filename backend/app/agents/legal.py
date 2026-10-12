@@ -38,70 +38,72 @@ class LegalAgent(Agent):
 {
   "items": [
     {"rule_id": "...", "rule_title": "...",
-     "status": "ok|violation|risk|needs_review",
+     "status": "ok|risk|needs_review",
      "severity": "low|medium|high",
      "description": "...",
      "law_reference": "статья/пункт закона",
+     "article": "статья/пункт закона",
+     "source": "источник нормы",
+     "quote": "цитата из нормы",
+     "citation_url": "ссылка на источник",
      "recommendation": "что делать"}
   ],
-  "overall_risk": "low|medium|high",
+  "overall_risk": "low|medium|high|needs_review",
   "summary": "краткое резюме проверки в 2-3 предложениях",
-  "can_complain_to_counting_committee": true/false,
-  "complaint_draft": "если есть нарушения и нужно подавать жалобу — черновик жалобы в Счётный комитет на госязыке или русском, иначе null"
+  "can_complain_to_counting_committee": false,
+  "complaint_draft": null
 }
 
 ПРИНЦИПЫ РАБОТЫ:
 
-1. ЛОЯЛЬНОСТЬ К МЕЛОЧАМ.
-   Не будь занудой. Если нарушение мелкое, формальное, типовое для отрасли,
-   или заказчик его легко исправит — НЕ вноси его в список.
-   Лучше меньше нарушений, но все будут серьёзные.
-   Сосредоточься только на том, что реально мешает участнику.
+1. НЕ ВЫДАВАЙ ОПРЕДЕЛЁННЫЙ ВЫВОД БЕЗ НОРМАТИВНОЙ БАЗЫ.
+   Если RAG пуст или недоступен — не делай юридический вывод. Верни пустой items и overall_risk='needs_review'.
 
-2. СТРОГОСТЬ К РЕАЛЬНЫМ ПРОБЛЕМАМ.
-   Грубые нарушения — обязательно фиксируй:
-   - дискриминационные требования (опыт работы с конкретным поставщиком,
-     требование быть резидентом определённого региона без обоснования,
-     избыточные квалификационные требования)
-   - завышенные требования (например, требуется 5 лет опыта для лота на 1 млн тг)
-   - отсутствие бюджета, сроков, существенных условий
-   - противоречие антимонопольному законодательству
-   - требование документов, не предусмотренных Законом
+2. СОМНЕВАЕШЬСЯ — НЕ УТВЕРЖДАЙ.
+   Если нет достаточной уверенности, используй status='risk' или 'needs_review'.
+   Не утверждай, что есть нарушение, если это лишь возможный риск, который требует проверки.
+   Формулы типа 'возможный риск, требуется проверка' лучше, чем ложное обвинение.
 
-3. СОМНЕВАЕШЬСЯ — ПРОПУСТИ.
-   Если не уверен в нарушении — НЕ вноси его.
-   Лучше ничего не написать, чем ошибочно обвинить заказчика.
-   Помечай status=needs_review ТОЛЬКО когда явно нужно участие юриста-человека.
+3. НЕ ВЫДУМЫВАЙ СТАТЬИ И ССЫЛКИ.
+   Используй только те нормы, которые реально упомянуты в RAG-контексте или в ТЗ.
+   Если источник неизвестен, оставляй поля source/article/citation_url пустыми.
 
-4. ЖАЛОБУ ПИШИ ТОЛЬКО ПРИ СЕРЬЁЗНЫХ НАРУШЕНИЯХ.
-   complaint_draft генерируй ТОЛЬКО если есть хотя бы один item
-   со status=violation и severity=high, иначе null.
-   Имитация жалоб без оснований — отвлекает от реальных проблем.
-
-5. НЕ ВЫДУМЫВАЙ СТАТЬИ.
-   Ссылайся только на те нормы, которые реально упомянуты
-   в RAG-контексте или в самом ТЗ.
-
-6. ФОРМА ЖАЛОБЫ (если complaint_draft не null):
-   - шапка: Счётный комитет по контролю за осуществлением госзакупок РК
-   - обстоятельства: краткое описание лота и выявленных нарушений
-   - нарушенные нормы: конкретные статьи Закона с номерами
-   - просительная часть: признать, обязать устранить, приостановить
+4. ЖАЛОБУ НЕ ГЕНЕРИРОВАТЬ.
+   Для жалоб и институционального адресата требуется отдельная профессиональная проверка с реальным регламентом уполномоченного органа.
+   Поэтому complaint_draft всегда должен быть null, а can_complain_to_counting_committee — false.
 """
 
     def __init__(self, rag: RAGStore | None = None) -> None:
         self.rag = rag or RAGStore(collection="law_kz")
 
     async def run(self, lot_text: str, *, lot_id: str) -> LegalCheckResult:
-        # 1. ищем релевантные нормы в RAG
-        context_chunks: list[str] = []
-        if self.rag.count() > 0:
-            query = (
-                f"Проверка соответствия государственных закупок требованиям Закона РК. "
-                f"Лот: {lot_text[:500]}"
+        rag_count = self.rag.count() if self.rag is not None else 0
+        if rag_count == 0:
+            return LegalCheckResult(
+                lot_id=lot_id,
+                checks=[],
+                items=[],
+                overall_risk="needs_review",
+                summary=(
+                    "Юридическая проверка недоступна: нормативная база (RAG) пуста или "
+                    "недоступна. Сначала загрузите корпус законодательства и проверьте Qdrant."
+                ),
+                can_complain_to_counting_committee=False,
+                complaint_draft=None,
+                corpus_revision=None,
             )
-            hits = await self.rag.search(query, top_k=6)
-            context_chunks = [h.chunk.text for h in hits]
+
+        context_chunks: list[str] = []
+        source_hints: list[str] = []
+        quote_hints: list[str] = []
+        query = (
+            f"Проверка соответствия государственных закупок требованиям Закона РК. "
+            f"Лот: {lot_text[:500]}"
+        )
+        hits = await self.rag.search(query, top_k=6)
+        context_chunks = [h.chunk.text for h in hits]
+        source_hints = [h.chunk.source for h in hits if h.chunk.source]
+        quote_hints = [h.chunk.text for h in hits if h.chunk.text]
 
         context_block = "\n\n---\n\n".join(context_chunks) if context_chunks else "(RAG пуст)"
         prompt = (
@@ -119,9 +121,9 @@ class LegalAgent(Agent):
                 summary="Не удалось выполнить проверку. Попробуйте позже.",
             )
 
-        items = [
-            LegalCheckItem(
-                # Поддерживаем оба варианта полей от LLM
+        items = []
+        for it in data.get("items", []):
+            item = LegalCheckItem(
                 category=_s(it.get("category") or it.get("rule_id") or "general"),
                 title=_s(it.get("title") or it.get("rule_title") or ""),
                 severity=_s(it.get("severity"), "info"),
@@ -130,19 +132,21 @@ class LegalAgent(Agent):
                 recommendation=_s(it.get("recommendation") or ""),
                 rule_id=_s(it.get("rule_id")) or None,
                 rule_title=_s(it.get("rule_title")) or None,
-                law_reference=_s(it.get("law_reference")) or None,
+                law_reference=_s(it.get("law_reference") or it.get("article")) or None,
+                article=_s(it.get("article") or it.get("law_reference")) or None,
+                source=_s(it.get("source")) or (source_hints[0] if source_hints else None),
+                quote=_s(it.get("quote")) or (quote_hints[0] if quote_hints else None),
+                citation_url=_s(it.get("citation_url")) or None,
+                legal_text_revision=_s(it.get("legal_text_revision")) or None,
             )
-            for it in data.get("items", [])
-        ]
+            items.append(item)
         return LegalCheckResult(
             lot_id=lot_id,
-            # Заполняем оба поля — checks (новое имя) и items (alias для совместимости)
             checks=items,
             items=items,
             overall_risk=_s(data.get("overall_risk"), "needs_review"),
             summary=_s(data.get("summary")),
-            can_complain_to_counting_committee=bool(
-                data.get("can_complain_to_counting_committee", False)
-            ),
-            complaint_draft=data.get("complaint_draft"),
+            can_complain_to_counting_committee=False,
+            complaint_draft=None,
+            corpus_revision=_s(data.get("corpus_revision")) or None,
         )

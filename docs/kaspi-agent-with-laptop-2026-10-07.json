@@ -1,0 +1,60 @@
+{
+  "base_commit": "95dd0b0",
+  "local_code_fixes": true,
+  "model": "ag/gemini-3.7-flash-low",
+  "scope": "synthetic specifications, real LLM/Tavily/pages, isolated SQLite, no saved shortlist or outreach",
+  "runs": [
+    {
+      "name": "known_kaspi_filter_browser_control",
+      "seconds": 11.5,
+      "result": {
+        "card": {
+          "name": "Топливный фильтр 13592436",
+          "supplier": "Kaspi",
+          "domain": "kaspi.kz",
+          "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+          "price_kzt": 2692.0,
+          "in_stock": null,
+          "city": "Астана",
+          "delivery_days": null,
+          "email": "",
+          "phone": "",
+          "image_url": "",
+          "certificates": [],
+          "warranty": "",
+          "sources": {
+            "page_content": "ssh_browser",
+            "price": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+            "price_source": "ssh_browser"
+          },
+          "is_middleman": true,
+          "domain_kind": "unknown",
+          "estimated_total_kzt": 26920.0,
+          "budget_status": "within_budget"
+        },
+        "match": {
+          "requirement_matches": [
+            {
+              "code": "filter",
+              "title": "Топливный фильтр",
+              "status": "fits",
+              "comment": "Марка автомобиля: Chevrolet; Модель автомобиля: Cobalt; Год выпуска автомобиля: 2014; Тип: топливный фильтр; Номер OEM: 13592336.",
+              "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+            }
+          ],
+          "score": 100,
+          "warnings": [
+            "Сертификаты не указаны — запросите подтверждение.",
+            "Гарантия не указана.",
+            "Цена указана без стоимости доставки.",
+            "Контакты на странице не найдены.",
+            "Похоже на посредника, а не производителя — уточните, кто фактический поставщик."
+          ]
+        },
+        "evidence_text": "Клиентам\nБизнесу\nKaspi Гид\nМагазин\nМой город:\nАстана\nВСЕ КАТЕГОРИИ\tТЕЛЕФОНЫ И ГАДЖЕТЫ\tБЫТОВАЯ ТЕХНИКА\tТВ, АУДИО, ВИДЕО\tКОМПЬЮТЕРЫ\tМЕБЕЛЬ\tКРАСОТА, ЗДОРОВЬЕ\tДЕТСКИЕ ТОВАРЫ\tАПТЕКА\nKaspi Магазин\nАвтотовары\nАвтозапчасти\nАвтомобильные фильтры\nЧтобы увеличить, нажмите на картинку\n0 • 0 • 12\n\t\nКод товара: 108443317\nТопливный фильтр 13592436\n (1 отзыв)\nЦена\n2 692 ₸\nВ рассрочку\n898 ₸x 3 мес\nОткрыть в приложении Kaspi.kz\n\n\n\nХарактеристики\nОписание\nХарактеристики Топливный фильтр 13592436\nОбщие характеристики\nКод товара:\n108443317\nМарка автомобиля\nChevrolet\nМодель автомобиля\nCobalt\nГод выпуска автомобиля\n2014, 2022\nОсновные характеристики\nТип\nтопливный фильтр\nНомер OEM\n13592336\nАртикул производителя\n13592436\n",
+        "pages_read": 1,
+        "llm_calls": 1
+      }
+    }
+  ]
+}

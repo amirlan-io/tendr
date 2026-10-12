@@ -22,7 +22,12 @@ class LocalEmbedder:
     """
 
     def __init__(self, model_name: str = "intfloat/multilingual-e5-small") -> None:
-        from sentence_transformers import SentenceTransformer
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise RuntimeError(
+                'Local embeddings are not installed. Run: pip install -e ".[local-embeddings]"'
+            ) from exc
 
         logger.info("Loading local embedder model: {}", model_name)
         self._model = SentenceTransformer(model_name)

@@ -87,6 +87,27 @@ class User(Base):
     )
 
 
+class WorkspaceState(Base):
+    """Small user-owned UI state synchronized across browsers."""
+
+    __tablename__ = "workspace_states"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    namespace: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict | list] = mapped_column(JSONType, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "namespace", name="uq_workspace_states_user_namespace"),
+        Index("ix_workspace_states_user_namespace", "user_id", "namespace"),
+    )
+
+
 class QuotaReservation(Base):
     """БД-резервирование квоты на текущий месяц."""
 
@@ -147,6 +168,36 @@ class Analysis(Base):
     __table_args__ = (
         Index("ix_analyses_user_created", "user_id", "created_at"),
         Index("ix_analyses_lot", "lot_id"),
+    )
+
+
+class AnalysisJob(Base):
+    """Долгий анализ, который можно восстановить после перезагрузки страницы."""
+
+    __tablename__ = "analysis_jobs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # url / upload
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    stage: Mapped[str] = mapped_column(String(160), default="Задание создано")
+    input_json: Mapped[dict] = mapped_column(JSONType, default=dict)
+    result_json: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    analysis_id: Mapped[int | None] = mapped_column(
+        ForeignKey("analyses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    reservation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_analysis_jobs_user_created", "user_id", "created_at"),
+        Index("ix_analysis_jobs_user_status", "user_id", "status"),
     )
 
 
@@ -425,3 +476,280 @@ class B2GTzDraft(Base):
     workspace: Mapped["B2GWorkspace"] = relationship(back_populates="tz_drafts")
 
     __table_args__ = (Index("ix_b2g_drafts_ws_version", "workspace_id", "version"),)
+
+
+# ═══════════════ Supplier Agent (F1–F10, ТЗ docs/tz-supplier-agent.md) ═══════════════
+# Архитектурный инвариант: агент умеет только ИСКАТЬ и ГОТОВИТЬ черновики.
+# Любой исходящий контакт (письмо/звонок) возможен исключительно через
+# approval_queue, и у агента нет инструментов «согласиться / заключить / оплатить».
+
+
+class CompanyProfile(Base):
+    """Профиль компании пользователя (F7).
+
+    Используется для персонализации системного промпта агента и подстановки
+    рабочих контактов в исходящие письма/звонки. Контакты НИКОГДА не уходят
+    в логи сторонних сервисов.
+    """
+
+    __tablename__ = "company_profiles"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    # Что поставляем / категории (список строк)
+    categories: Mapped[list] = mapped_column(JSONType, default=list)
+    regions: Mapped[list] = mapped_column(JSONType, default=list)
+    # Бюджетная вилка: [min_kzt, max_kzt] или None
+    budget_min_kzt: Mapped[float | None] = mapped_column(Float, nullable=True)
+    budget_max_kzt: Mapped[float | None] = mapped_column(Float, nullable=True)
+    min_check_kzt: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Производственные мощности / свободный текст
+    capabilities: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Рабочие контакты — только для исходящих
+    work_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    work_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    contact_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Режим отправки по умолчанию: review / trusted / manual
+    outreach_mode: Mapped[str] = mapped_column(String(16), default="review")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship()
+
+
+class SupplierAllowlist(Base):
+    """Белый список поставщиков — автонастройка разрешена (F7)."""
+
+    __tablename__ = "supplier_allowlist"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    supplier: Mapped[str] = mapped_column(String(256), index=True)
+    domain: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    note: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "supplier", name="uq_allowlist_user_supplier"),
+    )
+
+
+class SupplierBlocklist(Base):
+    """Стоп-лист поставщиков: агент не связывается и не предлагает (F6)."""
+
+    __tablename__ = "supplier_blocklist"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    supplier: Mapped[str] = mapped_column(String(256), index=True)
+    domain: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "supplier", name="uq_blocklist_user_supplier"),
+    )
+
+
+class SupplierCandidate(Base):
+    """Найденный поставщик с посимвольной сверкой по пунктам ТЗ (F1–F3).
+
+    ``card_json`` — сырая карточка (фото, цена, город, контакты, источники).
+    ``match_json`` — статусы по пунктам ТЗ + общий score + предупреждения.
+    Общий score вторичен: UI показывает объяснение по пунктам первым (F2).
+    """
+
+    __tablename__ = "supplier_candidates"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # lot_id — строка (в т.ч. "raw"/"manual" для файловых анализов)
+    lot_id: Mapped[str] = mapped_column(String(64), index=True)
+    supplier: Mapped[str] = mapped_column(String(256))
+    domain: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(512), default="")
+    # Карточка: name/price/city/stock/delivery/contacts/sources/image_url
+    card_json: Mapped[dict] = mapped_column(JSONType, default=dict)
+    # Сверка: requirement_matches[], score, warnings[]
+    match_json: Mapped[dict] = mapped_column(JSONType, default=dict)
+    score: Mapped[int] = mapped_column(Integer, default=0)
+    # Решение пользователя: pending / approved / rejected
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index("ix_supplier_candidates_user_lot", "user_id", "lot_id"),
+    )
+
+
+class ApprovalQueue(Base):
+    """Очередь на одобрение: черновик письма или план звонка (F3–F5).
+
+    Исходящий контакт разрешён ТОЛЬКО при status=approved (F6, тест в критериях приёмки).
+    """
+
+    __tablename__ = "approval_queue"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    candidate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("supplier_candidates.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    # Тип: email / call
+    kind: Mapped[str] = mapped_column(String(16), index=True)
+    # Черновик письма (email) либо сценарий/план звонка (call)
+    draft_text: Mapped[str] = mapped_column(Text, default="")
+    plan_json: Mapped[dict] = mapped_column(JSONType, default=dict)
+    # Статус: pending / approved / rejected / executed / failed
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    decision_note: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
+class OutreachJob(Base):
+    """Выполненное исходящее действие: письмо или звонок (F4–F5)."""
+
+    __tablename__ = "outreach_jobs"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    approval_id: Mapped[int] = mapped_column(
+        ForeignKey("approval_queue.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16), index=True)
+    recipient: Mapped[str] = mapped_column(String(256), default="")
+    # Итог переговоров по цене: accept / counter_once / decline
+    price_outcome: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    # Статус: queued / sent / delivered / failed / transcription_ready
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    external_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    transcription: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
+class PricePolicy(Base):
+    """Политика торга пользователя (F6).
+
+    Допуск X% — зона молчаливого согласия. Предел Y% — одна встречная попытка,
+    дальше — отказ. Реализуется состояниями в services/price_policy.py,
+    а не текстом промпта.
+    """
+
+    __tablename__ = "price_policies"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    # X: цена в пределах ±tolerance_pct% — согласиться
+    tolerance_pct: Mapped[float] = mapped_column(Float, default=5.0)
+    # Y: выше tolerance, но в пределах counter_limit_pct% — одна встречная
+    counter_limit_pct: Mapped[float] = mapped_column(Float, default=15.0)
+    counter_script: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserInterest(Base):
+    """Интересы пользователя для персонализации тендеров (F8).
+
+    Заполняется онбординг-квизом (cold start) и уточняется поведением.
+    """
+
+    __tablename__ = "user_interests"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    categories: Mapped[list] = mapped_column(JSONType, default=list)
+    regions: Mapped[list] = mapped_column(JSONType, default=list)
+    keywords: Mapped[list] = mapped_column(JSONType, default=list)
+    min_budget_kzt: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_budget_kzt: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Заполнен ли квиз (cold start закрыт)
+    quiz_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class TenderFeedback(Base):
+    """Обратная связь «подходит / не подходит» — топливо для скоринга v2 (F8)."""
+
+    __tablename__ = "tender_feedback"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    lot_id: Mapped[str] = mapped_column(String(64), index=True)
+    # fits / not_fits
+    verdict: Mapped[str] = mapped_column(String(16), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
+class DigestSetting(Base):
+    """Настройки дайджеста рекомендаций (F8)."""
+
+    __tablename__ = "digest_settings"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    # Каналы: ["telegram", "email"]
+    channels: Mapped[list] = mapped_column(JSONType, default=list)
+    # Максимум рекомендаций в день (анти-спам)
+    daily_limit: Mapped[int] = mapped_column(Integer, default=5)
+    hour_kz: Mapped[int] = mapped_column(Integer, default=9)  # час отправки по Алматы
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class AgentAuditLog(Base):
+    """Аудит действий агента и расходов (F10, НФТ «наблюдаемость»).
+
+    Пишется на каждый поиск, сверку, черновик, одобрение, письмо, звонок.
+    Расходы разделены по типам: llm / tavily / browser / call.
+    """
+
+    __tablename__ = "agent_audit_log"
+
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # search / match / draft / decision / email / call / digest
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    lot_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    target: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Произвольные детали (без секретов и контактов третьих лиц)
+    detail_json: Mapped[dict] = mapped_column(JSONType, default=dict)
+    llm_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    tavily_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    browser_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    call_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)

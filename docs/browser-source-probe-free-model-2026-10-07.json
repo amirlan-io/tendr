@@ -1,0 +1,7 @@
+{
+  "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+  "model": "browser-use-2.0",
+  "task": "read a public product card; no login or purchase",
+  "error_type": "BrowserUseError",
+  "error_summary": "Task failed: 422: [{\"type\": \"enum\", \"loc\": [\"body\", \"model\"], \"msg\": \"Input should be 'bu-mini', 'bu-max', 'bu-ultra', 'gemini-3-flash', 'claude-sonnet-4.6', 'claude-opus-4.6', 'claude-opus-4.7', 'claude-sonnet-5', 'clau"
+}

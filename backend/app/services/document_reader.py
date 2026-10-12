@@ -23,9 +23,16 @@ from app.core.config import get_settings
 
 # Минимальное количество символов на страницу, чтобы считать, что PDF содержит текст
 _MIN_CHARS_PER_PAGE = 50
+# Защитные лимиты для официальных вложений и пользовательских файлов. Раньше
+# ссылки на эти константы существовали без определений, поэтому PDF/XLSX
+# завершались ошибкой до чтения содержимого.
+MAX_PDF_PAGES = 120
+MAX_EXCEL_ROWS = 5_000
+MAX_EXCEL_COLUMNS = 100
+MAX_EXCEL_CELLS = 200_000
 
 
-async def extract_text(file_path: str | Path) -> str:
+async def extract_text(file_path: str | Path, *, include_vision: bool = True) -> str:
     """Извлечь текст из файла. Поддержка: .pdf, .docx, .txt, .md, .xlsx, .xls, .csv.
 
     Для PDF с картинками: извлекаем текст + vision-описания картинок.
@@ -50,7 +57,7 @@ async def extract_text(file_path: str | Path) -> str:
             text = p.read_text(encoding="utf-8", errors="ignore")
 
         # Для PDF: добавляем vision-описания картинок (если есть)
-        if suffix == ".pdf" and text and not text.startswith("["):
+        if include_vision and suffix == ".pdf" and text and not text.startswith("["):
             try:
                 from app.services.vision import describe_pdf_images
 

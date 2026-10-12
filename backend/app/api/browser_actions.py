@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.agents.browser_use import BrowserUseAgent, BrowserUseError, ModelTier
-from app.core.client_id import require_client_id
+from app.core.client_id import require_authenticated_client_id
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +184,7 @@ async def _run_task_with_timeout(agent: BrowserUseAgent, **kwargs: Any) -> Any:
 @router.post("/run")
 async def run_browser_task(
     req: RunTaskRequest,
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
 ) -> dict[str, Any]:
     """Запустить задачу в реальном браузере по безопасному шаблону."""
     _enforce_browser_rate_limit(client_id)
@@ -247,7 +247,7 @@ async def run_browser_task(
 @router.get("/status/{session_id}")
 async def get_browser_status(
     session_id: str,
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
 ) -> dict:
     """Получить статус сессии только владельцем."""
     session = _get_browser_session_for_client(session_id, client_id)
@@ -273,7 +273,7 @@ async def get_browser_status(
 async def continue_browser_task(
     session_id: str,
     req: ContinueTaskRequest,
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
 ) -> dict:
     """Продолжить HIL сессию только владельцем."""
     session = _get_browser_session_for_client(session_id, client_id)
@@ -307,7 +307,7 @@ async def continue_browser_task(
 async def stop_browser_session(
     session_id: str,
     strategy: str = "session",
-    client_id: str = Depends(require_client_id),
+    client_id: str = Depends(require_authenticated_client_id),
 ) -> dict:
     """Остановить сессию только владельцем."""
     session = _get_browser_session_for_client(session_id, client_id)

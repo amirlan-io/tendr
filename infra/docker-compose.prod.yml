@@ -1,0 +1,99 @@
+name: tendr
+
+x-backend: &backend
+  build:
+    context: ..
+    dockerfile: backend/Dockerfile
+  env_file:
+    - ../.env
+  environment:
+    APP_ENV: prod
+    DATABASE_URL: postgresql+asyncpg://tendr:${POSTGRES_PASSWORD}@postgres:5432/tendr
+    DATABASE_URL_SYNC: postgresql://tendr:${POSTGRES_PASSWORD}@postgres:5432/tendr
+    REDIS_URL: redis://redis:6379/0
+    QDRANT_URL: http://qdrant:6333
+    ANALYSIS_JOB_MODE: redis
+    ANALYSIS_JOB_STORAGE_DIR: /var/lib/tendr/analysis-jobs
+  volumes:
+    - analysis_jobs:/var/lib/tendr/analysis-jobs
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tendr
+      POSTGRES_USER: tendr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tendr -d tendr"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.5
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    <<: *backend
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  analysis-worker:
+    <<: *backend
+    command: ["python", "-m", "app.workers.analysis"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  analysis_jobs:

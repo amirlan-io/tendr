@@ -61,7 +61,29 @@ class LLMProvider(ABC):
         """Эмбеддинг пачки текстов (оптимизация под лимиты API)."""
 
     async def healthcheck(self) -> bool:
-        """Проверка доступности. По умолчанию — embed('ping')."""
+        """Проверка доступности.
+
+        Проверяем именно chat: это то, от чего зависит анализ лотов и все
+        агенты. Раньше здесь был embed('ping'), из-за чего провайдеры без
+        поддержки эмбеддингов (например alemLLM) всегда отдавали «unavailable»
+        и в /health висел ложный degraded, хотя чат работал.
+
+        Сообщение передаётся объектом Message: провайдеры сериализуют его
+        через ``.__dict__`` и словарь приводит к AttributeError.
+        """
+        try:
+            await self.chat([Message(role="user", content="ping")], max_tokens=1)
+            return True
+        except Exception:
+            # Запасной вариант: вдруг падает именно chat, а embed жив.
+            try:
+                await self.embed("ping")
+                return True
+            except Exception:
+                return False
+
+    async def supports_embeddings(self) -> bool:
+        """Умеет ли провайдер эмбеддинги (для RAG). Не влияет на health."""
         try:
             await self.embed("ping")
             return True

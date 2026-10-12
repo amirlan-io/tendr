@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend tests and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test -- --run
+      - run: npm run build
+
+  backend:
+    name: Backend tests and migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: tendr_test
+          POSTGRES_USER: tendr
+          POSTGRES_PASSWORD: tendr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tendr -d tendr_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://tendr:tendr@localhost:5432/tendr_test
+      DATABASE_URL_SYNC: postgresql://tendr:tendr@localhost:5432/tendr_test
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      ALLOWED_FRONTEND_ORIGINS: http://localhost:5173
+      LLM_PROVIDER: openai-compatible
+      LLM_API_KEY: test-key
+      LLM_BASE_URL: https://example.invalid/v1
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Check undefined names
+        run: python -m ruff check app --select F821
+      - name: Apply migrations on clean PostgreSQL
+        run: python -m alembic upgrade head
+      - run: python -m pytest -q
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

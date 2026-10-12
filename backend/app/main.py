@@ -2,37 +2,86 @@
 
 from __future__ import annotations
 
+import traceback
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api import (
     account,
     admin,
     applications,
+    approvals,
     b2g,
     browser_actions,
     discovery,
+    errors,
     health,
     lots,
     products,
+    sandbox,
+    suppliers,
+    tenders,
 )
 from app.core.config import get_settings
 from app.core.logging import setup_logging
+from app.core.rate_limit import RateLimitMiddleware
 from app.llm import close_llm, get_llm
 from app.services.discovery import close_discovery, get_discovery
 from app.services.goszakup_parser import close_parser, get_parser
+from app.services.analysis_jobs import recover_analysis_jobs, shutdown_analysis_jobs
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except HTTPException:
+            # Ожидаемый ответ приложения (401/403/404…): его должен
+            # обработать сам FastAPI. Глотать его нельзя — иначе штатная
+            # проверка прав превратится в 500.
+            raise
+        except Exception as exc:  # noqa: BLE001 - последний рубеж
+            # Необработанное исключение не должно теряться: пересылаем
+            # владельцу и отдаём клиенту безопасный ответ без деталей.
+            from app.services.error_reporter import get_reporter, scrub
+
+            try:
+                await get_reporter().report(
+                    {
+                        "name": type(exc).__name__,
+                        "message": scrub(str(exc)),
+                        "stack": scrub("".join(traceback.format_exception(exc))[:1200]),
+                        "source": "backend",
+                        "where": f"{request.method} {request.url.path}",
+                    }
+                )
+            except Exception:  # noqa: BLE001 - репортер не должен ломать ответ
+                pass
+            logger_opt = __import__("loguru").logger
+            logger_opt.exception("[unhandled] {} {}", request.method, request.url.path)
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "INTERNAL_ERROR"},
+            )
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
-        if request.url.path.startswith("/api/admin") or request.url.path.startswith("/api/account"):
+        if (
+            request.url.path.startswith("/api/admin")
+            or request.url.path.startswith("/api/account")
+            or request.url.path.startswith("/api/suppliers")
+            or request.url.path.startswith("/api/approvals")
+            or request.url.path.startswith("/api/outreach")
+            or request.url.path.startswith("/api/lots/analysis-jobs")
+            or request.url.path.startswith("/api/lots/assistant")
+            or request.url.path.startswith("/api/b2g")
+            or request.url.path.startswith("/api/browser")
+            or request.url.path.startswith("/api/products")
+        ):
             response.headers.setdefault("Cache-Control", "no-store")
         return response
 
@@ -43,7 +92,9 @@ async def lifespan(app: FastAPI):
     get_llm()
     get_parser()
     get_discovery()
+    await recover_analysis_jobs()
     yield
+    await shutdown_analysis_jobs()
     await close_llm()
     await close_parser()
     await close_discovery()
@@ -51,6 +102,15 @@ async def lifespan(app: FastAPI):
 
 def create_app(*, test_mode: bool = False) -> FastAPI:
     settings = get_settings()
+    if settings.sentry_dsn:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.app_env,
+            traces_sample_rate=0.1 if settings.app_env == "prod" else 0.0,
+            send_default_pii=False,
+        )
     allow_docs = settings.app_env in {"dev", "test"} or test_mode or settings.enable_openapi_in_prod
     app = FastAPI(
         title="Tendr API",
@@ -63,6 +123,9 @@ def create_app(*, test_mode: bool = False) -> FastAPI:
     )
 
     app.add_middleware(SecurityHeadersMiddleware)
+    # Лимит по IP на дорогостоящие эндпоинты: подделать его сменой
+    # заголовка нельзя, в отличие от клиентского ключа внутри /api/browser.
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_frontend_origins_list,
@@ -85,6 +148,16 @@ def create_app(*, test_mode: bool = False) -> FastAPI:
     app.include_router(products.router, prefix="/api")
     app.include_router(applications.router, prefix="/api")
     app.include_router(browser_actions.router, prefix="/api")
+    # Сбор ошибок от клиента и тест канала уведомлений.
+    app.include_router(errors.router, prefix="/api")
+    # Песочница агента: прогон на реальных данных со следом и фильтрами.
+    app.include_router(sandbox.router, prefix="/api")
+    # Supplier Agent: поиск поставщиков, одобрения, исходящие, персонализация.
+    app.include_router(suppliers.router, prefix="/api")
+    app.include_router(approvals.router, prefix="/api")
+    app.include_router(approvals.outreach_router, prefix="/api")
+    app.include_router(tenders.router, prefix="/api")
+    app.include_router(tenders.profile_router, prefix="/api")
     return app
 
 

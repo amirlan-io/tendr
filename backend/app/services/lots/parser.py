@@ -54,8 +54,9 @@ class LotParser:
     BASE_URL_PUB = "https://zakup.gov.kz"
     TIMEOUT = 30.0
 
-    def __init__(self, api_token: str = ""):
+    def __init__(self, api_token: str = "", api_url: str = ""):
         self.api_token = api_token
+        self.base_url_api = (api_url or self.BASE_URL_API).rstrip("/")
         # Реальный токен — не "mock-test-token-12345" и не пустой и не заглушка
         self.use_api = bool(api_token) and not api_token.startswith("mock")
 
@@ -136,7 +137,7 @@ class LotParser:
 
         async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
             for endpoint in endpoints:
-                url = f"{self.BASE_URL_API}{endpoint}"
+                url = f"{self.base_url_api}{endpoint}"
                 try:
                     logger.info(f"[LotParser] trying {url} with params {list(params.keys())}")
                     resp = await client.get(url, headers=headers, params=params)

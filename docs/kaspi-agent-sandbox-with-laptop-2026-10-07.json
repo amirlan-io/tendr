@@ -1,0 +1,842 @@
+{
+  "base_commit": "95dd0b0",
+  "local_code_fixes": true,
+  "model": "ag/gemini-3.7-flash-low",
+  "scope": "synthetic specifications, real LLM/Tavily/pages, isolated SQLite, no saved shortlist or outreach",
+  "runs": [
+    {
+      "name": "sandbox_filter_and_regulator",
+      "seconds": 131.7,
+      "result": {
+        "lot_id": "benchmark-synthetic",
+        "lot_url": null,
+        "requirements": [
+          {
+            "code": "filter",
+            "title": "Топливный фильтр",
+            "description": "Для ДВС легкового автомобиля. Количество 10 шт.",
+            "mandatory": true
+          },
+          {
+            "code": "regulator",
+            "title": "Регулятор давления",
+            "description": "Стальной, фланцевый, проход 80 мм, давление 60,3 МПа. Количество 1 шт.",
+            "mandatory": true
+          }
+        ],
+        "trace": {
+          "queries": [
+            "Регулятор давления 80 мм 60,3 МПа 1 шт Стальной",
+            "Топливный фильтр 10 шт автомобиля",
+            "купить топливный фильтр для легкового автомобиля Казахстан",
+            "регулятор давления стальной фланцевый Ду 80 Ру 60 МПа",
+            "топливный фильтр ДВС оптом Алматы Астана",
+            "регулятор давления фланцевый 80 мм высокое давление"
+          ],
+          "direct_queries": [
+            "Топливный фильтр 10 шт автомобиля производитель казахстан",
+            "Регулятор давления 80 мм 60,3 МПа 1 шт Стальной производитель казахстан",
+            "Топливный фильтр оптом напрямую от производителя",
+            "Регулятор давления оптом напрямую от производителя"
+          ],
+          "found_before_filters": 20,
+          "blocked_filtered": 0,
+          "filtered_out": {
+            "dropped_region": 0,
+            "dropped_price": 0,
+            "dropped_direct": 0,
+            "dropped_no_price": 0,
+            "dropped_no_contacts": 0,
+            "dropped_budget": 0,
+            "unknown_city_kept": 0,
+            "dropped_mandatory": 2,
+            "dropped_unconfirmed": 15
+          },
+          "pages_read": 5,
+          "personalization": "",
+          "filters_applied": {
+            "regions": [],
+            "price_range": [
+              null,
+              null
+            ],
+            "only_direct": false,
+            "only_with_price": false,
+            "only_with_contacts": false,
+            "budget_kzt": 48000.0,
+            "lot_region": ""
+          }
+        },
+        "costs": {
+          "llm_usd": 0.0102,
+          "tavily_usd": 0.064,
+          "browser_usd": 0.0,
+          "total_usd": 0.0742,
+          "is_estimate": true,
+          "llm_calls": 9,
+          "tavily_calls": 8,
+          "browser_calls": 0
+        },
+        "duration_sec": 131.7,
+        "total": 3,
+        "candidates": [
+          {
+            "supplier": "Купить Stellox топливный фильтр 8220550SX в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Stellox топливный фильтр 8220550SX в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/stellox-toplivnyi-fil-tr-8220550sx-166638607",
+            "score": 50,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "fits",
+                "comment": "«Топливный фильтр для эффективной очистки топлива от загрязнений, обеспечивающий стабильную работу двигателя и защиту топливной системы», «Совместимость: Подходит для OPEL MONTEREY B», «Марка автомобиля: Opel», «Модель автомобиля: Monterey».",
+                "source_url": "https://kaspi.kz/shop/p/stellox-toplivnyi-fil-tr-8220550sx-166638607"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "В источнике представлен топливный фильтр, информация о регуляторе давления отсутствует.",
+                "source_url": "https://kaspi.kz/shop/p/stellox-toplivnyi-fil-tr-8220550sx-166638607"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Купить Топливный фильтр 13592436 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Топливный фильтр 13592436 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+            "score": 50,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "fits",
+                "comment": "«Тип: топливный фильтр», «защита двигателя от загрязнений и повреждений», «Совместимость с Chevrolet Cobalt», «Марка автомобиля: Chevrolet», «Модель автомобиля: Cobalt».",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "В источнике представлен топливный фильтр, информация о регуляторе давления отсутствует.",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Купить UFI топливный фильтр 31.500.00 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить UFI топливный фильтр 31.500.00 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705",
+            "score": 50,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "fits",
+                "comment": "«Тип: топливный фильтр», предназначен для легковых автомобилей: «Audi, BMW, Land Rover, Nissan, Skoda, Volkswagen», модели «A4, A6, 3-Series... Passat, Golf...» с двигателями «1.6, 1.8, 1.8T, 2.0, 2.4...»",
+                "source_url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар на странице отсутствует (представлен только топливный фильтр).",
+                "source_url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          }
+        ],
+        "rejected_candidates": [
+          {
+            "supplier": "Регулятор давления газа рд м в Казахстане, стр. 3",
+            "domain": "flagma.kz",
+            "title": "Регулятор давления газа рд м в Казахстане, стр. 3",
+            "url": "https://flagma.kz/products/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F+%D0%B3%D0%B0%D0%B7%D0%B0+%D1%80%D0%B4+%D0%BC/page-3",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике представлен регулятор давления, информация о топливном фильтре отсутствует.",
+                "source_url": "https://flagma.kz/products/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F+%D0%B3%D0%B0%D0%B7%D0%B0+%D1%80%D0%B4+%D0%BC/page-3"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "no",
+                "comment": "В описании указан «Регулятор давления чугунный фланцевый 80мм», что противоречит требованию о стальном материале; точное давление не указано.",
+                "source_url": "https://flagma.kz/products/q=%D1%80%D0%B5%D0%B3%D1%83%D0%BB%D1%8F%D1%82%D0%BE%D1%80+%D0%B4%D0%B0%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F+%D0%B3%D0%B0%D0%B7%D0%B0+%D1%80%D0%B4+%D0%BC/page-3"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Регуляторы давления общепромышленные",
+            "domain": "fluid.kz",
+            "title": "Регуляторы давления общепромышленные",
+            "url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "mail@fluid.kz",
+            "phone": "+77770433181",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике информация о топливном фильтре отсутствует.",
+                "source_url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Страница содержит только ссылки/каталог регуляторов давления («Регуляторы давления общепромышленные»), конкретные характеристики (материал сталь, фланцевый, проход 80 мм, давление 60,3 МПа) не указаны.",
+                "source_url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр мерседес - Купить легковые автомобили в Казахстане - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр мерседес - Купить легковые автомобили в Казахстане - Цена на OLX.kz",
+            "url": "https://www.olx.kz/transport/legkovye-avtomobili/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%BC%D0%B5%D1%80%D1%81%D0%B5%D0%B4%D0%B5%D1%81",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Астана",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница является списком объявлений (каталогом), а не единичной карточкой товара с подтвержденными характеристиками",
+                "source_url": "https://www.olx.kz/transport/legkovye-avtomobili/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%BC%D0%B5%D1%80%D1%81%D0%B5%D0%B4%D0%B5%D1%81"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице",
+                "source_url": "https://www.olx.kz/transport/legkovye-avtomobili/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%BC%D0%B5%D1%80%D1%81%D0%B5%D0%B4%D0%B5%D1%81"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр тойота - Купить легковые автомобили в Казахстане - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр тойота - Купить легковые автомобили в Казахстане - Цена на OLX.kz",
+            "url": "https://www.olx.kz/transport/legkovye-avtomobili/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%B9%D0%BE%D1%82%D0%B0",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Астана",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница представляет собой каталог объявлений, конкретный товар со всеми характеристиками не определен",
+                "source_url": "https://www.olx.kz/transport/legkovye-avtomobili/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%B9%D0%BE%D1%82%D0%B0"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице",
+                "source_url": "https://www.olx.kz/transport/legkovye-avtomobili/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%B9%D0%BE%D1%82%D0%B0"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - купить автоаксессуары - Цена на OLX.kz - Страница 8",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - купить автоаксессуары - Цена на OLX.kz - Страница 8",
+            "url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9%20%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80?page=8",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница является каталогом различных объявлений, характеристики и цена не относятся к одному товару",
+                "source_url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9%20%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80?page=8"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице",
+                "source_url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9%20%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80?page=8"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "фильтр топливный - Купить авто фильтры - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "фильтр топливный - Купить авто фильтры - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Караганда",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница поисковой выдачи/каталога с множеством товаров, характеристики конкретной позиции не подтверждены",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Лучшие топливные фильтры оптом",
+            "domain": "0086filter.com",
+            "title": "Лучшие топливные фильтры оптом",
+            "url": "https://www.0086filter.com/ru/p-best-fuel-filter-products-wholesale-huachang-filter.html",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.0086filter.com/ru/p-best-fuel-filter-products-wholesale-huachang-filter.html"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице поставщика.",
+                "source_url": "https://www.0086filter.com/ru/p-best-fuel-filter-products-wholesale-huachang-filter.html"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Купить Биг Бэги (big bag) в Украине - От Производителя",
+            "domain": "bigbag-intera.com.ua",
+            "title": "Купить Биг Бэги (big bag) в Украине - От Производителя",
+            "url": "https://www.bigbag-intera.com.ua/en",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице представлены только биг бэги («Buy Big-bags», «polypropylene containers»), топливные фильтры отсутствуют.",
+                "source_url": "https://www.bigbag-intera.com.ua/en"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице представлены только биг бэги («Buy Big-bags»), регуляторы давления отсутствуют.",
+                "source_url": "https://www.bigbag-intera.com.ua/en"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Купить регуляторы перепада давления IMI TA по оптовой цене | IMI TA",
+            "domain": "imi-hydronic.info",
+            "title": "Купить регуляторы перепада давления IMI TA по оптовой цене | IMI TA",
+            "url": "https://imi-hydronic.info/shop/regulyatory-perepada-davleniya",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "+7 (343) 237-27-06",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице представлены регуляторы перепада давления, топливные фильтры отсутствуют.",
+                "source_url": "https://imi-hydronic.info/shop/regulyatory-perepada-davleniya"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 4 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://imi-hydronic.info/shop/regulyatory-perepada-davleniya"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Топливные фильтры для спецтехники заказать с доставкой - KIR",
+            "domain": "kraftinvest.com",
+            "title": "Топливные фильтры для спецтехники заказать с доставкой - KIR",
+            "url": "https://www.kraftinvest.com/produkcziya/toplivnye-filtry",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.kraftinvest.com/produkcziya/toplivnye-filtry"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице представлены только топливные фильтры, регуляторы давления отсутствуют.",
+                "source_url": "https://www.kraftinvest.com/produkcziya/toplivnye-filtry"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Топливный фильтр StartVOLT - купить в Алматы, фото, отзывы, доставка по Казахстану. Подбор запчастей по VIN коду. Магазин Альта-Картер",
+            "domain": "kz.alta-karter.com",
+            "title": "Топливный фильтр StartVOLT - купить в Алматы, фото, отзывы, доставка по Казахстану. Подбор запчастей по VIN коду. Магазин Альта-Картер",
+            "url": "https://kz.alta-karter.com/toplivniy-filtr/startvolt",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://kz.alta-karter.com/toplivniy-filtr/startvolt"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице представлены только топливные фильтры, регуляторы давления отсутствуют.",
+                "source_url": "https://kz.alta-karter.com/toplivniy-filtr/startvolt"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Топливные фильтры оптом от производителя",
+            "domain": "axkmfilter.ru",
+            "title": "Топливные фильтры оптом от производителя",
+            "url": "https://www.axkmfilter.ru/filter-opt/toplivnye",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.axkmfilter.ru/filter-opt/toplivnye"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует во фрагменте источника.",
+                "source_url": "https://www.axkmfilter.ru/filter-opt/toplivnye"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "ООО «Сиэнси Один» - ООО «СИЭНСИ ОДИН» — поставщик инструмента, оснастки и станков для металлообработки напрямую от производителей. Низкие цены, широкий ассортимент , склад >20К позиций, собственное производство.",
+            "domain": "ds66.ru",
+            "title": "ООО «Сиэнси Один» - ООО «СИЭНСИ ОДИН» — поставщик инструмента, оснастки и станков для металлообработки напрямую от производителей. Низкие цены, широкий ассортимент , склад >20К позиций, собственное производство.",
+            "url": "https://www.ds66.ru/firms/2377011",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике отсутствует информация о топливном фильтре.",
+                "source_url": "https://www.ds66.ru/firms/2377011"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "В источнике отсутствует информация о регуляторе давления.",
+                "source_url": "https://www.ds66.ru/firms/2377011"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Представляем Регулятор давления прямого действия ...",
+            "domain": "metran.ru",
+            "title": "Представляем Регулятор давления прямого действия ...",
+            "url": "https://www.metran.ru/catalog/valves-and-regulators/regulyator_davleniya_pryamogo_deystviya_model_d81",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике отсутствует информация о топливном фильтре.",
+                "source_url": "https://www.metran.ru/catalog/valves-and-regulators/regulyator_davleniya_pryamogo_deystviya_model_d81"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 4 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.metran.ru/catalog/valves-and-regulators/regulyator_davleniya_pryamogo_deystviya_model_d81"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Качественные товары напрямую от производителя оптом",
+            "domain": "optlist.ru",
+            "title": "Качественные товары напрямую от производителя оптом",
+            "url": "https://optlist.ru/wholesales/kachestvennye-tovary-napriamuiu-ot-proizvoditelia",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике отсутствует информация о топливном фильтре.",
+                "source_url": "https://optlist.ru/wholesales/kachestvennye-tovary-napriamuiu-ot-proizvoditelia"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "В источнике отсутствует информация о регуляторе давления.",
+                "source_url": "https://optlist.ru/wholesales/kachestvennye-tovary-napriamuiu-ot-proizvoditelia"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Регулятор давления воды оптом в РОССИИ",
+            "domain": "pulscen.ru",
+            "title": "Регулятор давления воды оптом в РОССИИ",
+            "url": "https://www.pulscen.ru/price/080501-reguljator-davlenija-vody/f:31348_optom",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике отсутствует информация о топливном фильтре.",
+                "source_url": "https://www.pulscen.ru/price/080501-reguljator-davlenija-vody/f:31348_optom"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "no",
+                "comment": "Указан размер 1/2” вместо прохода 80 мм («Регулятор давления поршневой с выходом под манометр QS-3432 , 1/2”»). Не подтверждены материал (стальной), фланцевое соединение и давление 60,3 МПа.",
+                "source_url": "https://www.pulscen.ru/price/080501-reguljator-davlenija-vody/f:31348_optom"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Переход на прямые договоры",
+            "domain": "resk.ru",
+            "title": "Переход на прямые договоры",
+            "url": "https://www.resk.ru/korporativnym-klientam/potentsialnym-klientam/ispolnitelyam-kommunalnykh-uslug/perekhod-na-pryamye-dogovory",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице отсутствует информация о топливном фильтре",
+                "source_url": "https://www.resk.ru/korporativnym-klientam/potentsialnym-klientam/ispolnitelyam-kommunalnykh-uslug/perekhod-na-pryamye-dogovory"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице отсутствует информация о регуляторе давления",
+                "source_url": "https://www.resk.ru/korporativnym-klientam/potentsialnym-klientam/ispolnitelyam-kommunalnykh-uslug/perekhod-na-pryamye-dogovory"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          }
+        ]
+      }
+    }
+  ]
+}

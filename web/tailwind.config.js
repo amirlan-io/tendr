@@ -10,6 +10,19 @@ export default {
           dark: "#059669", // emerald-600
           light: "#34d399", // emerald-400
         },
+        // shadcn-токены для компонентов из /components/ui.
+        // Значения — RGB-триплеты, чтобы работали модификаторы прозрачности (/50 и т.п.).
+        background: "rgb(var(--background) / <alpha-value>)",
+        foreground: "rgb(var(--foreground) / <alpha-value>)",
+        card: "rgb(var(--card) / <alpha-value>)",
+        border: "rgb(var(--border-token) / <alpha-value>)",
+        primary: {
+          DEFAULT: "rgb(var(--primary) / <alpha-value>)",
+          foreground: "rgb(var(--primary-foreground) / <alpha-value>)",
+        },
+        muted: {
+          foreground: "rgb(var(--muted-foreground) / <alpha-value>)",
+        },
         ink: {
           50: "#fafafa",
           100: "#f4f4f5",
@@ -37,5 +50,5 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [require("tailwindcss-animate")],
 };

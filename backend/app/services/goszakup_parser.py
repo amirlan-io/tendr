@@ -98,10 +98,18 @@ class GoszakupParser:
 
         if self._api_token:
             try:
-                return await self._fetch_lot_via_api(str(lookup_key))
+                parsed = await self._fetch_lot_via_api(str(lookup_key))
             except Exception as e:
                 logger.warning("API fetch failed for {}, fallback to HTML: {}", lookup_key, e)
-        return await self._fetch_lot_html(str(lookup_key))
+            else:
+                # Каноническая ссылка вычислена из входного reference — на
+                # GraphQL-пути её больше негде взять, а без неё UI не может
+                # дать переход на исходное объявление.
+                _attach_source_url(parsed, reference)
+                return parsed
+        parsed = await self._fetch_lot_html(str(lookup_key))
+        _attach_source_url(parsed, reference)
+        return parsed
 
     @staticmethod
     def parse_reference(value: str) -> GoszakupReference:
@@ -466,7 +474,20 @@ class GoszakupParser:
         except Exception as e:
             logger.warning("Failed to fetch Lots for trd_buy {}: {}", lot_id_int, e)
 
+        # В v2 схема не содержит Files. Официальные технические спецификации
+        # доступны в v3 в Lots.Files, поэтому запрашиваем их отдельно и
+        # прикрепляем к тем же позициям по внутреннему id.
+        files_lookup_failed = False
+        try:
+            files_by_lot = await self._fetch_lot_files_via_graphql_v3(lot_id_int)
+            for lot in lots:
+                lot["files"] = files_by_lot.get(str(lot.get("id")), [])
+        except Exception as e:
+            files_lookup_failed = True
+            logger.warning("Failed to fetch official files for trd_buy {}: {}", lot_id_int, e)
+
         trd["lots"] = lots
+        trd["_official_files_lookup_failed"] = files_lookup_failed
 
         # 3. Получаем профиль заказчика (Subject) по org_bin
         org_bin = trd.get("org_bin") or trd.get("customer_bin")
@@ -645,6 +666,70 @@ class GoszakupParser:
             return []
         return (payload.get("data") or {}).get("lots") or []
 
+    async def _fetch_lot_files_via_graphql_v3(
+        self, trd_buy_id: int
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Получить официальные вложения позиций через схему OWS v3."""
+
+        query = """
+        query GetOfficialLotFiles($trdBuyId: [Int!]) {
+          Lots(filter: {trdBuyId: $trdBuyId}, limit: 50) {
+            id
+            Files {
+              id
+              filePath
+              originalName
+              objectId
+              nameRu
+              nameKz
+              indexDate
+              systemId
+            }
+          }
+        }
+        """
+        headers = {
+            "Authorization": f"Bearer {self._api_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        response = await self._client.post(
+            "https://ows.goszakup.gov.kz/v3/graphql",
+            headers=headers,
+            json={"query": query, "variables": {"trdBuyId": [trd_buy_id]}},
+            timeout=15.0,
+        )
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"GraphQL v3 lot files returned {response.status_code} "
+                f"for trd_buy {trd_buy_id}"
+            )
+        try:
+            payload = response.json()
+        except Exception as exc:
+            raise RuntimeError("GraphQL v3 lot files returned invalid JSON") from exc
+        if payload.get("errors"):
+            raise RuntimeError(f"GraphQL v3 lot files errors: {payload['errors'][:1]}")
+
+        result: dict[str, list[dict[str, Any]]] = {}
+        for lot in (payload.get("data") or {}).get("Lots") or []:
+            normalized: list[dict[str, Any]] = []
+            for file_info in lot.get("Files") or []:
+                normalized.append(
+                    {
+                        "id": file_info.get("id"),
+                        "file_path": file_info.get("filePath"),
+                        "original_name": file_info.get("originalName"),
+                        "object_id": file_info.get("objectId"),
+                        "name_ru": file_info.get("nameRu"),
+                        "name_kz": file_info.get("nameKz"),
+                        "index_date": file_info.get("indexDate"),
+                        "system_id": file_info.get("systemId"),
+                    }
+                )
+            result[str(lot.get("id"))] = normalized
+        return result
+
     def _map_graphql_response_to_lot(self, t: dict, lot_id: str) -> ParsedLot:
         """Маппинг ответа GraphQL TrdBuy + вложенных Lots → ParsedLot.
 
@@ -796,6 +881,12 @@ class GoszakupParser:
         description = lots_block or title
 
         # Дополнительные поля
+        source_documents = [
+            file_info
+            for lot in lots
+            for file_info in (lot.get("files") or [])
+            if file_info.get("file_path")
+        ]
         extra = {
             "trd_buy_id": t.get("id"),
             "number_anno": t.get("number_anno"),
@@ -816,9 +907,12 @@ class GoszakupParser:
                     "amount": lot.get("amount"),
                     "count": lot.get("count"),
                     "customer_bin": lot.get("customer_bin"),
+                    "files": list(lot.get("files") or []),
                 }
                 for lot in lots
             ],
+            "source_documents": source_documents,
+            "source_documents_lookup_failed": bool(t.get("_official_files_lookup_failed")),
             "source": "graphql_v2",
         }
 
@@ -1092,6 +1186,36 @@ class GoszakupParser:
             raw_html=html,
             extra={"source_url": source_url},
         )
+
+
+def _attach_source_url(parsed: ParsedLot, reference: GoszakupReference) -> None:
+    """Сохраняет каноническую ссылку на объявление в extra лота.
+
+    HTML-путь кладёт source_url сам, GraphQL — нет. Без этого ссылки
+    «Открыть на Госзакупках» на странице анализа не появляются.
+    Значение из extra не перетираем: парсер HTML знает URL фактического
+    редиректа, он точнее.
+    """
+    if parsed.extra.get("source_url"):
+        return
+    if reference.source_url:
+        parsed.extra["source_url"] = reference.source_url
+
+
+def build_lot_url(lot_id_or_url: str | None) -> str | None:
+    """Каноническая ссылка на goszakup по ID/ссылке либо None.
+
+    Мягкая версия parse_reference: не бросает исключение на мусорном вводе,
+    потому что используется в UI-слое (история, песочница), где ID может
+    оказаться чем угодно.
+    """
+    if not lot_id_or_url:
+        return None
+    try:
+        reference = GoszakupParser.parse_reference(str(lot_id_or_url))
+    except ValueError:
+        return None
+    return reference.source_url
 
 
 _parser: GoszakupParser | None = None

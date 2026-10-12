@@ -1,0 +1,690 @@
+{
+  "base_commit": "95dd0b0",
+  "local_code_fixes": true,
+  "model": "ag/gemini-3.7-flash-low",
+  "scope": "synthetic specifications, real LLM/Tavily/pages, isolated SQLite, no saved shortlist or outreach",
+  "runs": [
+    {
+      "name": "sandbox_exact_filter",
+      "seconds": 120.4,
+      "result": {
+        "lot_id": "benchmark-synthetic",
+        "lot_url": null,
+        "requirements": [
+          {
+            "code": "filter",
+            "title": "Топливный фильтр 13592436",
+            "description": "Для Chevrolet Cobalt 2014, тип топливный фильтр, OEM 13592336. Количество 10 шт.",
+            "mandatory": true
+          }
+        ],
+        "trace": {
+          "queries": [
+            "Топливный фильтр 13592436 10 шт",
+            "Топливный фильтр 13592436 10 шт Астана",
+            "Топливный фильтр 13592436 Chevrolet Cobalt Астана купить",
+            "Топливный фильтр 13592336 Шевроле Кобальт Астана",
+            "Фильтр топливный Шевроле Кобальт 2014 Астана",
+            "Топливный фильтр 13592436"
+          ],
+          "direct_queries": [
+            "Топливный фильтр 13592436 10 шт производитель казахстан",
+            "Топливный фильтр 13592436 оптом напрямую от производителя"
+          ],
+          "found_before_filters": 20,
+          "blocked_filtered": 0,
+          "filtered_out": {
+            "dropped_region": 2,
+            "dropped_price": 0,
+            "dropped_direct": 0,
+            "dropped_no_price": 0,
+            "dropped_no_contacts": 0,
+            "dropped_budget": 0,
+            "unknown_city_kept": 17,
+            "dropped_mandatory": 0,
+            "dropped_unconfirmed": 16
+          },
+          "pages_read": 4,
+          "browser_worker_pages": 0,
+          "personalization": "",
+          "filters_applied": {
+            "regions": [
+              "Астана"
+            ],
+            "price_range": [
+              null,
+              null
+            ],
+            "only_direct": false,
+            "only_with_price": false,
+            "only_with_contacts": false,
+            "budget_kzt": 48000.0,
+            "lot_region": ""
+          }
+        },
+        "costs": {
+          "llm_usd": 0.0092,
+          "tavily_usd": 0.064,
+          "browser_usd": 0.0,
+          "total_usd": 0.0732,
+          "is_estimate": true,
+          "llm_calls": 8,
+          "tavily_calls": 8,
+          "browser_calls": 0
+        },
+        "duration_sec": 120.4,
+        "total": 2,
+        "candidates": [
+          {
+            "supplier": "Купить Топливный фильтр 13592436 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Топливный фильтр 13592436 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+            "score": 100,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "fits",
+                "comment": "«Топливный фильтр 13592436», «Марка автомобиля Chevrolet Модель автомобиля Cobalt Год выпуска автомобиля 2014», «Тип топливный фильтр Номер OEM 13592336».",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик."
+            ]
+          },
+          {
+            "supplier": "Купить фильтр топливный | Низкие цены",
+            "domain": "zakazauto.kz",
+            "title": "Купить фильтр топливный | Низкие цены",
+            "url": "https://zakazauto.kz/catalogs/filtry-toplivnye.html",
+            "score": 50,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://zakazauto.kz/catalogs/filtry-toplivnye.html"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "partial",
+                "comment": "Упоминаются «фильтры топливные» и марка «Chevrolet», но не указаны модель Cobalt 2014 и OEM-номер 13592336 / 13592436.",
+                "source_url": "https://zakazauto.kz/catalogs/filtry-toplivnye.html"
+              }
+            ],
+            "warnings": [
+              "Сайт закрыт анти-ботом — нужен браузерный режим.",
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены."
+            ]
+          }
+        ],
+        "rejected_candidates": [
+          {
+            "supplier": "ФИЛЬТР ТОПЛИВНЫЙ купить в Алматы с доставкой по Казахстану, цены",
+            "domain": "feparts.kz",
+            "title": "ФИЛЬТР ТОПЛИВНЫЙ купить в Алматы с доставкой по Казахстану, цены",
+            "url": "https://feparts.kz/filtra/filtr-toplivnyj",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://feparts.kz/filtra/filtr-toplivnyj"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "Каталог автозапчастей. Топливный фильтр 13592436 с OEM 13592336 для Chevrolet Cobalt 2014 на странице отсутствует.",
+                "source_url": "https://feparts.kz/filtra/filtr-toplivnyj"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "cobalt - Купить автозапчасти - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "cobalt - Купить автозапчасти - Цена на OLX.kz",
+            "url": "https://olx.kz/transport/avtozapchasti-i-aksessuary/avtozapchasti/q-cobalt",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://olx.kz/transport/avtozapchasti-i-aksessuary/avtozapchasti/q-cobalt"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "Список объявлений о запчастях на Cobalt. Топливный фильтр 13592436 / OEM 13592336 не найден.",
+                "source_url": "https://olx.kz/transport/avtozapchasti-i-aksessuary/avtozapchasti/q-cobalt"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "кобальт - купить прочие автозапчасти и автоаксессуары Акмолинская область - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "кобальт - купить прочие автозапчасти и автоаксессуары Акмолинская область - Цена на OLX.kz",
+            "url": "https://olx.kz/zapchasti/prochie-zapchasti/akm/q-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://olx.kz/zapchasti/prochie-zapchasti/akm/q-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "Список объявлений автозапчастей. Топливный фильтр с требуемыми характеристиками не представлен.",
+                "source_url": "https://olx.kz/zapchasti/prochie-zapchasti/akm/q-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр в Астана - OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр в Астана - OLX.kz",
+            "url": "https://www.olx.kz/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "В источнике представлена общая страница поиска со списком объявлений, конкретный топливный фильтр для Chevrolet Cobalt 2014 / OEM 13592336 (13592436) отсутствует.",
+                "source_url": "https://www.olx.kz/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/transport/avtozapchasti-i-aksessuary/q-топливный-фильтр",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/transport/avtozapchasti-i-aksessuary/q-топливный-фильтр"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "Страница представляет собой каталог/список объявлений. Необходимый товар для Chevrolet Cobalt 2014 с OEM 13592336 / 13592436 отсутствует.",
+                "source_url": "https://www.olx.kz/transport/avtozapchasti-i-aksessuary/q-топливный-фильтр"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Chevrolet Cobalt купить в Казахстане: цены авто Шевроле Cobalt на OLX.kz",
+            "domain": "olx.kz",
+            "title": "Chevrolet Cobalt купить в Казахстане: цены авто Шевроле Cobalt на OLX.kz",
+            "url": "https://www.olx.kz/transport/legkovye-avtomobili/chevrolet/cobalt",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/transport/legkovye-avtomobili/chevrolet/cobalt"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "Страница со списком объявлений о продаже автомобилей Chevrolet Cobalt. Топливный фильтр отсутствует.",
+                "source_url": "https://www.olx.kz/transport/legkovye-avtomobili/chevrolet/cobalt"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - купить автоаксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - купить автоаксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-топливный-фильтр",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/aksessuary-avto/q-топливный-фильтр"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "Каталог автоаксессуаров и запчастей. Топливный фильтр для Chevrolet Cobalt 2014 с указанными номерами не представлен.",
+                "source_url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-топливный-фильтр"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - Купить автозапчасти и аксессуары Астана - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - Купить автозапчасти и аксессуары Астана - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "Каталог объявлений запчастей в Астане. Топливный фильтр для Chevrolet Cobalt 2014 с номерами 13592436 / OEM 13592336 не найден.",
+                "source_url": "https://www.olx.kz/zapchasti/astana/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "салонный фильтр - Купить автозапчасти Астана - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "салонный фильтр - Купить автозапчасти Астана - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%81%D0%B0%D0%BB%D0%BE%D0%BD%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%81%D0%B0%D0%BB%D0%BE%D0%BD%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "На странице каталога отсутствует запрашиваемый топливный фильтр для Chevrolet Cobalt 2014 (OEM 13592336 / 13592436); представлены другие товары (радиаторы и моторы отопителя салона).",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%81%D0%B0%D0%BB%D0%BE%D0%BD%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "фара кобальт - Купить автозапчасти Астана - Цена на ...",
+            "domain": "olx.kz",
+            "title": "фара кобальт - Купить автозапчасти Астана - Цена на ...",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%84%D0%B0%D1%80%D0%B0-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%84%D0%B0%D1%80%D0%B0-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "На странице представлен поисковый список с товарами по оптике/фарам («Оптика равон кобальт шевроле ravon nexia Chevrolet Cobalt»), конкретный топливный фильтр с OEM 13592336 / 13592436 для Chevrolet Cobalt 2014 отсутствует.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%84%D0%B0%D1%80%D0%B0-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "фильтр топливный мерседес - Купить автозапчасти Астана - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "фильтр топливный мерседес - Купить автозапчасти Астана - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D0%BC%D0%B5%D1%80%D1%81%D0%B5%D0%B4%D0%B5%D1%81",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D0%BC%D0%B5%D1%80%D1%81%D0%B5%D0%B4%D0%B5%D1%81"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "На странице представлены топливные фильтры для автомобилей Mercedes, информация о топливном фильтре для Chevrolet Cobalt 2014 (OEM 13592336) отсутствует.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D0%BC%D0%B5%D1%80%D1%81%D0%B5%D0%B4%D0%B5%D1%81"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "cobalt акпп - Купить автозапчасти Астана - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "cobalt акпп - Купить автозапчасти Астана - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-cobalt-%D0%B0%D0%BA%D0%BF%D0%BF",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-cobalt-%D0%B0%D0%BA%D0%BF%D0%BF"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "На странице представлены КПП и защита для Chevrolet Cobalt, топливный фильтр отсутствует.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/astana/q-cobalt-%D0%B0%D0%BA%D0%BF%D0%BF"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр на кобальт - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр на кобальт - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%BD%D0%B0-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%BD%D0%B0-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "На странице каталога представлены инструменты и КПП Opel/Chevrolet, топливный фильтр для Chevrolet Cobalt 2014 с OEM 13592336 отсутствует.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%BD%D0%B0-%D0%BA%D0%BE%D0%B1%D0%B0%D0%BB%D1%8C%D1%82"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "фильтр шевроле - Купить автозапчасти и аксессуары",
+            "domain": "olx.kz",
+            "title": "фильтр шевроле - Купить автозапчасти и аксессуары",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%88%D0%B5%D0%B2%D1%80%D0%BE%D0%BB%D0%B5",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Астана",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%88%D0%B5%D0%B2%D1%80%D0%BE%D0%BB%D0%B5"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "На странице результатов поиска отсутствуют характеристики конкретного товара: неизвестны тип фильтра, совместимость с Chevrolet Cobalt 2014 и OEM-номер.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%88%D0%B5%D0%B2%D1%80%D0%BE%D0%BB%D0%B5"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-топливный-фильтр",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://www.olx.kz/zapchasti/q-топливный-фильтр"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "В каталоге OLX нет информации о совместимости с Chevrolet Cobalt 2014 и OEM 13592336 / 13592436.",
+                "source_url": "https://www.olx.kz/zapchasti/q-топливный-фильтр"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Топливные фильтры. Товары и услуги компании \"Zamaslom.kz Интернет магазин.\"",
+            "domain": "zamaslom.kz",
+            "title": "Топливные фильтры. Товары и услуги компании \"Zamaslom.kz Интернет магазин.\"",
+            "url": "https://zamaslom.kz/g5789758-toplivnye-filtry",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "sources": {
+              "search": "https://zamaslom.kz/g5789758-toplivnye-filtry"
+            },
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр 13592436",
+                "status": "unknown",
+                "comment": "В списке товаров отсутствуют позиции для Chevrolet Cobalt 2014 с артикулом/OEM 13592336 / 13592436.",
+                "source_url": "https://zamaslom.kz/g5789758-toplivnye-filtry"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          }
+        ]
+      }
+    }
+  ]
+}

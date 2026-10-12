@@ -12,9 +12,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from datetime import UTC, datetime
 
-from .graphql_client import GraphQLClient
+from .graphql_client import GraphQLClient, SearchPageInfo
 from .parser import LotParser, ParsedLot
 
 logger = logging.getLogger(__name__)
@@ -27,10 +27,11 @@ class LotAggregator:
     Можно переключиться на REST через use_graphql=False.
     """
 
-    def __init__(self, api_token: str = ""):
+    def __init__(self, api_token: str = "", api_url: str = ""):
         self.api_token = api_token
-        self.parser = LotParser(api_token=api_token)
-        self.graphql = GraphQLClient(api_token=api_token) if api_token else None
+        self.parser = LotParser(api_token=api_token, api_url=api_url)
+        self.graphql = GraphQLClient(api_token=api_token, api_url=api_url) if api_token else None
+        self.page_info = SearchPageInfo()
 
     async def get_lots(
         self,
@@ -42,6 +43,11 @@ class LotAggregator:
         category: str = "",
         customer_bin: str = "",
         customer_bin_like: str = "",
+        status: str = "active",
+        procurement_method_ids: list[int] | None = None,
+        published_from: str = "",
+        published_to: str = "",
+        cursor: int | None = None,
         only_with_amount: bool = False,
         use_graphql: bool = True,
         limit: int = 50,
@@ -58,23 +64,30 @@ class LotAggregator:
                 lots = await self.graphql.search_lots(
                     query=query,
                     region=region,
+                    category=category,
                     customer_bin=customer_bin,
                     customer_bin_like=customer_bin_like,
+                    status=status,
+                    procurement_method_ids=procurement_method_ids,
+                    published_from=published_from,
+                    published_to=published_to,
+                    cursor=cursor,
                     min_amount=min_amount,
                     max_amount=max_amount,
                     only_with_amount=only_with_amount,
                     limit=limit,
                 )
                 results.extend(lots)
-                if results:
-                    logger.info(
-                        f"[Aggregator] GraphQL returned {len(results)} lots"
-                    )
-                    return self._dedupe(results)[:limit]
+                self.page_info = self.graphql.page_info
+                logger.info(f"[Aggregator] GraphQL returned {len(results)} lots")
+                # Пустой ответ — корректный результат, его нельзя подменять
+                # fallback/demo-записями другого запроса.
+                return self._dedupe(results)[:limit]
             except Exception as e:
-                logger.warning(
-                    f"[Aggregator] GraphQL failed: {e}, fallback to REST"
-                )
+                # REST /trd-buy возвращает объявления, а не отдельные лоты.
+                # Подмена после timeout делает выдачу фактически неверной.
+                logger.exception("[Aggregator] official lots GraphQL failed")
+                raise RuntimeError("Official Goszakup lots registry is unavailable") from e
 
         # REST fallback
         try:
@@ -91,7 +104,14 @@ class LotAggregator:
         except Exception as e:
             logger.exception(f"[Aggregator] REST failed: {e}")
 
-        return self._dedupe(results)[:limit]
+        unique = self._dedupe(results)[:limit]
+        self.page_info = SearchPageInfo(
+            total_count=len(unique),
+            has_next_page=False,
+            fetched_at=datetime.now(UTC),
+            total_is_exact=True,
+        )
+        return unique
 
     @staticmethod
     def _dedupe(lots: list[ParsedLot]) -> list[ParsedLot]:

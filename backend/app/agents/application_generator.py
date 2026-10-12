@@ -207,24 +207,25 @@ def calculate_margin(req: MarginCalculationRequest) -> MarginCalculationResult:
     cost_total = base + logistics + overhead
     min_price = cost_total * (1 + vat)
 
-    # Оптимальная цена (с желаемой маржой)
+    # Оптимальная цена. Маржа — доля прибыли в выручке без НДС,
+    # поэтому используется деление на (1 - margin), а не наценка cost * (1 + margin).
     target_margin = req.desired_margin_pct / 100.0
     if target_margin > 0:
-        # Маржа считается от цены продажи (после НДС)
-        # price = cost_total * (1 + margin) * (1 + vat)
-        optimal_price = cost_total * (1 + target_margin) * (1 + vat)
+        optimal_net_price = cost_total / (1 - target_margin)
+        optimal_price = optimal_net_price * (1 + vat)
     else:
+        optimal_net_price = cost_total
         optimal_price = min_price
 
     # Агрессивная цена (на 5% ниже конкурента, но не ниже min+10%)
     if req.competitor_price_kzt and req.competitor_price_kzt > 0:
         aggressive_price = req.competitor_price_kzt * 0.95
-        # Не ниже min_price * 1.1 (10% запас)
-        aggressive_price = max(aggressive_price, min_price * 1.1)
+        # Никогда не ниже точки безубыточности.
+        aggressive_price = max(aggressive_price, min_price)
         # Не выше optimal_price
         aggressive_price = min(aggressive_price, optimal_price)
     else:
-        aggressive_price = optimal_price * 0.95
+        aggressive_price = max(optimal_price * 0.95, min_price)
 
     # Рекомендация
     if req.competitor_price_kzt and req.competitor_price_kzt > 0:
@@ -240,19 +241,19 @@ def calculate_margin(req: MarginCalculationRequest) -> MarginCalculationResult:
             )
         else:
             recommendation = (
-                f"Цена конкурента {req.competitor_price_kzt:,.0f} ₸ комфортна. "
-                f"Предлагаем {optimal_price:,.0f} ₸ (на {req.desired_margin_pct}% маржи) — "
-                f"вы можете выиграть с хорошей прибылью."
+                f"Публичный ценовой ориентир: {req.competitor_price_kzt:,.0f} ₸. "
+                f"Расчётная цена с целевой маржой {req.desired_margin_pct}%: "
+                f"{optimal_price:,.0f} ₸. Победа не гарантируется."
             )
     else:
         recommendation = (
             f"Нет данных о ценах конкурентов. Рекомендуемая цена: {optimal_price:,.0f} ₸ "
-            f"(себестоимость + {req.desired_margin_pct}% маржи + НДС)."
+            f"(целевая маржа {req.desired_margin_pct}% от выручки без НДС)."
         )
 
-    # Прогноз прибыли по каждой цене
-    profit_optimal = optimal_price - cost_total
-    profit_aggressive = aggressive_price - cost_total
+    # НДС не является прибылью: из цены с НДС сначала выделяем чистую выручку.
+    profit_optimal = optimal_price / (1 + vat) - cost_total
+    profit_aggressive = aggressive_price / (1 + vat) - cost_total
 
     return MarginCalculationResult(
         min_price=min_price,

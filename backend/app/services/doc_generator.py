@@ -11,10 +11,24 @@ from __future__ import annotations
 import io
 from datetime import datetime
 from typing import Any
+from xml.sax.saxutils import escape as _xml_escape
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
+
+
+def _esc(value: Any) -> str:
+    """Экранировать значение для вставки в разметку ReportLab.
+
+    ReportLab `Paragraph` — мини-разметочный язык, а не plain text. Сырой
+    пользовательский текст в нём не только ломает вёрстку (ValueError на
+    непарном теге → 500), но и заставляет сервер читать файлы по указанному
+    пути через `<img src="...">` (Local File Inclusion). Поэтому весь ввод
+    из данных пользователя и LLM экранируется; собственные теги остаются
+    константами.
+    """
+    return _xml_escape("" if value is None else str(value))
 
 
 def _add_heading(doc: Document, text: str, level: int = 1) -> None:
@@ -95,26 +109,34 @@ def generate_tz_pdf(
     # Шапка
     story.append(Paragraph("ТЕХНИЧЕСКОЕ ЗАДАНИЕ", title_style))
     if organization:
-        story.append(Paragraph(f"<b>{organization}</b>", subtitle_style))
+        story.append(Paragraph(f"<b>{_esc(organization)}</b>", subtitle_style))
     if organization_bin:
-        story.append(Paragraph(f"БИН: {organization_bin}", subtitle_style))
+        story.append(Paragraph(f"БИН: {_esc(organization_bin)}", subtitle_style))
     story.append(Paragraph(
         f"Дата составления: {datetime.now().strftime('%d.%m.%Y')}", subtitle_style,
     ))
     story.append(Spacer(1, 10))
 
     def heading(text):
+        # Только собственные константы: разделы формируются кодом.
         story.append(Paragraph(text, h1_style))
 
     def para(text):
+        """Абзац из произвольного текста. Всё экранируется."""
         if text:
             for line in str(text).split("\n"):
                 if line.strip():
-                    story.append(Paragraph(line.strip(), body_style))
+                    story.append(Paragraph(_esc(line.strip()), body_style))
+
+    def para_markup(markup):
+        """Абзац с собственной разметкой. Значения внутри уже экранированы."""
+        for line in str(markup).split("\n"):
+            if line.strip():
+                story.append(Paragraph(line.strip(), body_style))
 
     def bullets(items):
         for it in items or []:
-            story.append(Paragraph(f"• {it}", bullet_style))
+            story.append(Paragraph(f"• {_esc(it)}", bullet_style))
 
     # 1. Название
     heading("1. Наименование закупки")
@@ -141,7 +163,7 @@ def generate_tz_pdf(
     spec = tz.get("technical_specification", "—")
     if isinstance(spec, dict):
         for key, val in spec.items():
-            para(f"<b>{key}:</b> {val}")
+            para_markup(f"<b>{_esc(key)}:</b> {_esc(val)}")
     else:
         para(spec)
 
@@ -177,7 +199,7 @@ def generate_tz_pdf(
         crit = tz["evaluation_criteria"]
         if isinstance(crit, dict):
             for k, v in crit.items():
-                para(f"<b>{k}:</b> {v}")
+                para_markup(f"<b>{_esc(k)}:</b> {_esc(v)}")
         else:
             para(str(crit))
 
@@ -187,7 +209,7 @@ def generate_tz_pdf(
         heading("9. Замечания (проверьте)")
         for f in flags:
             story.append(Paragraph(
-                f'<font color="#dc2626">⚠</font> {f}', flag_style,
+                f'<font color="#dc2626">⚠</font> {_esc(f)}', flag_style,
             ))
 
     # 10. Warnings
@@ -196,7 +218,7 @@ def generate_tz_pdf(
         heading("10. Рекомендации")
         for w in warnings:
             story.append(Paragraph(
-                f'<font color="#d97706">!</font> {w}', flag_style,
+                f'<font color="#d97706">!</font> {_esc(w)}', flag_style,
             ))
 
     # 11. Compliance

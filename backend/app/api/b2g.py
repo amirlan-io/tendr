@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.agents.b2g import B2GAgent
-from app.core.client_id import require_client_id
+from app.core.client_id import require_authenticated_client_id
 from app.db import get_db
 from app.db import repo as db_repo
 from app.db.models import (
@@ -32,12 +32,8 @@ router = APIRouter(prefix="/b2g", tags=["b2g"])
 
 
 async def _user_for_request(session: AsyncSession, request: Request) -> User:
-    """Резолвим юзера по X-Client-Id (cookie).
-
-    This is not a full authorization mechanism; in production a server-side
-    session should be used instead.
-    """
-    cid = await require_client_id(request)
+    """Resolve a workspace owner only from a verified Supabase session."""
+    cid = await require_authenticated_client_id(request)
     stmt = select(User).where(User.web_client_id == cid)
     user = (await session.execute(stmt)).scalar_one_or_none()
     if not user:
@@ -45,6 +41,14 @@ async def _user_for_request(session: AsyncSession, request: Request) -> User:
         session.add(user)
         await session.flush()
     return user
+
+
+def _escape_like(value: str) -> str:
+    """Экранировать спецсимволы шаблона LIKE (`%`, `_`, `\\`).
+
+    Иначе пользователь управляет шаблоном поиска по заголовкам анализов.
+    """
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 async def _check_access(
@@ -207,20 +211,19 @@ async def list_members(
         .all()
     )
     items = []
+    # client_id намеренно НЕ отдаётся: идентификатор остаётся внутренней
+    # привязкой к подтверждённой Supabase-сессии.
     if owner:
         items.append(
             {
                 "user_id": owner.id,
-                "client_id": owner.web_client_id,
                 "role": "owner",
             }
         )
     for m in members:
-        u = await session.get(User, m.user_id)
         items.append(
             {
                 "user_id": m.user_id,
-                "client_id": u.web_client_id if u else None,
                 "role": m.role,
             }
         )
@@ -253,11 +256,14 @@ async def generate_tz(
     ws = await session.get(B2GWorkspace, ws_id)
 
     # Поиск похожих лотов в БД
+    # LIKE-спецсимволы экранируются: иначе пользователь управляет шаблоном
+    # поиска и `%` вместо слова превращается в «совпадение со всем».
     keywords = payload.need_description.split()[:3]
-    like_pattern = f"%{keywords[0]}%" if keywords else "%%"
+    pattern = _escape_like(keywords[0]) if keywords else ""
+    like_pattern = f"%{pattern}%"
     stmt = (
         select(Analysis)
-        .where(Analysis.title.ilike(like_pattern))
+        .where(Analysis.title.ilike(like_pattern, escape="\\"))
         .where(Analysis.budget_kzt.is_not(None))
         .order_by(Analysis.created_at.desc())
         .limit(5)

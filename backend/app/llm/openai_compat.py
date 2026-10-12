@@ -35,11 +35,21 @@ class OpenAICompatProvider(LLMProvider):
     ) -> None:
         s = get_settings()
         self._api_key = api_key or s.llm_api_key or "EMPTY"
-        self._base_url = (base_url or s.llm_base_url).rstrip("/")
+        self._base_url = self._normalize_base_url(base_url or s.llm_base_url)
         self._model = model or s.llm_model
         self._embed_model = embed_model or s.llm_embedding_model
         self._disable_thinking = disable_thinking
         self._client = httpx.AsyncClient(timeout=120.0)
+
+    @staticmethod
+    def _normalize_base_url(value: str) -> str:
+        """Accept either an API root or a copied chat-completions endpoint."""
+        normalized = value.rstrip("/")
+        for suffix in ("/chat/completions", "/embeddings"):
+            if normalized.endswith(suffix):
+                normalized = normalized[: -len(suffix)]
+                break
+        return normalized.rstrip("/")
 
     async def close(self) -> None:
         await self._client.aclose()

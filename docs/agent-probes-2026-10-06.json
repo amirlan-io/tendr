@@ -1,0 +1,149 @@
+{
+  "documenter_seven_products": {
+    "lot_id": "benchmark-seven-products",
+    "title": "Поставка семи позиций IT-оборудования (тестовое ТЗ)",
+    "customer": "(не указан)",
+    "source_url": null,
+    "amount_kzt": null,
+    "currency": "KZT",
+    "deadline": null,
+    "delivery_address": "",
+    "delivery_days": null,
+    "payment_terms": "",
+    "procurement_method": "tender",
+    "technical_specification": "",
+    "requirements": [
+      {
+        "name": "Срок доставки",
+        "value": "Доставка оборудования в Астану в течение 10 дней.",
+        "is_critical": true,
+        "category": ""
+      },
+      {
+        "name": "Условия оплаты",
+        "value": "Оплата производится через 30 дней после приёмки товара.",
+        "is_critical": true,
+        "category": ""
+      },
+      {
+        "name": "Обязательность позиций",
+        "value": "Все семь перечисленных позиций являются обязательными для поставки.",
+        "is_critical": true,
+        "category": ""
+      }
+    ],
+    "qualification_requirements": [],
+    "documents_required": [],
+    "evaluation_criteria": {},
+    "red_flags": [
+      "Указание 'ТЕСТОВОЕ ТЗ, не настоящая закупка' противоречит процедуре госзакупок"
+    ],
+    "warnings": [],
+    "legal_compliance": "ok",
+    "compliance_notes": "",
+    "customer_score": null,
+    "margin_estimate": null,
+    "recommendation": "review",
+    "summary": "Тестовое техническое задание на поставку 7 видов IT-оборудования (ноутбуки, мониторы, принтеры и др.) в Астану."
+  },
+  "supplier_input_from_documenter": [
+    {
+      "code": "1",
+      "title": "Срок доставки",
+      "description": "Доставка оборудования в Астану в течение 10 дней.",
+      "is_mandatory": true
+    },
+    {
+      "code": "2",
+      "title": "Условия оплаты",
+      "description": "Оплата производится через 30 дней после приёмки товара.",
+      "is_mandatory": true
+    },
+    {
+      "code": "3",
+      "title": "Обязательность позиций",
+      "description": "Все семь перечисленных позиций являются обязательными для поставки.",
+      "is_mandatory": true
+    }
+  ],
+  "documenter_seven_products_without_test_label": {
+    "lot_id": "benchmark-seven-products-plain",
+    "title": "Поставка компьютерной техники и периферии (7 позиций)",
+    "customer": "(не указан)",
+    "source_url": null,
+    "amount_kzt": null,
+    "currency": "KZT",
+    "deadline": null,
+    "delivery_address": "",
+    "delivery_days": null,
+    "payment_terms": "",
+    "procurement_method": "tender",
+    "technical_specification": "",
+    "requirements": [
+      {
+        "name": "Доставка в Астану",
+        "value": "Необходима доставка всех позиций в Астану в течение 10 дней.",
+        "is_critical": true,
+        "category": ""
+      },
+      {
+        "name": "Срок оплаты",
+        "value": "Оплата производится через 30 дней после приёмки товара.",
+        "is_critical": true,
+        "category": ""
+      },
+      {
+        "name": "Полнота поставки",
+        "value": "Все семь позиций являются обязательными для поставки.",
+        "is_critical": true,
+        "category": ""
+      }
+    ],
+    "qualification_requirements": [],
+    "documents_required": [
+      "Коммерческое предложение",
+      "Счет-фактура",
+      "Акт приемки-передачи"
+    ],
+    "evaluation_criteria": {},
+    "red_flags": [],
+    "warnings": [],
+    "legal_compliance": "ok",
+    "compliance_notes": "",
+    "customer_score": null,
+    "margin_estimate": null,
+    "recommendation": "review",
+    "summary": "Поставка семи видов IT-оборудования (ноутбуки, мониторы, принтеры и др.) в Астану с доставкой за 10 дней."
+  },
+  "domain_classification": {
+    "wikipedia.org": "direct",
+    "news.example.org": "direct",
+    "unknown.example.org": "direct",
+    "kaspi.kz": "aggregator"
+  },
+  "evidence_checks": {
+    "Стол офисный ЛДСП 25 мм, металлический каркас, гарантия 24 месяца, высота 750 мм, 1400х700 мм.": [
+      3,
+      4
+    ],
+    "Стол офисный ЛДСП 16 мм, деревянный каркас, гарантия 12 месяцев, высота 750 мм, 1400х700 мм.": [
+      2,
+      4
+    ]
+  },
+  "partial_lot_budget": {
+    "unit_price": 4000,
+    "estimated_total": 40000,
+    "budget_status": "within_budget",
+    "matches": [
+      {
+        "code": "filter",
+        "status": "fits"
+      },
+      {
+        "code": "reg",
+        "status": "unknown"
+      }
+    ]
+  }
+}

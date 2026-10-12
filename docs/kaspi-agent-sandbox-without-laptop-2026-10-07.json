@@ -1,0 +1,461 @@
+{
+  "base_commit": "95dd0b0",
+  "local_code_fixes": true,
+  "model": "ag/gemini-3.7-flash-low",
+  "scope": "synthetic specifications, real LLM/Tavily/pages, isolated SQLite, no saved shortlist or outreach",
+  "runs": [
+    {
+      "name": "sandbox_filter_and_regulator",
+      "seconds": 114.3,
+      "result": {
+        "lot_id": "benchmark-synthetic",
+        "lot_url": null,
+        "requirements": [
+          {
+            "code": "filter",
+            "title": "Топливный фильтр",
+            "description": "Для ДВС легкового автомобиля. Количество 10 шт.",
+            "mandatory": true
+          },
+          {
+            "code": "regulator",
+            "title": "Регулятор давления",
+            "description": "Стальной, фланцевый, проход 80 мм, давление 60,3 МПа. Количество 1 шт.",
+            "mandatory": true
+          }
+        ],
+        "trace": {
+          "queries": [
+            "Регулятор давления 80 мм 60,3 МПа 1 шт Стальной",
+            "Топливный фильтр 10 шт автомобиля",
+            "топливный фильтр для легкового автомобиля купить Казахстан",
+            "регулятор давления стальной фланцевый Ду 80 Ру 60 МПа",
+            "топливный фильтр ДВС оптом",
+            "клапан регулятор давления фланцевый Ду 80 Казахстан"
+          ],
+          "direct_queries": [
+            "Топливный фильтр 10 шт автомобиля производитель казахстан",
+            "Регулятор давления 80 мм 60,3 МПа 1 шт Стальной производитель казахстан",
+            "Топливный фильтр оптом напрямую от производителя",
+            "Регулятор давления оптом напрямую от производителя"
+          ],
+          "found_before_filters": 20,
+          "blocked_filtered": 0,
+          "filtered_out": {
+            "dropped_region": 0,
+            "dropped_price": 0,
+            "dropped_direct": 0,
+            "dropped_no_price": 0,
+            "dropped_no_contacts": 0,
+            "dropped_budget": 0,
+            "unknown_city_kept": 0,
+            "dropped_mandatory": 0,
+            "dropped_unconfirmed": 5
+          },
+          "pages_read": 5,
+          "personalization": "",
+          "filters_applied": {
+            "regions": [],
+            "price_range": [
+              null,
+              null
+            ],
+            "only_direct": false,
+            "only_with_price": false,
+            "only_with_contacts": false,
+            "budget_kzt": 48000.0,
+            "lot_region": ""
+          }
+        },
+        "costs": {
+          "llm_usd": 0.0052,
+          "tavily_usd": 0.064,
+          "browser_usd": 0.0,
+          "total_usd": 0.0692,
+          "is_estimate": true,
+          "llm_calls": 5,
+          "tavily_calls": 8,
+          "browser_calls": 0
+        },
+        "duration_sec": 114.3,
+        "total": 5,
+        "candidates": [
+          {
+            "supplier": "Купить Stellox топливный фильтр 8220550SX в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Stellox топливный фильтр 8220550SX в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/stellox-toplivnyi-fil-tr-8220550sx-166638607",
+            "score": 50,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "fits",
+                "comment": "«топливный фильтр», «обеспечивающий стабильную работу двигателя», совместим с легковым автомобилем («Opel», «Monterey»).",
+                "source_url": "https://kaspi.kz/shop/p/stellox-toplivnyi-fil-tr-8220550sx-166638607"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Информация о регуляторе давления отсутствует.",
+                "source_url": "https://kaspi.kz/shop/p/stellox-toplivnyi-fil-tr-8220550sx-166638607"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Купить Топливный фильтр 13592436 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Топливный фильтр 13592436 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+            "score": 50,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "fits",
+                "comment": "«Топливный фильтр», «защита двигателя от загрязнений», для легкового автомобиля («Chevrolet», «Cobalt»).",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Информация о регуляторе давления отсутствует.",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Купить Топливный фильтр MR450965 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Топливный фильтр MR450965 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-mr450965-167639280",
+            "score": 50,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "fits",
+                "comment": "В источнике указано: «Тип: топливный фильтр», «Марка автомобиля: Mitsubishi», «Модель автомобиля: EL».",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-mr450965-167639280"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар на странице не относится к регулятору давления.",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-mr450965-167639280"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Купить UFI топливный фильтр 31.500.00 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить UFI топливный фильтр 31.500.00 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705",
+            "score": 50,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "fits",
+                "comment": "«Тип топливный фильтр», «Для каких автомобилей предназначено? Audi A4, A6 1.6, 1.8, 1.8T...; BMW...; VW Golf...» (для ДВС легковых автомобилей)",
+                "source_url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар на странице является топливным фильтром, регулятор давления не представлен",
+                "source_url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "Купить Топливный фильтр AS201302200S0 в Алматы – Магазин на Kaspi.kz",
+            "domain": "l.kaspi.kz",
+            "title": "Купить Топливный фильтр AS201302200S0 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://l.kaspi.kz/mrk/ext?sku=178591179",
+            "score": 25,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "partial",
+                "comment": "«Тип: топливный фильтр», «Марка автомобиля: Geely», «Модель автомобиля: Coolray» (ДВС легкового автомобиля) Источник — общая выдача; нужна отдельная карточка товара.",
+                "source_url": "https://l.kaspi.kz/mrk/ext?sku=178591179"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар на странице является топливным фильтром, регулятор давления не представлен",
+                "source_url": "https://l.kaspi.kz/mrk/ext?sku=178591179"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          }
+        ],
+        "rejected_candidates": [
+          {
+            "supplier": "Регуляторы давления общепромышленные",
+            "domain": "fluid.kz",
+            "title": "Регуляторы давления общепромышленные",
+            "url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "mail@fluid.kz",
+            "phone": "+77770433181",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В источнике представлены регуляторы давления, информация о топливном фильтре отсутствует.",
+                "source_url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 4 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "http://www.fluid.kz/prod/regulatory/regulyatoryi-davleniya-obshhepromyishlennyie"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Купить FREY топливный фильтр 715400601 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить FREY топливный фильтр 715400601 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/frey-toplivnyi-fil-tr-715400601-162259835",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Актобе",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://kaspi.kz/shop/p/frey-toplivnyi-fil-tr-715400601-162259835"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Информация о регуляторе давления отсутствует.",
+                "source_url": "https://kaspi.kz/shop/p/frey-toplivnyi-fil-tr-715400601-162259835"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "О нас",
+            "domain": "mtn.kz",
+            "title": "О нас",
+            "url": "https://mtn.kz/about",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница «О нас» компании, конкретный товар (топливный фильтр) с характеристиками отсутствует",
+                "source_url": "https://mtn.kz/about"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Информация о регуляторе давления отсутствует на странице",
+                "source_url": "https://mtn.kz/about"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - купить автоаксессуары - Цена на OLX.kz - Страница 8",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - купить автоаксессуары - Цена на OLX.kz - Страница 8",
+            "url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9%20%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80?page=8",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница каталога со множеством объявлений, характеристики конкретной модели не подтверждены",
+                "source_url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9%20%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80?page=8"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Информация о регуляторе давления отсутствует на странице",
+                "source_url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9%20%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80?page=8"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "фильтр топливный - Купить авто фильтры Актюбинская область - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "фильтр топливный - Купить авто фильтры Актюбинская область - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/akt/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Актобе",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница является общей выдачей объявлений (каталогом), а не карточкой конкретного товара; подробные характеристики не указаны",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/akt/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "В источнике отсутствует информация о товаре",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/filtry/akt/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          }
+        ]
+      }
+    }
+  ]
+}

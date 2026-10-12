@@ -1,0 +1,1536 @@
+{
+  "base_commit": "95dd0b0",
+  "local_code_fixes": true,
+  "model": "qwen/qwen3.8-max",
+  "scope": "synthetic specifications, real LLM/Tavily/pages, isolated SQLite, no saved shortlist or outreach",
+  "runs": [
+    {
+      "name": "documenter_7_requirements",
+      "seconds": 10.0,
+      "result": {
+        "lot_id": "benchmark-office",
+        "title": "Поставка 2 офисных столов",
+        "customer": "Тестовая компания",
+        "source_url": null,
+        "amount_kzt": 100000.0,
+        "currency": "KZT",
+        "deadline": null,
+        "delivery_address": "Астана",
+        "delivery_days": 10,
+        "payment_terms": "Оплата в течение 30 календарных дней после приёмки.",
+        "delivery_terms": "Доставка и сборка включены в стоимость, в течение 10 календарных дней.",
+        "procurement_method": "other",
+        "technical_specification": "ТЕСТОВОЕ ТЗ, не реальная закупка. Заказчик: Тестовая компания.\nБюджет: 100 000 тенге. Поставка 2 офисных столов в Астану.\nОбязательные требования:\n1. Размер столешницы 1400х700 мм.\n2. Высота 750 мм.\n3. Материал столешницы ЛДСП толщиной 25 мм.\n4. Металлический каркас.\n5. Гарантия 24 месяца.\n6. Доставка и сборка включены в стоимость, в течение 10 календарных дней.\n7. Сертификат соответствия приложить к заявке.\nОплата в течение 30 календарных дней после приёмки. Новые товары.\n",
+        "requirements": [
+          {
+            "code": "item_1",
+            "quantity": 2.0,
+            "unit": "шт.",
+            "source_quote": "",
+            "name": "Стол офисный",
+            "value": "Размер столешницы 1400х700 мм. Высота 750 мм. Материал столешницы ЛДСП толщиной 25 мм. Металлический каркас. Гарантия 24 месяца. Новые товары. Количество 2 шт.",
+            "is_critical": true,
+            "category": "goods"
+          }
+        ],
+        "qualification_requirements": [],
+        "documents_required": [
+          "Сертификат соответствия"
+        ],
+        "evaluation_criteria": {},
+        "red_flags": [],
+        "warnings": [
+          "Цитата для позиции «Стол офисный» не подтверждена дословно; сверьте исходное ТЗ."
+        ],
+        "legal_compliance": "ok",
+        "compliance_notes": "",
+        "customer_score": null,
+        "margin_estimate": null,
+        "recommendation": "review",
+        "summary": "Тестовое ТЗ на поставку 2 новых офисных столов с размерами столешницы 1400х700 мм, высотой 750 мм, из ЛДСП 25 мм на металлическом каркасе, с гарантией 24 месяца. Доставка и сборка включены в стоимость."
+      }
+    },
+    {
+      "name": "sandbox_office_desks",
+      "seconds": 177.0,
+      "result": {
+        "lot_id": "benchmark-synthetic",
+        "lot_url": null,
+        "requirements": [
+          {
+            "code": "desk",
+            "title": "Стол офисный",
+            "description": "Размер 1400х700 мм, высота 750 мм, ЛДСП 25 мм, металлический каркас, гарантия 24 месяца. Количество 2 шт.",
+            "mandatory": true
+          }
+        ],
+        "trace": {
+          "queries": [
+            "Стол офисный 1400х700 мм 750 мм 25 мм 2 шт",
+            "Стол офисный 1400х700 мм 750 мм 25 мм 2 шт Астана",
+            "Стол офисный 1400х700 мм металлический каркас ЛДСП 25 мм",
+            "Офисный стол 1400x700 высота 750 мм металл каркас",
+            "Стол рабочий офисный 1400 700 ЛДСП 25 мм Астана",
+            "Стол офисный на металлокаркасе 1400х700х750"
+          ],
+          "direct_queries": [
+            "Стол офисный 1400х700 мм 750 мм 25 мм 2 шт производитель казахстан",
+            "Стол офисный оптом напрямую от производителя"
+          ],
+          "found_before_filters": 20,
+          "blocked_filtered": 0,
+          "filtered_out": {
+            "dropped_region": 4,
+            "dropped_price": 0,
+            "dropped_direct": 0,
+            "dropped_no_price": 0,
+            "dropped_no_contacts": 0,
+            "dropped_budget": 0,
+            "unknown_city_kept": 15,
+            "dropped_mandatory": 4,
+            "dropped_unconfirmed": 12
+          },
+          "pages_read": 5,
+          "personalization": "",
+          "filters_applied": {
+            "regions": [
+              "Астана"
+            ],
+            "price_range": [
+              null,
+              null
+            ],
+            "only_direct": false,
+            "only_with_price": false,
+            "only_with_contacts": false,
+            "budget_kzt": 100000.0,
+            "lot_region": ""
+          }
+        },
+        "costs": {
+          "llm_usd": 0.0082,
+          "tavily_usd": 0.064,
+          "browser_usd": 0.0,
+          "total_usd": 0.0722,
+          "is_estimate": true,
+          "llm_calls": 8,
+          "tavily_calls": 8,
+          "browser_calls": 0
+        },
+        "duration_sec": 177.0,
+        "total": 0,
+        "candidates": [],
+        "rejected_candidates": [
+          {
+            "supplier": "Стол письменный прямоугольный, 1400*700*750, Стиль/Орех: продажа, цена в Астане. Компьютерные столы от \"ТОО Вектор-А\" - 38234412",
+            "domain": "flipchart.kz",
+            "title": "Стол письменный прямоугольный, 1400*700*750, Стиль/Орех: продажа, цена в Астане. Компьютерные столы от \"ТОО Вектор-А\" - 38234412",
+            "url": "https://flipchart.kz/p38234412-stol-pismennyj-pryamougolnyj.html",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "Астана",
+            "email": "vectorast@gmail.com",
+            "phone": "+7 (701) 162-11-11",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "no",
+                "comment": "Размер 1400*700*750 подтверждён; «Столешницы ЛДСП 22 мм» — противоречит требованию 25 мм; металлический каркас не указан («Стоевые ЛДСП 22 мм»); гарантия не указана.",
+                "source_url": "https://flipchart.kz/p38234412-stol-pismennyj-pryamougolnyj.html"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Купить Art Мебель подстолье для столешницы металл, 72.5 см в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Art Мебель подстолье для столешницы металл, 72.5 см в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/art-mebel-podstol-e-dlja-stoleshnitsy-metall-72-5-sm-150712961",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "no",
+                "comment": "Товар — подстолье (не стол); высота 725 мм вместо 750 мм; ЛДСП 25 мм отсутствует; гарантия не указана.",
+                "source_url": "https://kaspi.kz/shop/p/art-mebel-podstol-e-dlja-stoleshnitsy-metall-72-5-sm-150712961"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Купить Стол компьютерный Торнадо PLUS XS 0315, 140х80x75 см, черный, коричневый в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Стол компьютерный Торнадо PLUS XS 0315, 140х80x75 см, черный, коричневый в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/stol-pis-mennyi-tornado-plus-xs-0315-140h80x75-sm-chernyi-korichnevyi-150528204",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "no",
+                "comment": "Глубина 800 мм вместо 700 мм; толщина столешницы 32 мм вместо 25 мм; «Материал каркаса--Металл» подтверждён; гарантия не указана.",
+                "source_url": "https://kaspi.kz/shop/p/stol-pis-mennyi-tornado-plus-xs-0315-140h80x75-sm-chernyi-korichnevyi-150528204"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Офисные столы в Астане. Купить ...",
+            "domain": "obyavleniya.kaspi.kz",
+            "title": "Офисные столы в Астане. Купить ...",
+            "url": "https://obyavleniya.kaspi.kz/astana/biznes/mebel-dlya-ofisa/k--%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B5-%D1%81%D1%82%D0%BE%D0%BB%D1%8B",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Страница содержит только фрагмент объявления: размер 1350х650х750 мм, ЛДСП 32 мм; недостаточно информации для полной сверки всех характеристик.",
+                "source_url": "https://obyavleniya.kaspi.kz/astana/biznes/mebel-dlya-ofisa/k--%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B5-%D1%81%D1%82%D0%BE%D0%BB%D1%8B"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "офисные столы в Астана - OLX.kz",
+            "domain": "olx.kz",
+            "title": "офисные столы в Астана - OLX.kz",
+            "url": "https://www.olx.kz/astana/q-%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B5-%D1%81%D1%82%D0%BE%D0%BB%D1%8B",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "В источнике нет подтверждённых характеристик для обязательных требований: точные размеры 1400×700 мм, высота 750 мм, ЛДСП 25 мм, металлический каркас, гарантия 24 месяца и количество 2 шт.",
+                "source_url": "https://www.olx.kz/astana/q-%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B5-%D1%81%D1%82%D0%BE%D0%BB%D1%8B"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "письменный стол в Астана - OLX.kz",
+            "domain": "olx.kz",
+            "title": "письменный стол в Астана - OLX.kz",
+            "url": "https://www.olx.kz/astana/q-%D0%BF%D0%B8%D1%81%D1%8C%D0%BC%D0%B5%D0%BD%D0%BD%D1%8B%D0%B9-%D1%81%D1%82%D0%BE%D0%BB",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Каталог объявлений без детальных характеристик. Неизвестны: размер 1400х700 мм, высота 750 мм, ЛДСП 25 мм, металлический каркас, гарантия 24 месяца.",
+                "source_url": "https://www.olx.kz/astana/q-%D0%BF%D0%B8%D1%81%D1%8C%D0%BC%D0%B5%D0%BD%D0%BD%D1%8B%D0%B9-%D1%81%D1%82%D0%BE%D0%BB"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Офисные столы Астана купить: Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "Офисные столы Астана купить: Цена на OLX.kz",
+            "url": "https://www.olx.kz/astana/q-%D1%81%D1%82%D0%BE%D0%BB-%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 3 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.olx.kz/astana/q-%D1%81%D1%82%D0%BE%D0%BB-%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "стол офисный бу - купить мебель Астана - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "стол офисный бу - купить мебель Астана - Цена на OLX.kz",
+            "url": "https://www.olx.kz/dom-i-sad/mebel/astana/q-%D1%81%D1%82%D0%BE%D0%BB-%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9-%D0%B1%D1%83",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 3 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.olx.kz/dom-i-sad/mebel/astana/q-%D1%81%D1%82%D0%BE%D0%BB-%D0%BE%D1%84%D0%B8%D1%81%D0%BD%D1%8B%D0%B9-%D0%B1%D1%83"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Столы в Казахстане - купить Столы для офиса на OLX.kz Астана",
+            "domain": "olx.kz",
+            "title": "Столы в Казахстане - купить Столы для офиса на OLX.kz Астана",
+            "url": "https://www.olx.kz/dom-i-sad/mebel/ofisnaya-mebel/stoly/astana",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Каталог объявлений без требуемых характеристик. Есть «Стол офисный, размер 95×75×55 см», что не совпадает с ТЗ. Неизвестны: размер 1400х700 мм, высота 750 мм, ЛДСП 25 мм, металлический каркас, гарантия 24 месяца.",
+                "source_url": "https://www.olx.kz/dom-i-sad/mebel/ofisnaya-mebel/stoly/astana"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Купить Биг Бэги (big bag) в Украине - От Производителя",
+            "domain": "bigbag-intera.com.ua",
+            "title": "Купить Биг Бэги (big bag) в Украине - От Производителя",
+            "url": "https://www.bigbag-intera.com.ua/en",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "no",
+                "comment": "Поставщик предлагает биг-бэги и не указывает офисные столы; соответствие требованиям по размеру, материалу, каркасу и гарантии отсутствует.",
+                "source_url": "https://www.bigbag-intera.com.ua/en"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Офисные стулья оптом купить от производителя дешево - Фабрика стульев",
+            "domain": "xn-----vlchhhnadfskceeg3mf1d.xn--p1ai",
+            "title": "Офисные стулья оптом купить от производителя дешево - Фабрика стульев",
+            "url": "https://xn-----vlchhhnadfskceeg3mf1d.xn--p1ai/32-ofisnye-stulya-optom",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Источник содержит только стулья: «Офисные стулья оптом», «Стул офисный СМ-8», «Стул ИЗО». Столы не упоминаются.",
+                "source_url": "https://xn-----vlchhhnadfskceeg3mf1d.xn--p1ai/32-ofisnye-stulya-optom"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "ООО «Сиэнси Один» - ООО «СИЭНСИ ОДИН» — поставщик инструмента, оснастки и станков для металлообработки напрямую от производителей. Низкие цены, широкий ассортимент , склад >20К позиций, собственное производство.",
+            "domain": "ds66.ru",
+            "title": "ООО «Сиэнси Один» - ООО «СИЭНСИ ОДИН» — поставщик инструмента, оснастки и станков для металлообработки напрямую от производителей. Низкие цены, широкий ассортимент , склад >20К позиций, собственное производство.",
+            "url": "https://www.ds66.ru/firms/2377011",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Источник описывает поставщика инструмента и станков для металлообработки. Офисные столы не упоминаются.",
+                "source_url": "https://www.ds66.ru/firms/2377011"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Купить Офисные столы от производителя оптом и в розницу, на заказ.",
+            "domain": "imato.ru",
+            "title": "Купить Офисные столы от производителя оптом и в розницу, на заказ.",
+            "url": "https://imato.ru/66-ofisnye-stoly",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Упоминаются «Офисные столы из лдсп», «Стол письменный из ДСП», но отсутствуют размеры 1400х700 мм, высота 750 мм, толщина ЛДСП 25 мм, металлический каркас и гарантия 24 месяца.",
+                "source_url": "https://imato.ru/66-ofisnye-stoly"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Стол офисный Ст 01.08 цена, фото, описание, купить ...",
+            "domain": "optmebel.ru",
+            "title": "Стол офисный Ст 01.08 цена, фото, описание, купить ...",
+            "url": "https://optmebel.ru/product/stol-ofisnyy-st-01-08",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Указан «Стол офисный Ст 01.08», но отсутствуют размер 1400х700 мм, высота 750 мм, материал ЛДСП 25 мм, металлический каркас и гарантия 24 месяца.",
+                "source_url": "https://optmebel.ru/product/stol-ofisnyy-st-01-08"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Офисная мебель от производителя оптом с расширенной гарантией 10 лет",
+            "domain": "remi-m.ru",
+            "title": "Офисная мебель от производителя оптом с расширенной гарантией 10 лет",
+            "url": "https://remi-m.ru/opt",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "Источник содержит только каталог категорий («Столы На металлокаркасе», «Офисные столы») и общую информацию о компании. Конкретная модель с размерами 1400х700 мм, высотой 750 мм, толщиной ЛДСП 25 мм не указана; условия гарантии не детализированы.",
+                "source_url": "https://remi-m.ru/opt"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Офисная мебель оптом от производителя, купить мебель для офиса оптом в Москве",
+            "domain": "woodville.ru",
+            "title": "Офисная мебель оптом от производителя, купить мебель для офиса оптом в Москве",
+            "url": "https://woodville.ru/catalog/ofisnaya_mebel_optom",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "desk",
+                "title": "Стол офисный",
+                "status": "unknown",
+                "comment": "В переданном фрагменте источника указаны только стулья и кресла; столы не упомянуты. Характеристики неизвестны.",
+                "source_url": "https://woodville.ru/catalog/ofisnaya_mebel_optom"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Не подтверждено обязательных пунктов: 1."
+            ],
+            "rejection_reason": "unconfirmed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sandbox_filter_and_regulator",
+      "seconds": 185.2,
+      "result": {
+        "lot_id": "benchmark-synthetic",
+        "lot_url": null,
+        "requirements": [
+          {
+            "code": "filter",
+            "title": "Топливный фильтр",
+            "description": "Для ДВС легкового автомобиля. Количество 10 шт.",
+            "mandatory": true
+          },
+          {
+            "code": "regulator",
+            "title": "Регулятор давления",
+            "description": "Стальной, фланцевый, проход 80 мм, давление 60,3 МПа. Количество 1 шт.",
+            "mandatory": true
+          }
+        ],
+        "trace": {
+          "queries": [
+            "Регулятор давления 80 мм 60,3 МПа 1 шт Стальной",
+            "Топливный фильтр 10 шт автомобиля",
+            "Топливный фильтр для легкового автомобиля купить Казахстан",
+            "Фильтр топливный ДВС легковой авто цена тенге",
+            "Регулятор давления стальной фланцевый 80 мм 60.3 МПа",
+            "Регулятор давления фланцевый Ду80 Ру600 купить Казахстан"
+          ],
+          "direct_queries": [
+            "Топливный фильтр 10 шт автомобиля производитель казахстан",
+            "Регулятор давления 80 мм 60,3 МПа 1 шт Стальной производитель казахстан",
+            "Топливный фильтр оптом напрямую от производителя",
+            "Регулятор давления оптом напрямую от производителя"
+          ],
+          "found_before_filters": 20,
+          "blocked_filtered": 0,
+          "filtered_out": {
+            "dropped_region": 0,
+            "dropped_price": 0,
+            "dropped_direct": 0,
+            "dropped_no_price": 0,
+            "dropped_no_contacts": 0,
+            "dropped_budget": 1,
+            "unknown_city_kept": 0,
+            "dropped_mandatory": 2,
+            "dropped_unconfirmed": 14
+          },
+          "pages_read": 5,
+          "personalization": "",
+          "filters_applied": {
+            "regions": [],
+            "price_range": [
+              null,
+              null
+            ],
+            "only_direct": false,
+            "only_with_price": false,
+            "only_with_contacts": false,
+            "budget_kzt": 48000.0,
+            "lot_region": ""
+          }
+        },
+        "costs": {
+          "llm_usd": 0.0102,
+          "tavily_usd": 0.064,
+          "browser_usd": 0.0,
+          "total_usd": 0.0742,
+          "is_estimate": true,
+          "llm_calls": 9,
+          "tavily_calls": 8,
+          "browser_calls": 0
+        },
+        "duration_sec": 185.2,
+        "total": 3,
+        "candidates": [
+          {
+            "supplier": "Купить Топливный фильтр 13592436 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить Топливный фильтр 13592436 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317",
+            "score": 25,
+            "domain_kind": "aggregator",
+            "price_kzt": 2692.0,
+            "city": "",
+            "email": "",
+            "phone": "87947351247",
+            "estimated_total_kzt": 26920.0,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "partial",
+                "comment": "«Тип топливный фильтр», «Марка автомобиля Chevrolet Модель автомобиля Cobalt» (легковой). Количество 10 шт. не указано в характеристиках товара.",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице.",
+                "source_url": "https://kaspi.kz/shop/p/toplivnyi-fil-tr-13592436-108443317"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Цена указана без стоимости доставки.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1.",
+              "Рассчитана одна позиция; бюджет всего лота не подтверждён."
+            ]
+          },
+          {
+            "supplier": "Купить UFI топливный фильтр 31.500.00 в Алматы – Магазин на Kaspi.kz",
+            "domain": "kaspi.kz",
+            "title": "Купить UFI топливный фильтр 31.500.00 в Алматы – Магазин на Kaspi.kz",
+            "url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705",
+            "score": 25,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Актобе",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "partial",
+                "comment": "«Тип топливный фильтр», «Марка автомобиля Audi, BMW... Модель автомобиля A4, A6, 3-Series...» (легковые). Количество 10 шт. не указано в характеристиках товара.",
+                "source_url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице.",
+                "source_url": "https://kaspi.kz/shop/p/ufi-toplivnyi-fil-tr-31-500-00-109174705"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          },
+          {
+            "supplier": "топливный фильтр бмв - Купить автозапчасти - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр бмв - Купить автозапчасти - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/avtozapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B1%D0%BC%D0%B2",
+            "score": 25,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "partial",
+                "comment": "На странице представлены топливные фильтры для легковых BMW (X3, E90, E87, е46, е39, е53, е65), что подтверждает тип товара. Однако количество 10 шт. не указано ни в одном объявлении; каждое объявление — отдельная позиция без указания партии.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B1%D0%BC%D0%B2"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Регулятор давления на странице отсутствует. Нет данных о товаре и его характеристиках.",
+                "source_url": "https://www.olx.kz/zapchasti/avtozapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B1%D0%BC%D0%B2"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 1."
+            ]
+          }
+        ],
+        "rejected_candidates": [
+          {
+            "supplier": "О нас",
+            "domain": "mtn.kz",
+            "title": "О нас",
+            "url": "https://mtn.kz/about",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница «О нас» компании, конкретные карточки товаров с характеристиками отсутствуют. Упоминается только общий ассортимент автофильтров.",
+                "source_url": "https://mtn.kz/about"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице.",
+                "source_url": "https://mtn.kz/about"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - купить автоаксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - купить автоаксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "Кызылорда",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница поиска OLX, содержит объявления о подогревах топливных фильтров и GPS-мониторинге, но не карточки самих топливных фильтров для ДВС легковых автомобилей.",
+                "source_url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Товар отсутствует на странице.",
+                "source_url": "https://www.olx.kz/zapchasti/aksessuary-avto/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливные фильтра - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливные фильтра - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B5-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%B0",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B5-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%B0"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Регуляторы давления на странице отсутствуют.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B5-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80%D0%B0"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Регуляторы давления на странице отсутствуют.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "топливный фильтр дизель - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "топливный фильтр дизель - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B4%D0%B8%D0%B7%D0%B5%D0%BB%D1%8C",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B4%D0%B8%D0%B7%D0%B5%D0%BB%D1%8C"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Регуляторы давления на странице отсутствуют.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D0%B4%D0%B8%D0%B7%D0%B5%D0%BB%D1%8C"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "фильтр топливный с подкачкой - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "domain": "olx.kz",
+            "title": "фильтр топливный с подкачкой - Купить автозапчасти и аксессуары - Цена на OLX.kz",
+            "url": "https://www.olx.kz/zapchasti/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%81-%D0%BF%D0%BE%D0%B4%D0%BA%D0%B0%D1%87%D0%BA%D0%BE%D0%B9",
+            "score": 0,
+            "domain_kind": "aggregator",
+            "price_kzt": 20000.0,
+            "city": "Алматы",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": 200000.0,
+            "budget_status": "over_budget",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%81-%D0%BF%D0%BE%D0%B4%D0%BA%D0%B0%D1%87%D0%BA%D0%BE%D0%B9"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Регуляторы давления на странице отсутствуют.",
+                "source_url": "https://www.olx.kz/zapchasti/q-%D1%84%D0%B8%D0%BB%D1%8C%D1%82%D1%80-%D1%82%D0%BE%D0%BF%D0%BB%D0%B8%D0%B2%D0%BD%D1%8B%D0%B9-%D1%81-%D0%BF%D0%BE%D0%B4%D0%BA%D0%B0%D1%87%D0%BA%D0%BE%D0%B9"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Цена указана без стоимости доставки.",
+              "Контакты на странице не найдены.",
+              "Похоже на посредника, а не производителя — уточните, кто фактический поставщик.",
+              "Не подтверждено обязательных пунктов: 2.",
+              "Расчётная стоимость 200,000 ₸ превышает бюджет лота 48,000 ₸."
+            ],
+            "rejection_reason": "over_budget"
+          },
+          {
+            "supplier": "Купить Биг Бэги (big bag) в Украине - От Производителя",
+            "domain": "bigbag-intera.com.ua",
+            "title": "Купить Биг Бэги (big bag) в Украине - От Производителя",
+            "url": "https://www.bigbag-intera.com.ua/en",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник содержит информацию только о биг-бэгах (полипропиленовых контейнерах); данные о топливных фильтрах для ДВС отсутствуют.",
+                "source_url": "https://www.bigbag-intera.com.ua/en"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Источник содержит информацию только о биг-бэгах (полипропиленовых контейнерах); данные о регуляторах давления отсутствуют.",
+                "source_url": "https://www.bigbag-intera.com.ua/en"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Топливные фильтры для спецтехники заказать с доставкой - KIR",
+            "domain": "kraftinvest.com",
+            "title": "Топливные фильтры для спецтехники заказать с доставкой - KIR",
+            "url": "https://www.kraftinvest.com/produkcziya/toplivnye-filtry",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "no",
+                "comment": "Источник указывает «топливных фильтров для спецтехники», а не для легковых автомобилей; количество 10 шт. не подтверждено.",
+                "source_url": "https://www.kraftinvest.com/produkcziya/toplivnye-filtry"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице нет информации о регуляторах давления.",
+                "source_url": "https://www.kraftinvest.com/produkcziya/toplivnye-filtry"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Редукторы давления воды купить оптом от производителя",
+            "domain": "masterprof.net",
+            "title": "Редукторы давления воды купить оптом от производителя",
+            "url": "https://masterprof.net/catalog/fitingi-latunnye/reduktory",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице нет информации о топливных фильтрах.",
+                "source_url": "https://masterprof.net/catalog/fitingi-latunnye/reduktory"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Страница описывает редукторы давления воды с мембранным типом; материал (стальной), фланцевое соединение, проход 80 мм, давление 60,3 МПа не указаны.",
+                "source_url": "https://masterprof.net/catalog/fitingi-latunnye/reduktory"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Все поставщики топливного фильтра оптом в России на одном сайте — Supl.biz",
+            "domain": "supl.biz",
+            "title": "Все поставщики топливного фильтра оптом в России на одном сайте — Supl.biz",
+            "url": "https://supl.biz/toplivnyij-filtr-supplierscategory6948",
+            "score": 0,
+            "domain_kind": "unknown",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Страница является каталогом поставщиков без конкретных карточек товаров; назначение для легковых автомобилей и характеристики не подтверждены.",
+                "source_url": "https://supl.biz/toplivnyij-filtr-supplierscategory6948"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице нет информации о регуляторах давления.",
+                "source_url": "https://supl.biz/toplivnyij-filtr-supplierscategory6948"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Регуляторы давления в Москве - купить оптом по выгодной цене с доставкой",
+            "domain": "aquaoptim.ru",
+            "title": "Регуляторы давления в Москве - купить оптом по выгодной цене с доставкой",
+            "url": "https://www.aquaoptim.ru/catalog/klapany-reguliruyuschie-regulyatory-davleniya-vody",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "zakaz@aquaoptim.ru",
+            "phone": "8(495)225-99-45",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице нет информации о топливных фильтрах.",
+                "source_url": "https://www.aquaoptim.ru/catalog/klapany-reguliruyuschie-regulyatory-davleniya-vody"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Упоминаются квартирные регуляторы давления КФРД и РД; материал (стальной), фланцевое соединение, проход 80 мм, давление 60,3 МПа не указаны.",
+                "source_url": "https://www.aquaoptim.ru/catalog/klapany-reguliruyuschie-regulyatory-davleniya-vody"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Топливные фильтры оптом от производителя",
+            "domain": "axkmfilter.ru",
+            "title": "Топливные фильтры оптом от производителя",
+            "url": "https://www.axkmfilter.ru/filter-opt/toplivnye",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник подтверждает 0 из 1 ключевых характеристик ТЗ. Требуется подтверждение поставщика.",
+                "source_url": "https://www.axkmfilter.ru/filter-opt/toplivnye"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице нет информации о регуляторах давления.",
+                "source_url": "https://www.axkmfilter.ru/filter-opt/toplivnye"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "ООО «Сиэнси Один» - ООО «СИЭНСИ ОДИН» — поставщик инструмента, оснастки и станков для металлообработки напрямую от производителей. Низкие цены, широкий ассортимент , склад >20К позиций, собственное производство.",
+            "domain": "ds66.ru",
+            "title": "ООО «Сиэнси Один» - ООО «СИЭНСИ ОДИН» — поставщик инструмента, оснастки и станков для металлообработки напрямую от производителей. Низкие цены, широкий ассортимент , склад >20К позиций, собственное производство.",
+            "url": "https://www.ds66.ru/firms/2377011",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице нет информации о топливных фильтрах; компания поставляет инструмент, оснастку и станки для металлообработки.",
+                "source_url": "https://www.ds66.ru/firms/2377011"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице нет информации о регуляторах давления.",
+                "source_url": "https://www.ds66.ru/firms/2377011"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Купить масляный фильтр FLEETGUARD (Флитгард) оптом, купить воздушный и топливный фильтр FLEETGUARD (Флитгард) оптом : «Эдельвейс-Авто»",
+            "domain": "eann.ru",
+            "title": "Купить масляный фильтр FLEETGUARD (Флитгард) оптом, купить воздушный и топливный фильтр FLEETGUARD (Флитгард) оптом : «Эдельвейс-Авто»",
+            "url": "https://www.eann.ru/katalog/filtry-fleetguard",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "ea.nn@mail.ru",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "В заголовке упоминается «топливный фильтр FLEETGUARD», но в приведённом тексте каталога показаны только воздушные фильтры (AA2900, AA2959, AA2960, AF1606KM, AF1802). Применение для ДВС легкового автомобиля не подтверждено.",
+                "source_url": "https://www.eann.ru/katalog/filtry-fleetguard"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "На странице нет информации о регуляторах давления.",
+                "source_url": "https://www.eann.ru/katalog/filtry-fleetguard"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Купить редукторы давления воды оптом от завода производителя «ЭКО НОМ»",
+            "domain": "eckonom.ru",
+            "title": "Купить редукторы давления воды оптом от завода производителя «ЭКО НОМ»",
+            "url": "https://eckonom.ru/katalog/truboprovodnaya-armatura/reduktoryi-davleniya",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице нет информации о топливных фильтрах; представлены редукторы давления воды.",
+                "source_url": "https://eckonom.ru/katalog/truboprovodnaya-armatura/reduktoryi-davleniya"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "no",
+                "comment": "Представлены бытовые редукторы давления воды (например, «Редуктор давления ЭКО НОМ РД 1/2\" PN16»), что противоречит требованиям: стальной, фланцевый, проход 80 мм, давление 60,3 МПа.",
+                "source_url": "https://eckonom.ru/katalog/truboprovodnaya-armatura/reduktoryi-davleniya"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "mandatory_mismatch"
+          },
+          {
+            "supplier": "Регулятор давления Rexroth от компании Олниса",
+            "domain": "olnisa.ru",
+            "title": "Регулятор давления Rexroth от компании Олниса",
+            "url": "https://olnisa.ru/blog/regulyator-davleniya-rexroth",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "На странице нет информации о топливных фильтрах.",
+                "source_url": "https://olnisa.ru/blog/regulyator-davleniya-rexroth"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Упоминается «Регулятор давления Rexroth» для гидравлических систем, но характеристики (стальной, фланцевый, проход 80 мм, давление 60,3 МПа) не указаны.",
+                "source_url": "https://olnisa.ru/blog/regulyator-davleniya-rexroth"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          },
+          {
+            "supplier": "Качественные товары напрямую от производителя оптом",
+            "domain": "optlist.ru",
+            "title": "Качественные товары напрямую от производителя оптом",
+            "url": "https://optlist.ru/wholesales/kachestvennye-tovary-napriamuiu-ot-proizvoditelia",
+            "score": 0,
+            "domain_kind": "direct",
+            "price_kzt": null,
+            "city": "",
+            "email": "",
+            "phone": "",
+            "estimated_total_kzt": null,
+            "budget_status": "unknown",
+            "requirement_matches": [
+              {
+                "code": "filter",
+                "title": "Топливный фильтр",
+                "status": "unknown",
+                "comment": "Источник содержит только одежду, обувь, косметику и пищевую продукцию; топливный фильтр не упоминается.",
+                "source_url": "https://optlist.ru/wholesales/kachestvennye-tovary-napriamuiu-ot-proizvoditelia"
+              },
+              {
+                "code": "regulator",
+                "title": "Регулятор давления",
+                "status": "unknown",
+                "comment": "Источник содержит только одежду, обувь, косметику и пищевую продукцию; регулятор давления не упоминается.",
+                "source_url": "https://optlist.ru/wholesales/kachestvennye-tovary-napriamuiu-ot-proizvoditelia"
+              }
+            ],
+            "warnings": [
+              "Сертификаты не указаны — запросите подтверждение.",
+              "Гарантия не указана.",
+              "Контакты на странице не найдены.",
+              "Зарубежный поставщик: уточните сроки и стоимость доставки, а также подходят ли документы для участия в тендере РК.",
+              "Сайт похож на сайт компании — контакты искать в разделах «Контакты» и «О нас».",
+              "Не подтверждено обязательных пунктов: 2."
+            ],
+            "rejection_reason": "unconfirmed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "product_search_office_desks",
+      "seconds": 179.8,
+      "result": {
+        "lot_id": "benchmark-office",
+        "query": "Стол офисный 1400х700 мм Астана",
+        "products": [],
+        "search_queries": [
+          "Стол офисный 1400х700 мм 25 мм 750 мм 2 шт",
+          "Стол офисный 1400х700 мм ЛДСП 25 мм металлический каркас Астана",
+          "Офисный стол 1400 700 металл ЛДСП 25 мм гарантия 24 месяца",
+          "Стол письменный 1400х700 мм на металлокаркасе Астана",
+          "Стол офисный 1400х700 ЛДСП 25 мм металлический каркас высота 750 мм",
+          "Стол для офиса 1400х700 мм металл ЛДСП 25 мм Астана цена"
+        ],
+        "summary": "Найдено 0 кандидатов с подтверждёнными данными; полностью соответствуют ТЗ: 0. Неизвестные характеристики, наличие и доставка требуют уточнения.",
+        "browser_actions_count": 0,
+        "browser_total_cost_usd": 0.0,
+        "browser_total_duration_sec": 0.0
+      }
+    },
+    {
+      "name": "known_product_page_positive_control",
+      "seconds": 8.7,
+      "result": {
+        "card": {
+          "name": "Стол письменный 1500*700*750",
+          "supplier": "Арлан",
+          "domain": "arlanstyle.kz",
+          "url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+          "price_kzt": 41700.0,
+          "in_stock": true,
+          "city": "Алматы",
+          "delivery_days": null,
+          "email": "arlan.style.kz@gmail.com",
+          "phone": "+7 (701) 760-67-11",
+          "image_url": "",
+          "certificates": [],
+          "warranty": "",
+          "sources": {
+            "email": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+            "phone": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+            "page_content": "direct_html",
+            "price": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html",
+            "price_source": "structured_data"
+          },
+          "is_middleman": false,
+          "domain_kind": "direct",
+          "estimated_total_kzt": 83400.0,
+          "budget_status": "within_budget"
+        },
+        "match": {
+          "requirement_matches": [
+            {
+              "code": "desk",
+              "title": "Стол письменный",
+              "status": "fits",
+              "comment": "«Размеры: 1500*700*750мм», «Толщина столешницы 16 мм», «Столешница ламинированная ДСП (ЛДСП)», «Опоры стола ламинированная ДСП», «Минимальный заказ: 2 шт.»",
+              "source_url": "https://arlanstyle.kz/p23539093-stol-pismennyj-1500700750.html"
+            }
+          ],
+          "score": 100,
+          "warnings": [
+            "Сертификаты не указаны — запросите подтверждение.",
+            "Гарантия не указана.",
+            "Цена указана без стоимости доставки."
+          ]
+        },
+        "pages_read": 1
+      }
+    }
+  ]
+}
