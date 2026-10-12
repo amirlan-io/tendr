@@ -128,6 +128,13 @@ def test_env_file_resolves_to_project_root() -> None:
     project_env = project_root / ".env"
     legacy_backend_env = project_root / "backend" / ".env"
     assert env_path.name == ".env"
-    expected = project_env if project_env.exists() else legacy_backend_env
+    expected = (
+        project_env
+        if project_env.exists()
+        else legacy_backend_env
+        if legacy_backend_env.exists()
+        else project_env
+    )
     assert env_path == expected
-    assert env_path.exists(), "project or legacy backend .env must exist locally"
+    # CI и production могут передавать секреты только через environment;
+    # отсутствие физического .env не должно менять выбранный канонический путь.

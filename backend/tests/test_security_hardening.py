@@ -119,9 +119,10 @@ def test_alembic_single_head_and_quota_migration_is_isolated() -> None:
     script = ScriptDirectory.from_config(alembic_cfg)
     heads = script.get_heads()
     assert len(heads) == 1
-    # Голова сдвинулась на миграцию Supplier Agent; важно лишь, что она одна
-    # (никаких ветвлений) и наследует предыдущую ревизию.
-    assert heads == ["e4a91f0b2c77"]
+    # Голова сдвинулась на серверное workspace-состояние; важно, что цепочка
+    # остаётся линейной и новая миграция наследует Supplier Agent.
+    assert heads == ["c91e4b4aa210"]
+    assert script.get_revision("c91e4b4aa210").down_revision == "e4a91f0b2c77"
     assert script.get_revision("e4a91f0b2c77").down_revision == "a7c31e9d5b21"
     assert script.get_revision("a7c31e9d5b21").down_revision == "d19b5a2f3b91"
 
