@@ -37,11 +37,24 @@ if (-not (Test-DockerEngine)) {
         throw "Docker engine is not ready. Check the Docker Desktop window for WSL/virtualization errors and use Linux containers. Run this script again after Engine running."
     }
 }
-foreach ($Port in @(8000, 5173)) {
-    if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
-        throw "Port $Port is already in use. Close the existing local server before running this script."
+function Find-FreeLocalPort([int]$FirstPort) {
+    for ($Candidate = $FirstPort; $Candidate -lt $FirstPort + 20; $Candidate++) {
+        if (-not (Get-NetTCPConnection -LocalPort $Candidate -State Listen -ErrorAction SilentlyContinue)) {
+            return $Candidate
+        }
     }
+    throw "No free local port found starting at $FirstPort."
 }
+$ApiPort = Find-FreeLocalPort 8000
+$WebPort = Find-FreeLocalPort 5173
+$env:TENDR_LOCAL_API_PORT = [string]$ApiPort
+$env:TENDR_LOCAL_WEB_PORT = [string]$WebPort
+# The new frontend terminal inherits this value for its Vite API proxy.
+$env:TENDR_API_PORT = [string]$ApiPort
+$ApiUrl = "http://127.0.0.1:$ApiPort"
+$WebUrl = "http://127.0.0.1:$WebPort"
+Write-Host "Selected API port $ApiPort and frontend port $WebPort. Existing processes are left running."
+
 
 Push-Location (Join-Path $ProjectRoot "web")
 try {
@@ -54,7 +67,7 @@ if ($LASTEXITCODE -ne 0) { throw "Docker startup failed. Read the error above; e
 $Ready = $false
 for ($Attempt = 0; $Attempt -lt 60; $Attempt++) {
     try {
-        $Response = Invoke-RestMethod "http://127.0.0.1:8000/api/health/live" -TimeoutSec 2
+        $Response = Invoke-RestMethod "$ApiUrl/api/health/live" -TimeoutSec 2
         if ($Response.status -eq "ok") { $Ready = $true; break }
     } catch { }
     Start-Sleep -Seconds 1
@@ -64,17 +77,17 @@ if (-not $Ready) {
     throw "API is not ready. Read the container logs above."
 }
 $WebDirectory = Join-Path $ProjectRoot "web"
-Start-Process -FilePath "cmd.exe" -ArgumentList @("/k", ('cd /d "{0}" && npm run dev -- --host 127.0.0.1 --port 5173 --strictPort' -f $WebDirectory))
+Start-Process -FilePath "cmd.exe" -ArgumentList @("/k", ('cd /d "{0}" && npm run dev -- --host 127.0.0.1 --port {1} --strictPort' -f $WebDirectory, $WebPort))
 $WebReady = $false
 for ($Attempt = 0; $Attempt -lt 30; $Attempt++) {
     try {
-        $Response = Invoke-WebRequest "http://127.0.0.1:5173/" -UseBasicParsing -TimeoutSec 2
+        $Response = Invoke-WebRequest "$WebUrl/" -UseBasicParsing -TimeoutSec 2
         if ($Response.StatusCode -eq 200) { $WebReady = $true; break }
     } catch { }
     Start-Sleep -Seconds 1
 }
 if (-not $WebReady) { throw "Frontend did not start. Read the separate terminal window." }
-Start-Process "http://localhost:5173/#pricing"
-Write-Host "Frontend: http://localhost:5173/#pricing"
-Write-Host "API: http://localhost:8000/api/health/live"
+Start-Process "$WebUrl/#pricing"
+Write-Host "Frontend: $WebUrl/#pricing"
+Write-Host "API: $ApiUrl/api/health/live"
 Write-Host "Keep the frontend terminal open. Stop backend: docker compose -f infra/docker-compose.local.yml down"

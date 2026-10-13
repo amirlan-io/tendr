@@ -16,7 +16,7 @@ x-backend: &backend
     ANALYSIS_JOB_MODE: local
     ANALYSIS_JOB_STORAGE_DIR: /var/lib/tendr/analysis-jobs
     ALLOWED_HOSTS: localhost,127.0.0.1
-    ALLOWED_FRONTEND_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    ALLOWED_FRONTEND_ORIGINS: http://localhost:${TENDR_LOCAL_WEB_PORT:-5173},http://127.0.0.1:${TENDR_LOCAL_WEB_PORT:-5173}
   volumes:
     - analysis_jobs:/var/lib/tendr/analysis-jobs
 
