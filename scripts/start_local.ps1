@@ -13,8 +13,30 @@ $NodeVersion = [version]((& node -p "process.versions.node").Trim())
 if ($NodeVersion -lt [version]"22.12.0") {
     throw "Node.js 22.12 or newer is required. Install the current LTS release."
 }
-& docker info *> $null
-if ($LASTEXITCODE -ne 0) { throw "Start Docker Desktop and wait until its engine is ready." }
+function Test-DockerEngine {
+    # Windows PowerShell 5.1 turns native stderr into NativeCommandError under Stop.
+    # A missing engine is an expected startup state, not an unhandled exception.
+    try {
+        & docker info *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false }
+}
+if (-not (Test-DockerEngine)) {
+    $DesktopPath = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+    if (-not (Test-Path $DesktopPath)) {
+        throw "Open Docker Desktop manually and wait for Engine running, then run this script again."
+    }
+    Write-Host "Starting Docker Desktop. Complete any first-run prompts in its window."
+    Start-Process -FilePath $DesktopPath
+    $EngineReady = $false
+    for ($Attempt = 0; $Attempt -lt 60; $Attempt++) {
+        if (Test-DockerEngine) { $EngineReady = $true; break }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $EngineReady) {
+        throw "Docker engine is not ready. Check the Docker Desktop window for WSL/virtualization errors and use Linux containers. Run this script again after Engine running."
+    }
+}
 foreach ($Port in @(8000, 5173)) {
     if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
         throw "Port $Port is already in use. Close the existing local server before running this script."
