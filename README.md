@@ -179,6 +179,8 @@ tendr/
 
 ### Установка
 
+**Windows:** [пошаговый запуск frontend и backend на вашем компьютере](docs/LOCAL_WINDOWS.md).
+
 ```bash
 # 1. Клонировать и установить зависимости
 git clone <repo>
