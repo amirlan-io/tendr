@@ -1,3 +1,4 @@
+import { api, toSafeApiMessage } from "../clientId";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "../Layout";
@@ -21,6 +22,20 @@ export function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useT();
   const { items, total, loading, loadingMore, offline, error, hasMore, loadMore, reload } =
     useHistoryList();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [comparison, setComparison] = useState<Array<LocalItem & { budget_kzt: number | null }>>([]);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
+  async function compare() {
+    setComparing(true); setCompareError(null); setComparison([]);
+    try {
+      const response = await api<{ items: Array<LocalItem & { budget_kzt: number | null }> }>("/api/lots/compare", {
+        method: "POST", body: JSON.stringify({ lot_ids: selected }),
+      });
+      setComparison(response.items);
+    } catch (error) { setCompareError(toSafeApiMessage(error)); }
+    finally { setComparing(false); }
+  }
   const [query, setQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
@@ -149,6 +164,35 @@ export function HistoryPage({ embedded = false }: { embedded?: boolean } = {}) {
             {sortDir === "desc" ? "Новые ↓" : "Старые ↑"}
           </button>
         </div>
+
+        {items.length >= 2 && (
+          <section className="mb-5 rounded-xl border border-white/10 p-4" aria-label="Сравнение лотов">
+            <h2 className="text-base font-medium">Сравнение лотов · Pro и Ultra</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">Выберите от 2 до 4 сохранённых анализов. Сравнение не расходует лимит AI.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {items.map((item) => (
+                <label key={item.lot_id} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={selected.includes(item.lot_id)}
+                    disabled={!selected.includes(item.lot_id) && selected.length >= 4}
+                    onChange={(event) => setSelected((old) => event.target.checked ? [...old, item.lot_id] : old.filter((id) => id !== item.lot_id))} />
+                  {item.title || item.lot_id}
+                </label>
+              ))}
+            </div>
+            <button type="button" disabled={selected.length < 2 || comparing || offline} onClick={() => void compare()}
+              className="mt-4 rounded-lg border px-4 py-2 text-sm disabled:opacity-40">{comparing ? "Сравниваем…" : "Сравнить выбранные"}</button>
+            {compareError && <p role="alert" className="mt-3 text-sm text-red-400">{compareError}</p>}
+            {comparison.length > 0 && <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm">
+              <thead><tr><th className="p-2">Закупка</th><th className="p-2">Заказчик</th><th className="p-2">Бюджет, ₸</th><th className="p-2">Риск</th><th className="p-2">Требования</th><th className="p-2">Красные флаги</th></tr></thead>
+              <tbody>{comparison.map((item) => <tr key={item.lot_id} className="border-t border-white/10">
+                <td className="p-2">{item.title}</td><td className="p-2">{item.customer || "—"}</td>
+                <td className="p-2">{item.budget_kzt?.toLocaleString("ru-RU") ?? "—"}</td>
+                <td className="p-2">{t(`history.risk.${item.overall_risk || "needs_review"}`)}</td>
+                <td className="p-2">{item.n_requirements}</td><td className="p-2">{item.n_red_flags}</td>
+              </tr>)}</tbody>
+            </table></div>}
+          </section>
+        )}
 
         {loading ? (
           <div role="status" aria-busy="true" className="text-[var(--text-muted)] text-sm">Загрузка истории…</div>

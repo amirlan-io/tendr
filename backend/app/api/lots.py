@@ -638,6 +638,27 @@ async def get_lot_history(
     }
 
 
+class CompareLotsRequest(BaseModel):
+    lot_ids: list[str] = Field(min_length=2, max_length=4)
+
+
+@router.post("/compare")
+async def compare_lots(payload: CompareLotsRequest,
+    client_id: str = Depends(require_authenticated_client_id), db: AsyncSession = Depends(get_db)):
+    """Compare only this account's saved analyses; no external AI call or quota charge."""
+    if len(set(payload.lot_ids)) != len(payload.lot_ids) or any(len(key) > 128 for key in payload.lot_ids):
+        raise HTTPException(422, "INVALID_COMPARISON")
+    user = await db_repo.get_or_create_user(db, web_client_id=client_id)
+    await db_repo.require_plan_feature(db, user.id, "deep_analysis")
+    rows = (await db.execute(select(Analysis).where(
+        Analysis.user_id == user.id, Analysis.lot_id.in_(payload.lot_ids)))).scalars().all()
+    by_id = {row.lot_id: row for row in rows}
+    if any(key not in by_id for key in payload.lot_ids):
+        raise HTTPException(404, "Not found")
+    return {"items": [{**_safe_history_item(by_id[key]), "budget_kzt": by_id[key].budget_kzt}
+        for key in payload.lot_ids]}
+
+
 @router.get("/{lot_id}/download")
 async def download_lot_document(
     lot_id: int,

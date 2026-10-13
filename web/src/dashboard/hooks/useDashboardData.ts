@@ -20,8 +20,8 @@ const SAFE_HISTORY_ERROR = "Не удалось загрузить истори�
 function toQuota(raw: unknown): QuotaInfo | null {
   if (typeof raw !== "object" || raw === null) return null;
   const o = raw as Record<string, unknown>;
-  const limit = o["monthly_limit"] ?? o["limit"];
-  const used = o["used_this_month"] ?? o["used"];
+  const limit = o["window_limit"] ?? o["limit"];
+  const used = o["used_last_5_hours"] ?? o["used"];
   if (typeof limit !== "number" || typeof used !== "number") return null;
   return {
     limit,
@@ -33,6 +33,7 @@ function toQuota(raw: unknown): QuotaInfo | null {
     usedInWindow: typeof o["used_last_5_hours"] === "number" ? o["used_last_5_hours"] : 0,
     remainingInWindow: typeof o["remaining_last_5_hours"] === "number" ? o["remaining_last_5_hours"] : 0,
     windowResetsAt: typeof o["window_resets_at"] === "string" ? o["window_resets_at"] : null,
+    reserved: typeof o["reserved_last_5_hours"] === "number" ? o["reserved_last_5_hours"] : 0,
   };
 }
 
@@ -98,14 +99,14 @@ export function useHistoryList(pageLimit = 20) {
   return { items, total, loading, loadingMore, offline, error, hasMore, loadMore, reload: () => load(0, false) };
 }
 
-/** Квота пользователя: лимиты и использование для тарифа и кредитов. */
+/** Текущее пятичасовое окно: анализы, активные резервы и время обновления. */
 export function useQuota() {
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    api<unknown>("/api/account/quota")
+    const refresh = () => api<unknown>("/api/account/quota")
       .then((r) => {
         if (active) setQuota(toQuota(r));
       })
@@ -115,8 +116,11 @@ export function useQuota() {
       .finally(() => {
         if (active) setLoading(false);
       });
+    void refresh();
+    const timer = setInterval(refresh, 30_000);
     return () => {
       active = false;
+      clearInterval(timer);
     };
   }, []);
 

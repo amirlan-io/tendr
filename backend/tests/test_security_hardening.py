@@ -136,7 +136,8 @@ def test_alembic_single_head_and_quota_migration_is_isolated() -> None:
     assert len(heads) == 1
     # Голова сдвинулась на серверное workspace-состояние; важно, что цепочка
     # остаётся линейной и новая миграция наследует Supplier Agent.
-    assert heads == ["d02a13c003"]
+    assert heads == ["d02a13c004"]
+    assert script.get_revision("d02a13c004").down_revision == "d02a13c003"
     assert script.get_revision("d02a13c003").down_revision == "d02a13c002"
     assert script.get_revision("d02a13c002").down_revision == "d02a13c001"
     assert script.get_revision("d02a13c001").down_revision == "c91e4b4aa210"
@@ -590,7 +591,7 @@ async def test_quota_reservation_exhausts_last_slot_and_expired_reservation_is_r
 
 
 @pytest.mark.asyncio
-async def test_quota_month_boundary_uses_utc() -> None:
+async def test_quota_has_no_monthly_cap() -> None:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -604,7 +605,8 @@ async def test_quota_month_boundary_uses_utc() -> None:
 
         quota = await db_repo.get_user_quota(session, user.id, limit=3, now_override=None)
         assert quota["limit"] == 3
-        assert quota["used_this_month"] == 0
+        assert quota["monthly_limit"] is None
+        assert quota["used"] == 0
 
     await engine.dispose()
 

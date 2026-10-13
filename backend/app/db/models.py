@@ -46,6 +46,7 @@ class User(Base):
 
     __tablename__ = "users"
     quota_reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    quota_window_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
     # Telegram ID (0 = web-пользователь)
@@ -127,7 +128,7 @@ class QuotaResetAudit(Base):
 
 
 class QuotaReservation(Base):
-    """БД-резервирование квоты на текущий месяц."""
+    """Резерв AI-запусков; month_key сохраняется для исторического ledger."""
 
     __tablename__ = "quota_reservations"
 
@@ -137,6 +138,7 @@ class QuotaReservation(Base):
     operation_key: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
     amount: Mapped[int] = mapped_column(Integer, default=1)
     month_key: Mapped[str] = mapped_column(String(7), index=True, nullable=False)
+    window_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="reserved", index=True)
     reserved_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
@@ -149,6 +151,7 @@ class QuotaReservation(Base):
 
     __table_args__ = (
         Index("ix_quota_reservations_user_month_status", "user_id", "month_key", "status"),
+        Index("ix_quota_reservations_user_window_status", "user_id", "window_started_at", "status"),
     )
 
 
@@ -231,7 +234,7 @@ class Subscription(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     # Тариф: "free" / "monthly" / "quarterly" / "yearly" / "pilot"
     plan: Mapped[str] = mapped_column(String(32))
-    # Сколько анализов в месяц разрешено (999 = безлимит для пилота)
+    # Legacy поле: сохраняется для истории; действующий лимит берётся из каталога тарифов
     monthly_limit: Mapped[int] = mapped_column(Integer, default=3)
     # Статус
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -55,7 +55,7 @@ export function BillingPage() {
   const [billingLoading, setBillingLoading] = useState(true);
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
-  const remaining = quota ? Math.max(0, quota.limit - quota.used) : null;
+  const remaining = quota ? quota.remainingInWindow : null;
   const currentPlanName = quota
     ? ({ free: "Пробный", pilot: "Пилот", plus: "Plus", pro: "Pro", ultra: "Ultra" }[quota.plan] ?? quota.plan)
     : "Пробный";
@@ -91,8 +91,9 @@ export function BillingPage() {
         Тариф и лимиты
       </h1>
       <p className="mt-3 max-w-xl text-sm leading-6 text-white/42">
-        Кредиты тратятся на AI-анализ закупок и подготовку документов.
-        Пятичасовой лимит — скользящее окно: каждый использованный кредит освобождается ровно через 5 часов. Месячный лимит обновляется в начале нового расчётного периода.
+        В тарифе один лимит AI-анализов на пять часов, без месячного ограничения.
+        Окно начинается с первого запуска и затем полностью обновляется. Неудачный анализ не расходует лимит.
+        AI-чат, глубокий поиск и подготовка AI-черновика используют по одному запуску; пакетный разбор — по одному на лот.
       </p>
 
       {searchParams.get("payment") === "success" && (
@@ -112,7 +113,7 @@ export function BillingPage() {
             limit={quota?.limit ?? null}
             used={quota?.used ?? 0}
             remaining={remaining}
-            renewsAt={null}
+            renewsAt={quota?.windowResetsAt ?? null}
           />
         )}
         <section
@@ -122,27 +123,27 @@ export function BillingPage() {
           <h2 className="text-base font-medium text-white">Как считаются лимиты</h2>
           <dl className="mt-4 space-y-3 text-[13px]">
             <div className="flex justify-between gap-3">
-              <dt className="text-white/40">Месячный лимит</dt>
-              <dd className="font-medium text-white/80">{quota ? `${quota.limit} кредитов` : "—"}</dd>
+              <dt className="text-white/40">AI-анализы за 5 часов</dt>
+              <dd className="font-medium text-white/80">{quota ? `${quota.limit} анализов` : "—"}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-white/40">Использовано</dt>
-              <dd className="font-medium text-white/80">{quota ? `${quota.used} кредитов` : "—"}</dd>
+              <dd className="font-medium text-white/80">{quota ? `${quota.used} анализов` : "—"}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-white/40">Осталось</dt>
-              <dd className="font-medium text-emerald-300">{remaining !== null ? `${remaining} кредитов` : "—"}</dd>
+              <dd className="font-medium text-emerald-300">{remaining !== null ? `${remaining} анализов` : "—"}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-white/40">Лимит на 5 часов</dt>
-              <dd className="font-medium text-white/80">{quota ? `${quota.usedInWindow} из ${quota.windowLimit}` : "—"}</dd>
+              <dt className="text-white/40">Выполняются сейчас</dt>
+              <dd className="font-medium text-white/80">{quota ? quota.reserved : "—"}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-white/40">Доступно сейчас</dt>
-              <dd className="font-medium text-emerald-300">{quota ? `${quota.remainingInWindow} кредитов` : "—"}</dd>
+              <dd className="font-medium text-emerald-300">{quota ? `${quota.remainingInWindow} анализов` : "—"}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-white/40">Ближайшее восстановление</dt>
+              <dt className="text-white/40">Обновление всего лимита</dt>
               <dd className="font-medium text-white/80">{quota?.windowResetsAt ? new Date(quota.windowResetsAt).toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "после использования"}</dd>
             </div>
           </dl>
@@ -168,7 +169,7 @@ export function BillingPage() {
         ))}
       </div>
       <p className="mt-6 text-xs leading-5 text-white/30">
-        Данные банковских карт Tendr не получает: оплата проходит на защищённой странице Stripe. Тариф активируется только после подписанного подтверждения платежа. Если кнопка неактивна, владельцу проекта нужно добавить Stripe-ключи и Price ID на сервере.
+        Данные банковских карт Tendr не получает: оплата проходит на защищённой странице Stripe. Тариф активируется только после подписанного подтверждения платежа. Если кнопка неактивна, онлайн-оплата пока недоступна.
       </p>
     </div>
   );

@@ -4,8 +4,7 @@ export type Tariff = {
   id: TariffId;
   name: string;
   priceKzt: number | null;
-  monthlyCredits: number | null;
-  burstCredits: number | null;
+  windowLimit: number;
   features: string[];
 };
 
@@ -19,6 +18,7 @@ export type QuotaInfo = {
   usedInWindow: number;
   remainingInWindow: number;
   windowResetsAt: string | null;
+  reserved: number;
 };
 
 export type SavedLot = {

@@ -49,6 +49,12 @@ def metered(kind: str):
                 identity = await require_authenticated_client_id(values["request"])
             user = await repo.get_or_create_user(session, web_client_id=identity)
             user_id = user.id
+            feature = {
+                "product_deep_search": "deep_analysis", "b2g_generate": "documents",
+                "supplier_search": "suppliers", "supplier_sandbox": "suppliers",
+                "supplier_draft": "suppliers", "outreach_email": "suppliers", "outreach_call": "suppliers",
+            }.get(kind, "analysis")
+            await repo.require_plan_feature(session, user_id, feature)
             async with operation(session, user_id, kind):
                 return await fn(*args, **kwargs)
         wrapped.__signature__ = signature

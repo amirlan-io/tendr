@@ -1,3 +1,4 @@
+import { PAID_PLANS } from "../plans";
 import { accountLocalStorage } from "../accountStorage";
 import type {
   NavItem,
@@ -16,54 +17,11 @@ export const DASHBOARD_NAV: NavItem[] = [
   { to: "/dashboard/history", label: "Мои закупки", description: "История анализов", icon: "history" },
   { to: "/dashboard/documents", label: "Документы", description: "Жалобы и отчёты", icon: "docs" },
   { to: "/dashboard/b2g", label: "Подготовка ТЗ", description: "Черновики заказчикам", icon: "briefcase" },
-  { to: "/dashboard/billing", label: "Тариф и лимиты", description: "Кредиты и оплата", icon: "billing" },
+  { to: "/dashboard/billing", label: "Тариф и лимиты", description: "AI-анализы и оплата", icon: "billing" },
   { to: "/dashboard/settings", label: "Настройки", description: "Профиль и доступ", icon: "settings" },
 ];
 
-export const TARIFFS: Tariff[] = [
-  {
-    id: "plus",
-    name: "Plus",
-    priceKzt: 10000,
-    monthlyCredits: 150,
-    burstCredits: 20,
-    features: [
-      "150 кредитов в месяц",
-      "До 20 кредитов на 5 часов",
-      "AI-анализ закупок",
-      "Поиск лотов",
-      "История анализов",
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    priceKzt: 25000,
-    monthlyCredits: 400,
-    burstCredits: 60,
-    features: [
-      "400 кредитов в месяц",
-      "До 60 кредитов на 5 часов",
-      "Всё из тарифа Plus",
-      "Подготовка документов",
-      "Приоритетная обработка",
-    ],
-  },
-  {
-    id: "ultra",
-    name: "Ultra",
-    priceKzt: 56000,
-    monthlyCredits: 1200,
-    burstCredits: 150,
-    features: [
-      "1 200 кредитов в месяц",
-      "До 150 кредитов на 5 часов",
-      "Всё из тарифа Pro",
-      "Персональная поддержка",
-      "Ранний доступ к функциям",
-    ],
-  },
-];
+export const TARIFFS: Tariff[] = PAID_PLANS;
 
 const SAVED_LOTS_KEY = "tendr_saved_lots:v1";
 const DOCUMENTS_KEY = "tendr_documents:v1";

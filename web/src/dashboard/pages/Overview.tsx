@@ -1,3 +1,4 @@
+import { planName } from "../../plans";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { StatCard } from "../components/StatCard";
@@ -93,7 +94,7 @@ export function OverviewPage() {
   ].slice(0, 6);
 
   const analysesCount = total ?? history.length;
-  const remaining = quota ? Math.max(0, quota.limit - quota.used) : null;
+  const remaining = quota ? quota.remainingInWindow : null;
 
   return (
     <div>
@@ -138,9 +139,9 @@ export function OverviewPage() {
             <StatCard label="Документов подготовлено" value={String(documents.length).padStart(2, "0")} note="скачано" accent="blue" />
             <StatCard label="Активных дедлайнов" value={String(deadlines.length).padStart(2, "0")} note="отслеживается" accent="gold" />
             <StatCard
-              label="AI-кредиты"
+              label="AI-анализы"
               value={remaining !== null ? String(remaining) : "—"}
-              note={quota ? `осталось из ${quota.limit}` : "сервер недоступен"}
+              note={quota ? `осталось из ${quota.limit} за 5 часов` : "сервер недоступен"}
               accent="emerald"
             />
           </>
@@ -154,11 +155,11 @@ export function OverviewPage() {
         </div>
         <div className="grid content-start gap-4">
           <UsageCard
-            tariffName={quota?.isPilot ? "Пилот" : "Пробный"}
+            tariffName={quota ? planName(quota.plan) : "Пробный"}
             limit={quota?.limit ?? null}
             used={quota?.used ?? 0}
             remaining={remaining}
-            renewsAt={null}
+            renewsAt={quota?.windowResetsAt ?? null}
           />
           <QuickActions />
         </div>

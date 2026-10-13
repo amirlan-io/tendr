@@ -1,0 +1,20 @@
+{
+  "plus": {
+    "name": "Plus", "amount_kzt": 5000, "window_limit": 5,
+    "label": "СТАРТ", "description": "Для начала работы с закупками и первых заявок.",
+    "features": ["Поиск и фильтрация тендеров", "AI-анализ требований, рисков и документов", "История анализов и избранное"],
+    "capabilities": ["analysis"]
+  },
+  "pro": {
+    "name": "Pro", "amount_kzt": 10000, "window_limit": 10,
+    "label": "ДЛЯ РЕГУЛЯРНОЙ РАБОТЫ", "description": "Для компаний, которые регулярно участвуют в закупках.",
+    "features": ["Всё из тарифа Plus", "Глубокий разбор и сравнение лотов", "Генерация черновиков документов"],
+    "capabilities": ["analysis", "deep_analysis", "documents"]
+  },
+  "ultra": {
+    "name": "Ultra", "amount_kzt": 25000, "window_limit": 20,
+    "label": "МАКСИМУМ", "description": "Для активной работы с тендерами и поставщиками.",
+    "features": ["Всё из тарифа Pro", "Поиск поставщиков", "Подготовка запросов поставщикам"],
+    "capabilities": ["analysis", "deep_analysis", "documents", "suppliers"]
+  }
+}

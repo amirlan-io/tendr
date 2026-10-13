@@ -187,19 +187,12 @@ async def test_five_hour_limit_is_enforced_for_paid_plan(session) -> None:
             expires_at=(now + timedelta(days=20)).replace(tzinfo=None),
         )
     )
-    for index in range(20):
-        session.add(
-            Analysis(
-                user_id=user.id,
-                lot_id=f"window-{index}",
-                result_json={},
-                created_at=(now - timedelta(minutes=30)).replace(tzinfo=None),
-            )
-        )
-    await session.flush()
+    for index in range(5):
+        reservation = await repo.reserve_user_quota(session, user.id, operation_key=f"window-{index}", now_override=now)
+        await repo.confirm_user_quota(session, user.id, reservation["reservation_key"], now_override=now)
     quota = await repo.get_user_quota(session, user.id, now_override=now)
     assert quota["plan"] == "plus"
-    assert quota["window_limit"] == 20
+    assert quota["window_limit"] == 5
     assert quota["remaining_last_5_hours"] == 0
     with pytest.raises(repo.QuotaLimitExceeded, match="Five-hour"):
         await repo.reserve_user_quota(
@@ -211,9 +204,9 @@ async def test_five_hour_limit_is_enforced_for_paid_plan(session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_repeated_analysis_of_same_lot_still_consumes_each_credit(session) -> None:
+async def test_repeated_analysis_of_same_lot_still_consumes_each_run(session) -> None:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    user = User(web_client_id="repeated_lot_quota_001")
+    user = User(web_client_id="repeated_lot_quota_001", quota_window_started_at=now)
     session.add(user)
     await session.flush()
     session.add(Analysis(user_id=user.id, lot_id="same-lot", result_json={}, created_at=now))
@@ -222,6 +215,7 @@ async def test_repeated_analysis_of_same_lot_still_consumes_each_credit(session)
             QuotaReservation(
                 user_id=user.id,
                 reservation_key=f"confirmed-{index}",
+                window_started_at=now,
                 operation_key=f"same-lot-{index}",
                 amount=1,
                 month_key=now.strftime("%Y-%m"),
@@ -233,7 +227,8 @@ async def test_repeated_analysis_of_same_lot_still_consumes_each_credit(session)
         )
     await session.flush()
     quota = await repo.get_user_quota(session, user.id, now_override=now)
-    assert quota["used_this_month"] == 2
+    assert quota["monthly_limit"] is None
+    assert quota["used"] == 2
     assert quota["used_last_5_hours"] == 2
 
 

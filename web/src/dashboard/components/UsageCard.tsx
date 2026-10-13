@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 type Props = {
@@ -8,8 +9,15 @@ type Props = {
   renewsAt: string | null;
 };
 
-/** Карточка текущего тарифа с прогрессом использования кредитов. */
+/** Карточка текущего тарифа с прогрессом использования анализов. */
 export function UsageCard({ tariffName, limit, used, remaining, renewsAt }: Props) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const minutes = renewsAt ? Math.max(0, Math.ceil((Date.parse(renewsAt) - now) / 60_000)) : 0;
+  const untilReset = `${Math.floor(minutes / 60)} ч ${minutes % 60} мин`;
   const pct =
     limit !== null && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   return (
@@ -30,15 +38,15 @@ export function UsageCard({ tariffName, limit, used, remaining, renewsAt }: Prop
           <p className="mt-2 text-xs leading-5 text-white/35">
             {limit !== null ? (
               <>
-                Использовано {used} из {limit} кредитов
+                Использовано {used} из {limit} анализов за 5 часов
                 {remaining !== null && <> · осталось {remaining}</>}
               </>
             ) : (
-              <>Использовано кредитов: {used}</>
+              <>Выполнено анализов: {used}</>
             )}
           </p>
           {renewsAt && (
-            <p className="mt-1 text-[11px] text-white/25">Обновление: {renewsAt}</p>
+            <p className="mt-1 text-[11px] text-white/25">Обновление через {untilReset}</p>
           )}
         </div>
         <Link
@@ -54,7 +62,7 @@ export function UsageCard({ tariffName, limit, used, remaining, renewsAt }: Prop
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
-        aria-label="Использование кредитов"
+        aria-label="Использование AI-анализов"
       >
         <div
           className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-500"

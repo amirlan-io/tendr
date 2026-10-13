@@ -81,7 +81,7 @@ class LotOrchestrator:
         limit = 999 if is_pilot else free_limit
         if used_this_month > limit:
             raise QuotaExceeded(
-                f"Лимит бесплатных заявок на месяц исчерпан ({used_this_month}/{limit})."
+                f"Лимит AI-анализов за пять часов исчерпан ({used_this_month}/{limit})."
             )
 
         # 1. Получаем текст ТЗ

@@ -168,11 +168,7 @@ async def put_workspace_state(
     return {"ok": True, "namespace": namespace}
 
 
-PLAN_CATALOG = {
-    "plus": {"monthly_limit": 150, "window_limit": 20, "amount_kzt": 10_000},
-    "pro": {"monthly_limit": 400, "window_limit": 60, "amount_kzt": 25_000},
-    "ultra": {"monthly_limit": 1200, "window_limit": 150, "amount_kzt": 56_000},
-}
+from app.core.plans import PLAN_CATALOG, WINDOW_HOURS
 
 
 def _stripe_price_id(plan: str) -> str:
@@ -194,6 +190,9 @@ async def billing_plans() -> dict[str, Any]:
             {
                 "id": plan,
                 **limits,
+                "window_hours": WINDOW_HOURS,
+                "unit": "analysis",
+                "monthly_limit": None,
                 "checkout_available": bool(configured and _stripe_price_id(plan)),
             }
             for plan, limits in PLAN_CATALOG.items()
@@ -235,6 +234,19 @@ async def create_billing_checkout(
         form["customer_email"] = auth_user.email
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
+            price_response = await client.get(
+                f"https://api.stripe.com/v1/prices/{price_id}",
+                headers={"Authorization": f"Bearer {settings.stripe_secret_key}"},
+            )
+            price_response.raise_for_status()
+            price = price_response.json()
+            recurring = price.get("recurring") or {}
+            if (price.get("currency") != "kzt"
+                or price.get("unit_amount") != PLAN_CATALOG[payload.plan]["amount_kzt"] * 100
+                or recurring.get("interval") != "month"
+                or recurring.get("interval_count") != 1
+                or price.get("active") is not True):
+                raise HTTPException(503, "BILLING_PRICE_MISMATCH")
             response = await client.post(
                 "https://api.stripe.com/v1/checkout/sessions",
                 data=form,
@@ -329,7 +341,7 @@ async def _activate_stripe_subscription(
         current = Subscription(user_id=user.id, plan=plan)
         session.add(current)
     current.plan = plan
-    current.monthly_limit = PLAN_CATALOG[plan]["monthly_limit"]
+    current.monthly_limit = 0  # Legacy column; paid plans have no monthly cap.
     current.is_active = True
     current.starts_at = starts_at
     current.expires_at = expires_at
@@ -670,7 +682,7 @@ async def admin_reset_quota(
     _admin: None = Depends(require_admin_key),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Сбросить счётчик использований в этом месяце (для теста).
+    """Сбросить пятичасовое окно без удаления истории.
 
     В будущем — удалить этот эндпоинт или закрыть.
     """
@@ -695,6 +707,7 @@ async def admin_reset_quota(
     from app.db.models import QuotaResetAudit
     now = datetime.now(UTC).replace(tzinfo=None)
     user.quota_reset_at = now
+    user.quota_window_started_at = None
     session.add(QuotaResetAudit(user_id=user.id, reason=payload.reason, actor="admin-api", occurred_at=now))
     await session.flush()
-    return {"ok": True, "user_id": user.id, "reset_for_month": now.strftime("%Y-%m")}
+    return {"ok": True, "user_id": user.id, "window_reset_at": now.replace(tzinfo=UTC).isoformat()}

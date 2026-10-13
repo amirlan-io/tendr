@@ -81,6 +81,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             or request.url.path.startswith("/api/outreach")
             or request.url.path.startswith("/api/lots/analysis-jobs")
             or request.url.path.startswith("/api/lots/assistant")
+            or request.url.path == "/api/lots/compare"
             or request.url.path.startswith("/api/b2g")
             or request.url.path.startswith("/api/browser")
             or request.url.path.startswith("/api/products")

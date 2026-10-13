@@ -210,6 +210,6 @@ describe("Пустые состояния и тарифы", () => {
     for (const btn of await screen.findAllByRole("button", { name: "Оплата не настроена" })) {
       expect(btn).toBeDisabled();
     }
-    expect(screen.getByText(/Если кнопка неактивна, владельцу проекта нужно добавить Stripe-ключи/)).toBeInTheDocument();
+    expect(screen.getByText(/Если кнопка неактивна, онлайн-оплата пока недоступна/)).toBeInTheDocument();
   });
 });

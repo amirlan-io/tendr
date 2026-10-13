@@ -16,7 +16,8 @@ from app.schemas.lot import (
     MarginCalculationRequest,
     MarginCalculationResult,
 )
-from app.core.supabase_auth import SupabaseUser, require_supabase_user
+from app.core.supabase_auth import SupabaseUser, require_supabase_user, supabase_client_id
+from app.db import get_db, repo
 
 router = APIRouter(prefix="/applications", tags=["applications"])
 
@@ -25,11 +26,14 @@ router = APIRouter(prefix="/applications", tags=["applications"])
 async def generate_docx(
     payload: ApplicationRequest,
     _auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+    session=Depends(get_db),
 ) -> StreamingResponse:
     """Сгенерировать DOCX заявки на участие.
 
     Возвращает готовый файл для скачивания.
     """
+    user = await repo.get_or_create_user(session, web_client_id=supabase_client_id(_auth_user))
+    await repo.require_plan_feature(session, user.id, "documents")
     lot_info = None
     if payload.lot_id or payload.lot_title:
         lot_info = {"lot_id": payload.lot_id or "", "title": payload.lot_title or ""}
