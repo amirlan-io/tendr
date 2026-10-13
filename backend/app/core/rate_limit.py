@@ -68,6 +68,8 @@ def _sweep(now: float) -> None:
 
 def _client_key(request: Request) -> str:
     """Prefer a hashed bearer identity, otherwise use the source address."""
+    if getattr(request.state, "telegram_id", None) is not None:
+        return f"telegram:{request.state.telegram_id}"
     authorization = request.headers.get("Authorization", "").strip()
     if authorization.lower().startswith("bearer "):
         digest = hashlib.sha256(authorization.encode("utf-8")).hexdigest()[:32]
@@ -104,6 +106,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
+        if request.method == "GET" and path.startswith("/api/lots/analysis-jobs"):
+            return await call_next(request)
         if not any(path.startswith(prefix) for prefix in RATE_LIMITED_PREFIXES):
             return await call_next(request)
 

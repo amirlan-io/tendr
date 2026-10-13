@@ -11,6 +11,10 @@ from loguru import logger
 from app.llm import Message, get_llm
 
 
+class AnalysisUnavailable(RuntimeError):
+    """An AI analysis could not be completed; its quota must be released."""
+
+
 class Agent(ABC):
     """Базовый класс. Агенты используют LLM + RAG и возвращают структурированный результат."""
 

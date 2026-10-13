@@ -1,3 +1,4 @@
+import { accountLocalStorage } from "./accountStorage";
 /**
  * Локальное хранилище истории анализов.
  *
@@ -28,7 +29,7 @@ const MAX_ITEMS = 20;
 function storage(): Storage | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.localStorage;
+    return accountLocalStorage;
   } catch {
     return null;
   }

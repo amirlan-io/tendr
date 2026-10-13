@@ -661,6 +661,7 @@ async def admin_set_pilot(
 class ResetQuotaRequest(BaseModel):
     telegram_id: int | None = None
     web_client_id: str | None = None
+    reason: str = Field(default="Administrative quota correction", min_length=1, max_length=255)
 
 
 @router.post("/admin/reset-quota")
@@ -690,14 +691,10 @@ async def admin_reset_quota(
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-    # Удаляем все анализы за текущий месяц
-    from datetime import datetime
-
-    now = datetime.utcnow()
-    start_of_month = datetime(now.year, now.month, 1)
-    await session.execute(
-        delete(Analysis).where(
-            and_(Analysis.user_id == user.id, Analysis.created_at >= start_of_month)
-        )
-    )
+    from datetime import UTC, datetime
+    from app.db.models import QuotaResetAudit
+    now = datetime.now(UTC).replace(tzinfo=None)
+    user.quota_reset_at = now
+    session.add(QuotaResetAudit(user_id=user.id, reason=payload.reason, actor="admin-api", occurred_at=now))
+    await session.flush()
     return {"ok": True, "user_id": user.id, "reset_for_month": now.strftime("%Y-%m")}

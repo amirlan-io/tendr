@@ -5,6 +5,8 @@ P0: Конкуренция с ets-tender.kz и zakup.gov.kz.
 
 from __future__ import annotations
 
+from app.services.operations import metered
+
 import ast
 import io
 import json
@@ -20,7 +22,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -343,6 +345,7 @@ async def search_lots(
     req: LotSearchRequest,
     client_id: str = Depends(require_client_id),
     db: AsyncSession = Depends(get_db),
+    request: Request = None,
 ) -> LotSearchResult:
     """Поиск реальных лотов в официальном реестре zakup.gov.kz V3.
 
@@ -359,6 +362,8 @@ async def search_lots(
     reservation: dict | None = None
     ai_requested = bool(req.with_ai and req.ai_limit > 0)
     if ai_requested:
+        client_id = await require_authenticated_client_id(request)
+        user = await db_repo.get_or_create_user(db, web_client_id=client_id)
         try:
             reservation = await db_repo.reserve_user_quota(
                 db,
@@ -370,20 +375,32 @@ async def search_lots(
         except db_repo.QuotaLimitExceeded as exc:
             raise HTTPException(status_code=429, detail="QUOTA_EXCEEDED") from exc
 
+    user_id = user.id
+    await db.commit()
     try:
-        return await _run_lot_search(req, db, settings, ai_requested=ai_requested)
+        result = await _run_lot_search(req, db, settings, ai_requested=ai_requested)
+        if reservation is not None:
+            if result.ai_credits_used:
+                from app.db.models import QuotaReservation
+                row = await db.scalar(select(QuotaReservation).where(QuotaReservation.reservation_key == reservation["reservation_key"]))
+                row.amount = result.ai_credits_used
+                await db_repo.confirm_user_quota(db, user_id, reservation_key=reservation["reservation_key"])
+            else:
+                await db_repo.release_user_quota(db, user_id, reservation_key=reservation["reservation_key"])
+            await db.commit()
+        return result
     except Exception:
         # Любой сбой возвращает квоту: иначе неудачный запрос списывает её.
         if reservation is not None:
             try:
+                await db.rollback()
                 await db_repo.release_user_quota(
-                    db, user.id, reservation_key=reservation["reservation_key"]
+                    db, user_id, reservation_key=reservation["reservation_key"]
                 )
+                await db.commit()
             except Exception:  # noqa: BLE001 — освобождение не должно маскировать исходную ошибку
-                logger.warning("[search] quota release failed user=%s", user.id)
+                logger.warning("[search] quota release failed user=%s", user_id)
         raise
-    finally:
-        await db.close()
 
 
 async def _run_lot_search(
@@ -491,6 +508,7 @@ async def _run_lot_search(
     for lot in saved_lots:
         await db.refresh(lot)
 
+    ai_credits_used = 0
     # AI-анализ (P0-3): Documenter + Legal — ОПЦИОНАЛЬНО (выкл по умолчанию).
     # Квота на него зарезервирована в search_lots до вызова этой функции.
     if ai_requested:
@@ -529,6 +547,7 @@ async def _run_lot_search(
                     lot.ai_match_score = match_score
                     lot.ai_processed = True
                 await db.commit()
+                ai_credits_used = len(lots_to_analyze)
                 for lot in lots_to_analyze:
                     await db.refresh(lot)
             except Exception as e:
@@ -586,6 +605,7 @@ async def _run_lot_search(
         total=(len(items) if req.only_urgent else aggregator.page_info.total_count),
         source="zakup.gov.kz (mock)" if is_mock else "zakup.gov.kz",
         is_mock=is_mock,
+        ai_credits_used=ai_credits_used,
         next_cursor=aggregator.page_info.next_cursor,
         has_more=aggregator.page_info.has_next_page,
         total_is_exact=aggregator.page_info.total_is_exact and not req.only_urgent,
@@ -801,6 +821,7 @@ def _assistant_navigation_actions(answer: str) -> list[dict[str, str]]:
 
 
 @router.post("/assistant/chat")
+@metered("assistant_chat")
 async def chat_with_tender_assistant(
     payload: AssistantChatRequest,
     client_id: str = Depends(require_authenticated_client_id),
@@ -1167,7 +1188,10 @@ async def analyze_lot_url(
             used_this_month=used_this_month + 1,
             free_limit=free_limit,
         )
-        await db_repo.confirm_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
+        if result.incomplete:
+            await db_repo.release_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
+        else:
+            await db_repo.confirm_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
     except db_repo.QuotaLimitExceeded as exc:
         logger.warning("[analyze] quota exceeded user=%s", user.id)
         raise HTTPException(status_code=429, detail="QUOTA_EXCEEDED") from exc
@@ -1292,7 +1316,10 @@ async def analyze_lot_upload(
             free_limit=free_limit,
             session=db,
         )
-        await db_repo.confirm_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
+        if result.incomplete:
+            await db_repo.release_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
+        else:
+            await db_repo.confirm_user_quota(db, user.id, reservation_key=reservation["reservation_key"])
     except db_repo.QuotaLimitExceeded as exc:
         logger.warning("[analyze-upload] quota exceeded user=%s", user.id)
         raise HTTPException(status_code=429, detail="QUOTA_EXCEEDED") from exc

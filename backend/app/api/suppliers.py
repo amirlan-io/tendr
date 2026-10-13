@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from app.services.operations import metered
+
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -88,6 +90,7 @@ class SearchResponse(BaseModel):
 
 
 @router.post("/search", response_model=SearchResponse)
+@metered("supplier_search")
 async def search_suppliers(
     payload: SearchRequest,
     auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
@@ -285,6 +288,7 @@ def _requirement_lines(requirements: list[dict[str, Any]]) -> list[str]:
 
 
 @router.post("/draft")
+@metered("supplier_draft")
 async def create_draft(
     payload: DraftRequest,
     auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],

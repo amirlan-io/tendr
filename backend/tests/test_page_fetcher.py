@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from typing import Any
 
 import httpx
@@ -45,7 +46,10 @@ JINA_SAMPLE = (
         "http://example.com/page",
     ],
 )
-def test_public_urls_are_allowed(url: str) -> None:
+def test_public_urls_are_allowed(url: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+    ])
     assert is_public_http_url(url) is True
 
 
@@ -172,6 +176,10 @@ async def test_fetch_jina_handles_http_error(monkeypatch: pytest.MonkeyPatch) ->
 async def test_enrich_applies_contacts_price_and_city(monkeypatch: pytest.MonkeyPatch) -> None:
     """Страница -> контакты, цена, наличие, город."""
     from app.agents.supplier_agent import SupplierCandidate, SupplierAgent
+
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+    ])
 
     class FakeClient:
         def __init__(self, *a: Any, **kw: Any) -> None:

@@ -1,3 +1,4 @@
+import { accountLocalStorage } from "../accountStorage";
 import type {
   NavItem,
   PreparedDocument,
@@ -72,7 +73,7 @@ const MAX_DOCS = 100;
 function readJson<T>(key: string): T[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = accountLocalStorage.getItem(key);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as T[]) : [];
@@ -84,7 +85,7 @@ function readJson<T>(key: string): T[] {
 function writeJson(key: string, value: unknown[]): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    accountLocalStorage.setItem(key, JSON.stringify(value));
   } catch {
     /* переполнение или недоступность — молча пропускаем */
   }
@@ -175,8 +176,8 @@ export async function hydrateCabinetFromServer(): Promise<{
     loadWorkspaceState<unknown[]>("saved_lots"),
     loadWorkspaceState<unknown[]>("documents"),
   ]);
-  const savedLots = (remoteLots ?? loadSavedLots()).filter(isSavedLot).slice(0, MAX_SAVED);
-  const documents = (remoteDocuments ?? loadDocuments())
+  const savedLots = (remoteLots ?? []).filter(isSavedLot).slice(0, MAX_SAVED);
+  const documents = (remoteDocuments ?? [])
     .filter(isPreparedDocument)
     .slice(0, MAX_DOCS);
   writeJson(SAVED_LOTS_KEY, savedLots);

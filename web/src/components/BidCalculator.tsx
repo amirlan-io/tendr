@@ -1,3 +1,4 @@
+import { accountLocalStorage } from "../accountStorage";
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Calculator, CheckCircle2, ShieldCheck } from "lucide-react";
 import { loadWorkspaceState, saveWorkspaceState } from "../workspaceState";
@@ -119,7 +120,7 @@ export function BidCalculator({
   useEffect(() => {
     let active = true;
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "null") as Partial<BidInputs> | null;
+      const saved = JSON.parse(accountLocalStorage.getItem(storageKey) || "null") as Partial<BidInputs> | null;
       setInputs(saved ? { ...EMPTY_INPUTS, ...saved } : EMPTY_INPUTS);
     } catch {
       setInputs(EMPTY_INPUTS);
@@ -139,7 +140,7 @@ export function BidCalculator({
 
   useEffect(() => {
     if (!loaded) return;
-    localStorage.setItem(storageKey, JSON.stringify(inputs));
+    accountLocalStorage.setItem(storageKey, JSON.stringify(inputs));
     const timer = window.setTimeout(() => {
       void saveWorkspaceState(`bid-${lotId}`, inputs).catch(() => undefined);
     }, 500);

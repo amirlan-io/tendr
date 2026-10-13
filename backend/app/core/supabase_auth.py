@@ -22,6 +22,7 @@ MAX_AUTH_RESPONSE_BYTES = 64 * 1024
 class SupabaseUser:
     id: str
     email: str | None
+    telegram_id: int | None = None
 
 
 def _auth_error(detail: str = "AUTH_REQUIRED") -> HTTPException:
@@ -63,6 +64,16 @@ def _validated_auth_url(raw_url: str) -> str:
 
 async def get_optional_supabase_user(request: Request) -> SupabaseUser | None:
     """Return the authenticated user, or ``None`` for a guest request."""
+    telegram_id = getattr(request.state, "telegram_id", None)
+    if telegram_id is not None:
+        from app.db import SessionLocal
+        from app.db.models import User
+        from sqlalchemy import select
+        async with SessionLocal() as session:
+            user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+        if user and user.web_client_id and user.web_client_id.startswith("supabase_"):
+            return SupabaseUser(id=str(UUID(user.web_client_id.removeprefix("supabase_"))), email=user.email)
+        raise HTTPException(status_code=401, detail="TELEGRAM_NOT_LINKED")
     token = _bearer_token(request)
     if token is None:
         return None
@@ -116,4 +127,6 @@ async def require_supabase_user(request: Request) -> SupabaseUser:
 
 def supabase_client_id(user: SupabaseUser) -> str:
     """Map a verified Supabase subject to the existing stable web identity."""
+    if user.telegram_id is not None:
+        return f"telegram_authenticated_{user.telegram_id}"
     return f"supabase_{user.id.replace('-', '')}"

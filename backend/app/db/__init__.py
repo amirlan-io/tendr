@@ -20,12 +20,12 @@ class Base(DeclarativeBase):
 
 
 _settings = get_settings()
+_pool_options = {} if _settings.database_url.startswith("sqlite") else {"pool_size": 5, "max_overflow": 10}
 engine = create_async_engine(
     _settings.database_url,
     echo=False,
     pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    **_pool_options,
 )
 
 SessionLocal = async_sessionmaker(

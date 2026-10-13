@@ -20,6 +20,8 @@ from pydantic import BaseModel, Field
 
 from app.agents.browser_use import BrowserUseAgent, BrowserUseError, ModelTier
 from app.core.client_id import require_authenticated_client_id
+from app.db import get_db
+from app.services.operations import metered
 
 logger = logging.getLogger(__name__)
 
@@ -182,8 +184,10 @@ async def _run_task_with_timeout(agent: BrowserUseAgent, **kwargs: Any) -> Any:
 
 
 @router.post("/run")
+@metered("browser_run")
 async def run_browser_task(
     req: RunTaskRequest,
+    db=Depends(get_db),
     client_id: str = Depends(require_authenticated_client_id),
 ) -> dict[str, Any]:
     """Запустить задачу в реальном браузере по безопасному шаблону."""
@@ -270,9 +274,11 @@ async def get_browser_status(
 
 
 @router.post("/continue/{session_id}")
+@metered("browser_continue")
 async def continue_browser_task(
     session_id: str,
     req: ContinueTaskRequest,
+    db=Depends(get_db),
     client_id: str = Depends(require_authenticated_client_id),
 ) -> dict:
     """Продолжить HIL сессию только владельцем."""

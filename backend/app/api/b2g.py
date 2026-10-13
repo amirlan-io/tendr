@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.services.operations import metered
+
 from datetime import datetime
 from typing import Any
 
@@ -21,6 +23,7 @@ from app.db.models import (
     B2GMember,
     B2GTzDraft,
     B2GWorkspace,
+    Lot,
     User,
 )
 from app.services.doc_generator import generate_tz_docx, generate_tz_pdf
@@ -244,6 +247,7 @@ class CreateTzRequest(BaseModel):
 
 
 @router.post("/workspaces/{ws_id}/generate")
+@metered("b2g_generate")
 async def generate_tz(
     ws_id: int,
     payload: CreateTzRequest,
@@ -262,15 +266,15 @@ async def generate_tz(
     pattern = _escape_like(keywords[0]) if keywords else ""
     like_pattern = f"%{pattern}%"
     stmt = (
-        select(Analysis)
-        .where(Analysis.title.ilike(like_pattern, escape="\\"))
-        .where(Analysis.budget_kzt.is_not(None))
-        .order_by(Analysis.created_at.desc())
+        select(Lot)
+        .where(Lot.title.ilike(like_pattern, escape="\\"))
+        .where(Lot.amount_kzt.is_not(None))
+        .order_by(Lot.id.desc())
         .limit(5)
     )
     rows = (await session.execute(stmt)).scalars().all()
     similar_lots = [
-        {"title": r.title, "budget_kzt": r.budget_kzt, "customer": r.customer} for r in rows
+        {"title": r.title, "budget_kzt": r.amount_kzt, "customer": r.organizer} for r in rows
     ]
 
     # Запускаем B2G Agent

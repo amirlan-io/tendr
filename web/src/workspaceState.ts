@@ -1,4 +1,5 @@
 import { api } from "./clientId";
+import { storageGeneration, assertStorageGeneration } from "./accountStorage";
 
 type WorkspaceEnvelope<T> = {
   namespace: string;
@@ -7,9 +8,11 @@ type WorkspaceEnvelope<T> = {
 };
 
 export async function loadWorkspaceState<T>(namespace: string): Promise<T | null> {
+  const generation = storageGeneration();
   const response = await api<WorkspaceEnvelope<T>>(
     `/api/account/workspace/${encodeURIComponent(namespace)}`,
   );
+  assertStorageGeneration(generation);
   return response.payload ?? null;
 }
 

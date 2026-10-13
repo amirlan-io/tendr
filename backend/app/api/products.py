@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.product_search import ProductSearchAgent
 from app.core.supabase_auth import SupabaseUser, require_supabase_user
 from app.db import get_db
+from app.services.operations import metered
 from app.schemas.lot import (
     DeepSearchRequest,
     DeepSearchResult,
@@ -21,9 +22,11 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 
 @router.post("/search", response_model=ProductSearchResult)
+@metered("product_search")
 async def search_products(
     payload: ProductSearchRequest,
     _auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
+    session: AsyncSession = Depends(get_db),
 ) -> ProductSearchResult:
     """Простой поиск товаров/услуг (по названию)."""
     agent = ProductSearchAgent()
@@ -31,6 +34,7 @@ async def search_products(
 
 
 @router.post("/deep-search", response_model=DeepSearchResult)
+@metered("product_deep_search")
 async def deep_search_products(
     payload: DeepSearchRequest,
     _auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],

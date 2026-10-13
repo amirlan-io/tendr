@@ -1,5 +1,6 @@
 import {
   createContext,
+  Fragment,
   useContext,
   useEffect,
   useMemo,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../supabase";
+import { setAccountStorageScope } from "../accountStorage";
 
 type AuthContextValue = {
   session: Session | null;
@@ -31,12 +33,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     void supabase.auth.getSession().then(({ data }) => {
       if (active) {
+        setAccountStorageScope(data.session?.user.id ?? null);
         setSession(data.session);
         setLoading(false);
       }
-    });
+    }).catch(() => { if (active) { setAccountStorageScope(null); setLoading(false); } });
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setAccountStorageScope(nextSession?.user.id ?? null);
       setSession(nextSession);
       setLoading(false);
     });
@@ -53,13 +57,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       loading,
       signOut: async () => {
-        if (supabase) await supabase.auth.signOut();
+        if (supabase) {
+          const { error } = await supabase.auth.signOut();
+          if (error) throw error;
+        }
+        setAccountStorageScope(null);
       },
     }),
     [loading, session],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}><Fragment key={session?.user.id ?? "signed-out"}>{children}</Fragment></AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

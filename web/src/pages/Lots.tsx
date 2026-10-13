@@ -1,3 +1,4 @@
+import { accountLocalStorage } from "../accountStorage";
 import {
   useEffect,
   useMemo,
@@ -116,11 +117,11 @@ const PRICE_LABELS = [0, PRICE_MAX * 0.25, PRICE_MAX * 0.5, PRICE_MAX * 0.75, PR
 
 function getCachedSearch(key: string): SearchResult | null {
   try {
-    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    const raw = accountLocalStorage.getItem(CACHE_PREFIX + key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (Date.now() - parsed.ts > CACHE_TTL_MS) {
-      localStorage.removeItem(CACHE_PREFIX + key);
+      accountLocalStorage.removeItem(CACHE_PREFIX + key);
       return null;
     }
     return parsed.data as SearchResult;
@@ -131,7 +132,7 @@ function getCachedSearch(key: string): SearchResult | null {
 
 function setCachedSearch(key: string, data: SearchResult) {
   try {
-    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), data }));
+    accountLocalStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), data }));
   } catch {
     // localStorage может быть переполнен.
   }
@@ -377,9 +378,9 @@ export function LotsPage({ embedded = false }: { embedded?: boolean } = {}) {
   };
 
   const clearCache = () => {
-    Object.keys(localStorage)
+    Array.from({ length: accountLocalStorage.length }, (_, i) => accountLocalStorage.key(i) ?? "")
       .filter((key) => key.startsWith(CACHE_PREFIX))
-      .forEach((key) => localStorage.removeItem(key));
+      .forEach((key) => accountLocalStorage.removeItem(key));
     setFromCache(false);
     setResult(null);
   };

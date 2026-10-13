@@ -45,6 +45,7 @@ class User(Base):
     """Пользователь системы: Telegram-бот или web-клиент."""
 
     __tablename__ = "users"
+    quota_reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
     # Telegram ID (0 = web-пользователь)
@@ -87,6 +88,14 @@ class User(Base):
     )
 
 
+class TelegramLinkToken(Base):
+    __tablename__ = "telegram_link_tokens"
+    code_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class WorkspaceState(Base):
     """Small user-owned UI state synchronized across browsers."""
 
@@ -106,6 +115,15 @@ class WorkspaceState(Base):
         UniqueConstraint("user_id", "namespace", name="uq_workspace_states_user_namespace"),
         Index("ix_workspace_states_user_namespace", "user_id", "namespace"),
     )
+
+
+class QuotaResetAudit(Base):
+    __tablename__ = "quota_reset_audit"
+    id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    reason: Mapped[str] = mapped_column(String(255))
+    actor: Mapped[str] = mapped_column(String(32), default="admin-api")
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 class QuotaReservation(Base):
@@ -180,6 +198,9 @@ class AnalysisJob(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     kind: Mapped[str] = mapped_column(String(16))  # url / upload
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     progress: Mapped[int] = mapped_column(Integer, default=0)
     stage: Mapped[str] = mapped_column(String(160), default="Задание создано")
     input_json: Mapped[dict] = mapped_column(JSONType, default=dict)

@@ -1,17 +1,5 @@
-#!/bin/bash
-# Запускает FastAPI backend на порту 8000
-set -e
-cd "$(dirname "$0")/.."
-
-# Ключи лежат в корневом .env, а pydantic ищет .env в backend/.
-# Поэтому экспортируем корень в окружение (переменные окружения приоритетнее env_file).
-if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
-fi
-export BROWSER_USE_API_KEY="bu_NwlRCdoQFXw17CcBomkoI707IpBfYhj_07CMlhFYcyY"
-
-cd backend
-exec /home/angel/Рабочий\ стол/project\ all/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+#!/usr/bin/env bash
+set -euo pipefail
+TENDR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$TENDR_ROOT/backend"
+exec "$TENDR_ROOT/.venv/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port "${TENDR_API_PORT:-8000}"

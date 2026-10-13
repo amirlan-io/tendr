@@ -41,7 +41,9 @@ class FailoverProvider(LLMProvider):
         return True
 
     def _record_failure(self) -> None:
+        import time
         self._primary_failed_count += 1
+        self._last_failover_at = time.monotonic()
         if self._primary_failed_count == self._max_failures:
             logger.warning(
                 "Primary LLM '{}' failed {} times, switching to fallback '{}'",
@@ -56,6 +58,9 @@ class FailoverProvider(LLMProvider):
         self._primary_failed_count = 0
 
     async def _try_primary(self, coro_factory, *args, **kwargs):
+        import time
+        if self._should_failover() and time.monotonic() - self._last_failover_at < self._cooldown_seconds:
+            return await coro_factory(self._secondary, *args, **kwargs)
         try:
             result = await coro_factory(self._primary, *args, **kwargs)
             self._record_success()

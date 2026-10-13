@@ -19,6 +19,8 @@ BrowserUseAgent — обёртка над browser-use SDK для Tendr.
 import asyncio
 import logging
 import os
+from app.core.config import get_settings
+from app.agents.browser_use.v4 import clamp_max_cost_usd
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
@@ -61,7 +63,7 @@ class BrowserUseAgent:
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv("BROWSER_USE_API_KEY")
+        self.api_key = api_key or get_settings().browser_use_api_key or os.getenv("BROWSER_USE_API_KEY")
         if not self.api_key:
             raise BrowserUseError(
                 "BROWSER_USE_API_KEY не задан. Получи через scripts/browser_use/signup.py"
@@ -114,6 +116,7 @@ class BrowserUseAgent:
 
         kwargs = dict(
             task=task,
+            max_cost_usd=clamp_max_cost_usd(get_settings().browser_use_max_cost_usd),
             model=model,
             proxy_country_code=proxy_country,
             enable_recording=enable_recording,
@@ -141,6 +144,7 @@ class BrowserUseAgent:
                 # Создаём сессию, возвращаем live_url сразу
                 session = await client.sessions.create(
                     task=task,
+                    max_cost_usd=clamp_max_cost_usd(get_settings().browser_use_max_cost_usd),
                     model=model,
                     proxy_country_code=proxy_country,
                     enable_recording=enable_recording,
@@ -217,7 +221,7 @@ class BrowserUseAgent:
 
         client = await self._get_client()
 
-        kwargs = dict(session_id=session_id, task=task)
+        kwargs = dict(session_id=session_id, task=task, max_cost_usd=clamp_max_cost_usd(get_settings().browser_use_max_cost_usd))
         if model:
             kwargs["model"] = model
         if metadata:

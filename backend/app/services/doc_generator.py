@@ -333,7 +333,13 @@ def generate_report_docx(lot: dict[str, Any], legal: dict[str, Any] | None) -> b
         for r in reqs:
             if not isinstance(r, dict):
                 continue
-            label = r.get("title") or r.get("description") or "—"
+            label = r.get("name") or r.get("title") or r.get("description") or "—"
+            if r.get("value"):
+                label += ": " + str(r["value"])
+            if r.get("source_quote"):
+                label += " — цитата: " + str(r["source_quote"])
+            if r.get("source_section"):
+                label += " (" + str(r["source_section"]) + ")"
             _add_bullet(doc, label)
 
     flags = lot.get("red_flags") or []
@@ -351,7 +357,7 @@ def generate_report_docx(lot: dict[str, Any], legal: dict[str, Any] | None) -> b
     if legal:
         items = legal.get("items") or []
         if items:
-            _add_heading(doc, f"Юридические нарушения ({len(items)})", level=1)
+            _add_heading(doc, f"Пункты для юридической проверки ({len(items)})", level=1)
             for it in items:
                 if not isinstance(it, dict):
                     continue

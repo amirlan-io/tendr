@@ -1,4 +1,5 @@
 import { getAccessToken } from "./supabase";
+import { storageGeneration, assertStorageGeneration } from "./accountStorage";
 import { reportApiError } from "./monitoring/errorReporter";
 
 /**
@@ -65,6 +66,7 @@ export function getSafeMessageForStatus(status: number): string {
  * только для поиска в этой карте, наружу идёт фиксированное сообщение.
  */
 const ERROR_CODE_MESSAGES: Record<string, string> = {
+  APPROVAL_ALREADY_EXECUTED: "Это одобрение уже выполнено или требует проверки результата отправки.",
   QUOTA_EXCEEDED:
     "Лимит бесплатных проверок исчерпан. Дождитесь следующего месяца или оформите подписку.",
   FILE_TOO_LARGE:
@@ -214,9 +216,11 @@ export function getOrCreateClientId(): string {
 }
 
 export async function getApiHeaders(initial?: HeadersInit): Promise<Headers> {
+  const generation = storageGeneration();
   const headers = new Headers(initial);
   headers.set("X-Client-Id", getOrCreateClientId());
   const accessToken = await getAccessToken();
+  assertStorageGeneration(generation);
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   return headers;
 }
@@ -306,6 +310,7 @@ export async function api<T = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  const generation = storageGeneration();
   const headers = await getApiHeaders(init.headers);
   headers.delete("X-Admin-Key");
   if (
@@ -323,11 +328,14 @@ export async function api<T = unknown>(
     reportApiError(0, path, "network");
     throw new ApiError(0, "Нет соединения с сервером. Проверьте интернет и попробуйте снова.");
   }
+  assertStorageGeneration(generation);
   if (!resp.ok) {
     await throwSafeApiError(resp, path);
   }
   if (isJsonContentType(resp)) {
-    return (await resp.json()) as T;
+    const data = (await resp.json()) as T;
+    assertStorageGeneration(generation);
+    return data;
   }
   return resp as unknown as T;
 }
@@ -396,6 +404,7 @@ function sanitizeDownloadName(name: string, fallback: string): string {
  * - object URL освобождается с задержкой, чтобы браузер успел начать скачивание.
  */
 export async function downloadBlob(path: string, filename: string): Promise<void> {
+  const generation = storageGeneration();
   let resp: Response;
   try {
     resp = await fetch(path, { headers: await getApiHeaders() });
@@ -407,6 +416,7 @@ export async function downloadBlob(path: string, filename: string): Promise<void
     await throwSafeApiError(resp, path);
   }
   const blob = await resp.blob();
+  assertStorageGeneration(generation);
   const objectUrl = URL.createObjectURL(blob);
   try {
     const a = document.createElement("a");

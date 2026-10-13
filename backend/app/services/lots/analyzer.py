@@ -7,14 +7,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
-
-from loguru import logger
+from typing import Any
 
 from app.agents.documenter import DocumenterAgent
 from app.agents.legal import LegalAgent
-from app.schemas.lot import LotItem
-
 logger = logging.getLogger(__name__)
 
 
@@ -23,19 +19,19 @@ class LotAnalyzer:
 
     Использование:
         analyzer = LotAnalyzer()
-        summary, red_flags, match_score = await analyzer.analyze_lot(lot_item)
+        summary, red_flags, _ = await analyzer.analyze_lot(lot_item)
 
     Возвращает:
         - summary: краткое описание лота (1-2 предложения)
         - red_flags: список рисков (3-5 пунктов)
-        - match_score: 0-100 насколько лот подходит SMB
+        - third value: None until a supplier profile exists
     """
 
     def __init__(self):
         self.documenter = DocumenterAgent()
         self.legal = LegalAgent()
 
-    async def analyze_lot(self, lot: dict[str, Any]) -> tuple[str, list[str], int]:
+    async def analyze_lot(self, lot: dict[str, Any]) -> tuple[str, list[str], None]:
         """
         Анализирует один лот.
 
@@ -43,7 +39,8 @@ class LotAnalyzer:
             lot: словарь с полями лота (title, description, amount_kzt, ...)
 
         Returns:
-            (summary, red_flags, match_score)
+            (summary, red_flags, None). A company-specific match score cannot be
+            calculated without the supplier's capabilities and constraints.
         """
         title = lot.get("title") or ""
         description = lot.get("description") or ""
@@ -83,20 +80,20 @@ class LotAnalyzer:
                     lot_text=legal_text, lot_id=str(lot.get("id", "unknown"))
                 )
                 red_flags = self._extract_red_flags(legal_result, lot, analysis)
-                match_score = self._calc_match_score(legal_result, lot, analysis)
+                match_score = None
             else:
                 red_flags = self._fallback_red_flags(lot)
-                match_score = self._fallback_match_score(lot)
+                match_score = None
         except Exception as e:
             logger.warning(f"[LotAnalyzer] Legal failed: {e}")
             red_flags = self._fallback_red_flags(lot)
-            match_score = self._fallback_match_score(lot)
+            match_score = None
 
         return summary, red_flags, match_score
 
     async def analyze_batch(
         self, lots: list[dict[str, Any]], max_concurrent: int = 3
-    ) -> list[tuple[str, list[str], int]]:
+    ) -> list[tuple[str, list[str], None]]:
         """Параллельный анализ нескольких лотов (с ограничением concurrency)."""
         import asyncio
 
@@ -209,46 +206,6 @@ class LotAnalyzer:
 
         return flags[:6]  # максимум 6
 
-    def _calc_match_score(
-        self,
-        legal_result: Any,
-        lot: dict[str, Any],
-        analysis: Any,
-    ) -> int:
-        """Считает match_score (0-100) насколько лот подходит SMB."""
-        score = 70  # базовый
-
-        try:
-            # Штрафы за проблемы
-            checks = getattr(legal_result, "checks", []) or []
-            for check in checks:
-                severity = getattr(check, "severity", "info")
-                if severity == "violation":
-                    score -= 25
-                elif severity == "warning":
-                    score -= 10
-        except Exception:
-            pass
-
-        # Бонусы за хорошие параметры
-        amount = lot.get("amount_kzt", 0) or 0
-        if 1_000_000 <= amount <= 10_000_000:
-            score += 15  # оптимальный размер для SMB
-        elif 500_000 <= amount < 1_000_000:
-            score += 5
-        elif amount > 50_000_000:
-            score -= 10  # слишком крупный
-
-        # Бонус за наличие описания и контактов
-        if lot.get("description"):
-            score += 5
-        if lot.get("organizer"):
-            score += 5
-        if lot.get("delivery_address"):
-            score += 5
-
-        return max(0, min(100, score))
-
     def _fallback_summary(self, lot: dict[str, Any]) -> str:
         """Fallback summary если AI не сработал."""
         title = (lot.get("title") or "")[:120]
@@ -270,13 +227,3 @@ class LotAnalyzer:
         if not lot.get("organizer"):
             flags.append("🏛 Заказчик не указан")
         return flags
-
-    def _fallback_match_score(self, lot: dict[str, Any]) -> int:
-        """Fallback match score без AI."""
-        score = 60
-        amount = lot.get("amount_kzt", 0) or 0
-        if 1_000_000 <= amount <= 10_000_000:
-            score += 20
-        if lot.get("description"):
-            score += 5
-        return min(100, score)

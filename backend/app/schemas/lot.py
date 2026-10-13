@@ -103,6 +103,7 @@ class LotSearchResult(BaseModel):
     lots: list[LotItem]
     total: int
     source: str  # "zakup.gov.kz" или "mock"
+    ai_credits_used: int = 0
     is_mock: bool = False  # True если данные демо (пока нет реального токена)
     next_cursor: int | None = None
     has_more: bool = False
@@ -270,8 +271,8 @@ class ApplicationRequest(BaseModel):
     delivery_days: int | None = Field(default=None, description="Срок поставки (дней)")
     warranty_months: int | None = Field(default=None, description="Гарантия (мес)")
     # Ценовое предложение
-    proposed_price_kzt: float = Field(default=0.0, description="Предлагаемая цена (тенге)")
-    vat_rate: float = Field(default=12.0, description="Ставка НДС (%)")
+    proposed_price_kzt: float = Field(default=0.0, ge=0, allow_inf_nan=False, description="Цена с НДС (тенге)")
+    vat_rate: float = Field(default=12.0, ge=0, le=100, allow_inf_nan=False, description="Ставка НДС (%)")
     price_includes_delivery: bool = Field(default=False)
     payment_terms: str | None = Field(default=None)
     # Квалификации и документы
@@ -409,6 +410,7 @@ class RequirementItem(BaseModel):
     # проверяемой цитаты не должно выглядеть в UI как подтверждённый факт.
     source_quote: str = ""
     source_document: str = ""
+    source_section: str = ""
 
 
 class SourceDocument(BaseModel):

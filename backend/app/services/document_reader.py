@@ -10,6 +10,7 @@ Pipeline:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 from pathlib import Path
@@ -32,6 +33,10 @@ MAX_EXCEL_COLUMNS = 100
 MAX_EXCEL_CELLS = 200_000
 
 
+class DocumentReadError(ValueError):
+    """The source could not be read completely; do not charge for analysis."""
+
+
 async def extract_text(file_path: str | Path, *, include_vision: bool = True) -> str:
     """Извлечь текст из файла. Поддержка: .pdf, .docx, .txt, .md, .xlsx, .xls, .csv.
 
@@ -42,9 +47,9 @@ async def extract_text(file_path: str | Path, *, include_vision: bool = True) ->
     suffix = p.suffix.lower()
     try:
         if suffix == ".pdf":
-            text = _read_pdf(p)
+            text = await asyncio.to_thread(_read_pdf, p)
         elif suffix == ".docx":
-            text = _read_docx(p)
+            text = await asyncio.to_thread(_read_docx, p)
         elif suffix in {".xlsx", ".xlsm"}:
             text = await _read_xlsx(p)
         elif suffix == ".xls":
@@ -67,10 +72,16 @@ async def extract_text(file_path: str | Path, *, include_vision: bool = True) ->
             except Exception as e:
                 logger.warning("Vision extraction failed: {}", e)
 
+        if not text.strip() or text.startswith(("[Ошибка", "[ВНИМАНИЕ", "[openpyxl", "[xlrd")):
+            raise DocumentReadError("Не удалось прочитать документ. Пришлите читаемый PDF, DOCX или текст.")
+        if len(text) > get_settings().max_analysis_chars:
+            raise DocumentReadError("Документ слишком большой: разделите его на части.")
         return text
+    except DocumentReadError:
+        raise
     except Exception:
         logger.exception("Failed to extract text from {}", p)
-        return "[Ошибка чтения файла: формат не поддерживается или файл повреждён.]"
+        raise DocumentReadError("Файл повреждён или формат не поддерживается.")
 
 
 def _read_pdf(p: Path) -> str:
@@ -78,7 +89,7 @@ def _read_pdf(p: Path) -> str:
     parts: list[str] = []
     pages = reader.pages[:MAX_PDF_PAGES]
     if len(reader.pages) > MAX_PDF_PAGES:
-        parts.append("[Текст обрезан: превышен лимит страниц PDF]")
+        raise DocumentReadError("PDF превышает лимит страниц; разделите документ.")
     for page in pages:
         try:
             text = page.extract_text() or ""
@@ -114,13 +125,16 @@ def _read_pdf(p: Path) -> str:
 def _ocr_pdf_with_mistral(p: Path) -> str:
     """OCR через Mistral OCR (mistral-ocr-latest)."""
     settings = get_settings()
-    if not settings.llm_api_key:
+    ocr_key = settings.mistral_ocr_api_key or (
+        settings.llm_api_key if settings.llm_provider == "mistral" else ""
+    )
+    if not ocr_key:
         logger.warning("Mistral API key not set, OCR unavailable")
         return ""
     try:
         from mistralai.client import Mistral
 
-        client = Mistral(api_key=settings.llm_api_key)
+        client = Mistral(api_key=ocr_key)
         with open(p, "rb") as f:
             pdf_bytes = f.read()
         pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
@@ -199,16 +213,22 @@ async def _read_xlsx(p: Path) -> str:
         cell_count = 0
         for sheet_name in wb.sheetnames:
             sheet = wb[sheet_name]
+            if (sheet.max_row or 0) > MAX_EXCEL_ROWS or (sheet.max_column or 0) > MAX_EXCEL_COLUMNS:
+                wb.close()
+                raise DocumentReadError("Таблица превышает лимит строк или столбцов; разделите файл.")
             parts.append(f"\n=== Лист: {sheet_name} ===")
             for row in sheet.iter_rows(values_only=True, max_row=MAX_EXCEL_ROWS, max_col=MAX_EXCEL_COLUMNS):
                 cells = [str(c) if c is not None else "" for c in row]
                 if any(c for c in cells):
                     cell_count += len(cells)
                     if cell_count > MAX_EXCEL_CELLS:
-                        parts.append("[Таблица обрезана: превышен лимит ячеек]")
-                        return "\n".join(parts).strip()
+                        wb.close()
+                        raise DocumentReadError("Таблица превышает лимит ячеек; разделите файл.")
                     parts.append(" | ".join(cells))
+        wb.close()
         return "\n".join(parts).strip()
+    except DocumentReadError:
+        raise
     except Exception:
         logger.exception("XLSX read failed for {}", p)
         return "[Ошибка чтения XLSX: формат не поддерживается или файл повреждён.]"
@@ -226,6 +246,8 @@ async def _read_xls(p: Path) -> str:
         parts: list[str] = []
         cell_count = 0
         for sheet in book.sheets():
+            if sheet.nrows > MAX_EXCEL_ROWS or sheet.ncols > MAX_EXCEL_COLUMNS:
+                raise DocumentReadError("Таблица превышает лимит строк или столбцов; разделите файл.")
             parts.append(f"\n=== Лист: {sheet.name} ===")
             for row_idx in range(min(sheet.nrows, MAX_EXCEL_ROWS)):
                 row = sheet.row_values(row_idx)[:MAX_EXCEL_COLUMNS]
@@ -233,10 +255,11 @@ async def _read_xls(p: Path) -> str:
                 if any(c for c in cells):
                     cell_count += len(cells)
                     if cell_count > MAX_EXCEL_CELLS:
-                        parts.append("[Таблица обрезана: превышен лимит ячеек]")
-                        return "\n".join(parts).strip()
+                        raise DocumentReadError("Таблица превышает лимит ячеек; разделите файл.")
                     parts.append(" | ".join(cells))
         return "\n".join(parts).strip()
+    except DocumentReadError:
+        raise
     except Exception:
         logger.exception("XLS read failed for {}", p)
         return "[Ошибка чтения XLS: формат не поддерживается или файл повреждён.]"

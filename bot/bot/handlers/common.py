@@ -9,8 +9,21 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import language_choose, main_menu
 from bot.locales import t
+from bot.http_client import BotApiClient
+from bot.config import get_settings
 
 router = Router(name="common")
+
+@router.message(Command("link"))
+async def cmd_link(message: Message) -> None:
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) != 2 or not message.from_user:
+        await message.answer("Получите команду привязки в настройках аккаунта Tendr.")
+        return
+    async with BotApiClient(telegram_id=message.from_user.id, timeout=15) as client:
+        response = await client.post(f"{get_settings().backend_url}/api/account/telegram/link", json={"code": parts[1]})
+    await message.answer("Аккаунт привязан. История и квота теперь общие с сайтом." if response.is_success
+        else "Привязка отклонена: получите новую команду в настройках или проверьте существующую привязку.")
 
 
 @router.message(Command("start"))

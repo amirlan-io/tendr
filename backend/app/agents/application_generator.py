@@ -9,6 +9,7 @@
 """
 
 from __future__ import annotations
+from app.services.money import included_vat
 
 import io
 from datetime import datetime
@@ -115,7 +116,7 @@ def generate_application_docx(
     _add_para(
         doc,
         f"В том числе НДС ({request.vat_rate}%): "
-        f"{request.proposed_price_kzt * request.vat_rate / 100:,.0f} тенге",
+        f"{included_vat(request.proposed_price_kzt, request.vat_rate):,.2f} тенге",
     )
     if request.proposed_price_kzt > 0 and request.delivery_days and request.delivery_days > 0:
         per_day = request.proposed_price_kzt / request.delivery_days

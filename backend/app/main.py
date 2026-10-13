@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import traceback
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -28,6 +29,8 @@ from app.api import (
     tenders,
 )
 from app.core.config import get_settings
+from app.core.bot_auth import BotSignatureMiddleware
+from app.api import telegram
 from app.core.logging import setup_logging
 from app.core.rate_limit import RateLimitMiddleware
 from app.llm import close_llm, get_llm
@@ -86,15 +89,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+async def _recover_local_jobs():
+    while True:
+        await asyncio.sleep(15)
+        try:
+            await recover_analysis_jobs()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Analysis recovery failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
-    get_llm()
+    if get_settings().llm_api_key:
+        get_llm()
     get_parser()
     get_discovery()
     await recover_analysis_jobs()
-    yield
-    await shutdown_analysis_jobs()
+    recovery = asyncio.create_task(_recover_local_jobs()) if get_settings().analysis_job_mode == "local" else None
+    try:
+        yield
+    finally:
+        if recovery is not None:
+            recovery.cancel()
+            await asyncio.gather(recovery, return_exceptions=True)
+        await shutdown_analysis_jobs()
     await close_llm()
     await close_parser()
     await close_discovery()
@@ -138,10 +158,12 @@ def create_app(*, test_mode: bool = False) -> FastAPI:
     if settings.app_env in {"dev", "test"} or test_mode:
         allowed_hosts = ["testserver", "localhost", "127.0.0.1", "0.0.0.0", *allowed_hosts]
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+    app.add_middleware(BotSignatureMiddleware)
 
     app.include_router(health.router, prefix="/api")
     app.include_router(lots.router, prefix="/api")
     app.include_router(account.router, prefix="/api")
+    app.include_router(telegram.router, prefix="/api")
     app.include_router(discovery.router, prefix="/api")
     app.include_router(admin.router, prefix="/api")
     app.include_router(b2g.router, prefix="/api")

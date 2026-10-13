@@ -56,11 +56,11 @@ category: goods, work или service. Коды уникальны. quantity чи
     async def run(self, lot_text: str, *, lot_id: str) -> LotAnalysis:
         source_text = lot_text
         # Читаем весь документ частями, а не выбрасываем его середину.
-        chunks = [lot_text[i:i + 10000] for i in range(0, len(lot_text), 10000)] or [""]
+        chunks = [lot_text[i:i + 10000] for i in range(0, len(lot_text), 9500)] or [""]
         data = {}
         extracted = []
         warnings = []
-        for chunk in chunks:
+        for section_number, chunk in enumerate(chunks, 1):
             prompt = (
                 f"ID лота: {lot_id}\nТехническое задание:\n{chunk}\n"
                 "Извлеки все позиции и условия из этого фрагмента. Верни JSON."
@@ -79,8 +79,18 @@ category: goods, work или service. Коды уникальны. quantity чи
                 if key != "requirements" and value and not data.get(key):
                     data[key] = value
             for item in part.get("requirements", []) or []:
-                if isinstance(item, dict) and item not in extracted:
-                    extracted.append(item)
+                if isinstance(item, dict):
+                    if any(
+                        (old.get("name") or old.get("title") or old.get("code"),
+                         old.get("value") or old.get("description"), old.get("source_quote"),
+                         old.get("quantity"), old.get("unit"), old.get("source_document"))
+                        == (item.get("name") or item.get("title") or item.get("code"),
+                            item.get("value") or item.get("description"), item.get("source_quote"),
+                            item.get("quantity"), item.get("unit"), item.get("source_document"))
+                        for old in extracted
+                    ):
+                        continue
+                    extracted.append({**item, "source_section": f"Раздел {section_number}"})
         if extracted:
             data["requirements"] = extracted
         if not data:
@@ -116,6 +126,7 @@ category: goods, work или service. Коды уникальны. quantity чи
                 ),
                 category=_s(r.get("category") or ""),
                 source_document=_s(r.get("source_document") or ""),
+                source_section=_s(r.get("source_section") or ""),
             )
             for r in data.get("requirements", [])
         ]

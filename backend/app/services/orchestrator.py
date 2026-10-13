@@ -11,6 +11,7 @@ from datetime import datetime
 from loguru import logger
 
 from app.agents.documenter import DocumenterAgent
+from app.agents.base import AnalysisUnavailable
 from app.agents.legal import LegalAgent
 from app.schemas.lot import (
     CustomerScore,
@@ -78,7 +79,7 @@ class LotOrchestrator:
         """Полный цикл: получить ТЗ → проанализировать → (опционально) проверить юридически."""
         # Freemium-проверка
         limit = 999 if is_pilot else free_limit
-        if used_this_month >= limit:
+        if used_this_month > limit:
             raise QuotaExceeded(
                 f"Лимит бесплатных заявок на месяц исчерпан ({used_this_month}/{limit})."
             )
@@ -225,6 +226,8 @@ class LotOrchestrator:
             "(без названия)",
         }
         if documenter_failed:
+            if lot_input.raw_text:
+                raise AnalysisUnavailable("Не удалось выполнить ИИ-анализ загруженного документа.")
             analysis.title = parsed.title or f"Лот {parsed.lot_id}"
             analysis.customer = parsed.customer_name or "(не указан)"
             analysis.procurement_method = parsed.method or ProcurementMethod.OTHER
@@ -437,10 +440,12 @@ async def analyze_uploaded_file(
     free_limit: int,
     session=None,
 ) -> LotAnalysisResponse:
+    from uuid import uuid4
+
     text = await extract_text(file_path)
     orchestrator = LotOrchestrator(session=session)
     return await orchestrator.analyze_lot(
-        LotCreate(raw_text=text, source_id="uploaded"),
+        LotCreate(raw_text=text, source_id=f"uploaded-{uuid4().hex}"),
         user_id=user_id,
         is_pilot=is_pilot,
         used_this_month=used_this_month,

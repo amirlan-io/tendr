@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+from bot.http_client import BotApiClient
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import (
@@ -40,7 +41,7 @@ async def cmd_search(message: Message) -> None:
 
     s = get_settings()
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with BotApiClient(telegram_id=message.from_user.id if message.from_user else 0, timeout=120) as client:
             resp = await client.post(
                 f"{s.backend_url}/products/search",
                 json={

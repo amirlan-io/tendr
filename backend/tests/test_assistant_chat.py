@@ -46,7 +46,7 @@ async def test_assistant_chat_is_grounded_in_owned_completed_job(monkeypatch) ->
 
     monkeypatch.setattr(lots_api.db_repo, "get_user_by_web_id", get_user)
     monkeypatch.setattr(lots_api, "get_assistant_llm", lambda: FakeLlm())
-    response = await lots_api.chat_with_tender_assistant(
+    response = await lots_api.chat_with_tender_assistant.__wrapped__(
         payload=lots_api.AssistantChatRequest(
             message="Что от меня требуется?",
             job_id=job.id,

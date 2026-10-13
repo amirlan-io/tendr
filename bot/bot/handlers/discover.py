@@ -5,6 +5,7 @@ from __future__ import annotations
 import urllib.parse
 
 import httpx
+from bot.http_client import BotApiClient
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -34,12 +35,12 @@ async def cmd_discover(message: Message) -> None:
     wait = await message.answer(t("discover_loading", lang))
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with BotApiClient(telegram_id=message.from_user.id if message.from_user else 0, timeout=30) as client:
             resp = await client.get(
                 f"{s.backend_url}/discovery/feed", params={"max_pages": 2}
             )
         if resp.status_code != 200:
-            await wait.edit_text(t("error", lang, error=resp.text[:300]))
+            await wait.edit_text(t("error", lang, error="Сервис временно недоступен или запрос отклонён."))
             return
         data = resp.json()
     except Exception as e:  # noqa: BLE001
@@ -103,14 +104,14 @@ async def fsm_keywords(message: Message, state: FSMContext) -> None:
         return
     s = get_settings()
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with BotApiClient(telegram_id=message.from_user.id if message.from_user else 0, timeout=15) as client:
             resp = await client.post(
                 f"{s.backend_url}/account/discovery/subscribe",
                 json={"keywords": message.text.strip(), "channel": "telegram"},
                 params={"user_id": message.from_user.id if message.from_user else 0},
             )
         if resp.status_code != 200:
-            await message.answer(t("error", lang, error=resp.text[:300]))
+            await message.answer(t("error", lang, error="Сервис временно недоступен или запрос отклонён."))
             return
     except Exception as e:  # noqa: BLE001
         await message.answer(t("error", lang, error=str(e)))

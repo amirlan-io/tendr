@@ -30,18 +30,33 @@ client = TestClient(app)
 
 
 @pytest.fixture
-def authenticated_browser_client():
+def authenticated_browser_client(tmp_path):
     """Exercise protected browser routes without contacting Supabase."""
     async def _identity(request: Request) -> str:
         return request.headers.get(
             "X-Test-User", "supabase_00000000000000000000000000000001"
         )
 
+    import asyncio
+    from app.db import get_db
+    from sqlalchemy.pool import NullPool
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'browser.db'}", poolclass=NullPool)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async def setup():
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+    asyncio.run(setup())
+    async def database():
+        async with factory() as session:
+            yield session
+    app.dependency_overrides[get_db] = database
     app.dependency_overrides[require_authenticated_client_id] = _identity
     try:
         yield
     finally:
         app.dependency_overrides.pop(require_authenticated_client_id, None)
+        app.dependency_overrides.pop(get_db, None)
+        asyncio.run(engine.dispose())
 
 
 def test_extract_reference_rejects_untrusted_host() -> None:
@@ -121,7 +136,10 @@ def test_alembic_single_head_and_quota_migration_is_isolated() -> None:
     assert len(heads) == 1
     # Голова сдвинулась на серверное workspace-состояние; важно, что цепочка
     # остаётся линейной и новая миграция наследует Supplier Agent.
-    assert heads == ["c91e4b4aa210"]
+    assert heads == ["d02a13c003"]
+    assert script.get_revision("d02a13c003").down_revision == "d02a13c002"
+    assert script.get_revision("d02a13c002").down_revision == "d02a13c001"
+    assert script.get_revision("d02a13c001").down_revision == "c91e4b4aa210"
     assert script.get_revision("c91e4b4aa210").down_revision == "e4a91f0b2c77"
     assert script.get_revision("e4a91f0b2c77").down_revision == "a7c31e9d5b21"
     assert script.get_revision("a7c31e9d5b21").down_revision == "d19b5a2f3b91"

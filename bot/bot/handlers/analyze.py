@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 import httpx
+from bot.http_client import BotApiClient
 from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 
@@ -131,17 +132,17 @@ async def handle_url(message: Message) -> None:
     # Уникальный client_id для бота — чтобы квота считалась на пользователя TG.
     client_id = f"tg:{message.from_user.id}" if message.from_user else "tg:anon"
     try:
-        async with httpx.AsyncClient(timeout=180) as client:
+        async with BotApiClient(telegram_id=message.from_user.id if message.from_user else 0, timeout=180) as client:
             resp = await client.post(
                 f"{s.backend_url}/api/lots/analyze",
                 json=payload,
                 headers={"X-Client-Id": client_id},
             )
-        if resp.status_code == 402:
+        if resp.status_code == 429:
             await wait.edit_text(t("quota_exceeded", lang))
             return
         if resp.status_code != 200:
-            await wait.edit_text(t("error", lang, error=resp.text[:500]))
+            await wait.edit_text(t("error", lang, error="Сервис временно недоступен или запрос отклонён."))
             return
         data = resp.json()
     except Exception as e:  # noqa: BLE001
@@ -201,7 +202,7 @@ async def handle_document(message: Message, bot: Bot) -> None:
             #
             # На данный момент: сообщаем пользователю что загрузка файлов через
             # бота временно не поддерживается, и предлагаем прислать URL.
-            async with httpx.AsyncClient(timeout=180) as client:
+            async with BotApiClient(telegram_id=message.from_user.id if message.from_user else 0, timeout=180) as client:
                 # Попробуем сначала /api/lots/analyze-upload (если когда-то добавим)
                 with open(file_path, "rb") as f:
                     resp = await client.post(
@@ -217,11 +218,11 @@ async def handle_document(message: Message, bot: Bot) -> None:
                         "или ID объявления (число из ссылки)."
                     )
                     return
-            if resp.status_code == 402:
+            if resp.status_code == 429:
                 await wait.edit_text(t("quota_exceeded", lang))
                 return
             if resp.status_code != 200:
-                await wait.edit_text(t("error", lang, error=resp.text[:500]))
+                await wait.edit_text(t("error", lang, error="Сервис временно недоступен или запрос отклонён."))
                 return
             data = resp.json()
         except Exception as e:  # noqa: BLE001

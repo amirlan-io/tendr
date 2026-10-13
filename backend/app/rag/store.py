@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import uuid
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -101,14 +102,19 @@ class RAGStore:
         return self._embedder  # sync
 
     def _ensure_collection(self) -> bool:
-        if self._ensured:
-            return True
         client = self._get_client()
         if client is None:
             return False
         try:
+            aliases = {a.alias_name for a in client.get_aliases().aliases}
+            active = self.collection + "_active"
+            if active in aliases:
+                self.collection = active
+                self._ensured = False
+            if self._ensured:
+                return True
             existing = {c.name for c in client.get_collections().collections}
-            if self.collection in existing:
+            if self.collection in existing or self.collection in aliases:
                 # Если существующая коллекция имеет другой dim — несовместимо.
                 # Логируем и используем её как есть.
                 info = client.get_collection(self.collection)
@@ -118,6 +124,10 @@ class RAGStore:
                     self.collection,
                     actual_dim,
                 )
+                expected = getattr(self._get_embedder(), "dim", get_settings().embedding_dim)
+                if actual_dim != expected:
+                    logger.error("Embedding dimensions differ; reindex a new collection")
+                    return False
                 self._ensured = True
                 return True
             # dim берём из реального эмбеддера
@@ -155,7 +165,7 @@ class RAGStore:
             if inspect.iscoroutinefunction(emb.embed_batch):
                 embs = await emb.embed_batch(texts)
             else:
-                embs = emb.embed_batch(texts)
+                embs = await asyncio.to_thread(emb.embed_batch, texts)
         except Exception as e:
             logger.error("Embedding failed during upsert: {}", e)
             return 0
@@ -163,7 +173,7 @@ class RAGStore:
         for chunk, e in zip(chunks, embs):
             points.append(
                 qmodels.PointStruct(
-                    id=hash(chunk.chunk_id) & 0x7FFFFFFF,
+                    id=str(uuid.uuid5(uuid.NAMESPACE_URL, self.collection + ":" + chunk.chunk_id)),
                     vector=e.vector,
                     payload={
                         "text": chunk.text,
@@ -193,7 +203,7 @@ class RAGStore:
             if inspect.iscoroutinefunction(emb_obj.embed):
                 emb = await emb_obj.embed(query)
             else:
-                emb = emb_obj.embed(query)
+                emb = await asyncio.to_thread(emb_obj.embed, query, is_query=True)
             # qdrant-client >= 1.10: query_points; < 1.10: search
             if hasattr(client, "query_points"):
                 resp = client.query_points(

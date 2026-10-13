@@ -1,3 +1,4 @@
+import { accountLocalStorage } from "../accountStorage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -186,7 +187,7 @@ function chatTitle(messages: ChatMessage[]): string {
 
 function loadLegacyMessages(): ChatMessage[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || "[]");
+    const parsed = JSON.parse(accountLocalStorage.getItem(CHAT_STORAGE_KEY) || "[]");
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(isChatMessage).slice(-40);
   } catch {
@@ -196,7 +197,7 @@ function loadLegacyMessages(): ChatMessage[] {
 
 function loadChatState(): { sessions: ChatSession[]; activeId: string } {
   try {
-    const parsed = JSON.parse(localStorage.getItem(CHAT_SESSIONS_KEY) || "[]");
+    const parsed = JSON.parse(accountLocalStorage.getItem(CHAT_SESSIONS_KEY) || "[]");
     if (Array.isArray(parsed)) {
       const sessions = parsed
         .filter((item): item is ChatSession => Boolean(
@@ -205,7 +206,7 @@ function loadChatState(): { sessions: ChatSession[]; activeId: string } {
         .map((item) => ({ ...item, messages: item.messages.filter(isChatMessage).slice(-40) }))
         .slice(0, 30);
       if (sessions.length) {
-        const savedActive = localStorage.getItem(ACTIVE_CHAT_KEY);
+        const savedActive = accountLocalStorage.getItem(ACTIVE_CHAT_KEY);
         const activeId = sessions.some((item) => item.id === savedActive) ? savedActive! : sessions[0].id;
         return { sessions, activeId };
       }
@@ -391,8 +392,8 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
             messages: messages.slice(-40),
           }
         : session);
-      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next.slice(0, 30)));
-      localStorage.setItem(ACTIVE_CHAT_KEY, activeChatId);
+      accountLocalStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next.slice(0, 30)));
+      accountLocalStorage.setItem(ACTIVE_CHAT_KEY, activeChatId);
       void saveWorkspaceState("ai_chats", {
         sessions: next.slice(0, 30),
         activeId: activeChatId,
@@ -414,8 +415,8 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     setLoading(false);
     setLastRequest(null);
     lastFileRef.current = null;
-    localStorage.removeItem(ACTIVE_JOB_KEY);
-    localStorage.setItem(LAST_JOB_KEY, done.id);
+    accountLocalStorage.removeItem(ACTIVE_JOB_KEY);
+    accountLocalStorage.setItem(LAST_JOB_KEY, done.id);
     if (!completedJobsRef.current.has(done.id) && done.result.lot?.lot_id) {
       completedJobsRef.current.add(done.id);
       const confirmedRequirements = done.result.lot.requirements?.length || 0;
@@ -453,18 +454,18 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     let cancelled = false;
     void (async () => {
       try {
-        const savedId = localStorage.getItem(ACTIVE_JOB_KEY);
+        const savedId = accountLocalStorage.getItem(ACTIVE_JOB_KEY);
         let restored = savedId
           ? await api<AnalysisJob>(`/api/lots/analysis-jobs/${savedId}`)
           : null;
         if (requestedLotUrl && restored?.input_label !== requestedLotUrl) {
           restored = null;
-          localStorage.removeItem(ACTIVE_JOB_KEY);
+          accountLocalStorage.removeItem(ACTIVE_JOB_KEY);
         }
         if (!requestedLotUrl && !restored) {
           restored = await api<AnalysisJob | null>("/api/lots/analysis-jobs/active");
         }
-        const lastId = localStorage.getItem(LAST_JOB_KEY);
+        const lastId = accountLocalStorage.getItem(LAST_JOB_KEY);
         if (!requestedLotUrl && !restored && lastId) {
           restored = await api<AnalysisJob>(`/api/lots/analysis-jobs/${lastId}`);
         }
@@ -472,22 +473,22 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
           restored?.status === "completed"
           && restored.result?.lot?.title?.toLowerCase().includes("не удалось проанализировать")
         ) {
-          localStorage.removeItem(LAST_JOB_KEY);
-          localStorage.removeItem(ACTIVE_JOB_KEY);
+          accountLocalStorage.removeItem(LAST_JOB_KEY);
+          accountLocalStorage.removeItem(ACTIVE_JOB_KEY);
           restored = null;
         }
         if (cancelled || !restored) return;
         setJob(restored);
         if (restored.status === "completed") applyCompletedJob(restored, false);
         else if (restored.status === "failed") {
-          localStorage.removeItem(ACTIVE_JOB_KEY);
+          accountLocalStorage.removeItem(ACTIVE_JOB_KEY);
           setError("Предыдущий анализ не завершился. Запустите его ещё раз.");
         } else {
-          localStorage.setItem(ACTIVE_JOB_KEY, restored.id);
+          accountLocalStorage.setItem(ACTIVE_JOB_KEY, restored.id);
           setLoading(true);
         }
       } catch {
-        localStorage.removeItem(ACTIVE_JOB_KEY);
+        accountLocalStorage.removeItem(ACTIVE_JOB_KEY);
       } finally {
         if (!cancelled) setRestoreChecked(true);
       }
@@ -508,7 +509,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
         setJob(fresh);
         if (fresh.status === "completed") applyCompletedJob(fresh);
         if (fresh.status === "failed") {
-          localStorage.removeItem(ACTIVE_JOB_KEY);
+          accountLocalStorage.removeItem(ACTIVE_JOB_KEY);
           setLoading(false);
           setError(
             fresh.error_code === "UPLOAD_EXPIRED"
@@ -548,7 +549,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
           body: JSON.stringify({ url: input.url }),
         });
       }
-      localStorage.setItem(ACTIVE_JOB_KEY, created.id);
+      accountLocalStorage.setItem(ACTIVE_JOB_KEY, created.id);
       setJob(created);
       setFile(null);
       if (fileInput.current) fileInput.current.value = "";
@@ -653,7 +654,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     setError(null);
     setQuota(false);
     setJob(null);
-    localStorage.removeItem(ACTIVE_JOB_KEY);
+    accountLocalStorage.removeItem(ACTIVE_JOB_KEY);
     if (lastRequest?.kind === "file" && lastFileRef.current) {
       setFile(lastFileRef.current);
       void startAnalysis({ file: lastFileRef.current });
@@ -672,8 +673,8 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     setLastRequest(null);
     lastFileRef.current = null;
     setJob(null);
-    localStorage.removeItem(LAST_JOB_KEY);
-    localStorage.removeItem(ACTIVE_JOB_KEY);
+    accountLocalStorage.removeItem(LAST_JOB_KEY);
+    accountLocalStorage.removeItem(ACTIVE_JOB_KEY);
   }
 
   function reset() {
@@ -690,7 +691,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     setTypingMessageId(null);
     setAutoTitle("");
     clearActiveAnalysis();
-    localStorage.removeItem(CHAT_STORAGE_KEY);
+    accountLocalStorage.removeItem(CHAT_STORAGE_KEY);
   }
 
   async function openChat(session: ChatSession) {
@@ -722,7 +723,7 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     const remaining = chatSessions.filter((item) => item.id !== session.id);
     if (session.id !== activeChatId) {
       setChatSessions(remaining);
-      localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(remaining));
+      accountLocalStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(remaining));
       return;
     }
 
@@ -734,8 +735,8 @@ export function AnalyzePage({ embedded = false }: { embedded?: boolean } = {}) {
     };
     const next = [blank, ...remaining].slice(0, 30);
     setChatSessions(next);
-    localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
-    localStorage.setItem(ACTIVE_CHAT_KEY, blank.id);
+    accountLocalStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
+    accountLocalStorage.setItem(ACTIVE_CHAT_KEY, blank.id);
     setActiveChatId(blank.id);
     setMessages([]);
     setTypingMessageId(null);

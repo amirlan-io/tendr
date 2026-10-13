@@ -89,11 +89,15 @@ async def _usage_in_rolling_window(
     hours: int = 5,
 ) -> tuple[int, int]:
     since = (now - timedelta(hours=hours)).replace(tzinfo=None)
+    user = await session.get(User, user_id)
+    if user and user.quota_reset_at:
+        since = max(since, user.quota_reset_at)
     now_naive = now.replace(tzinfo=None)
     analysis_result = await session.execute(
         select(func.count(Analysis.id)).where(
             Analysis.user_id == user_id,
             Analysis.created_at >= since,
+            Analysis.incomplete.is_(False),
         )
     )
     confirmed_result = await session.execute(
@@ -396,8 +400,11 @@ async def count_analyses_this_month(
     """Сколько анализов юзер сделал в текущем месяце, в UTC."""
     now = _normalize_utc(now_override)
     start_of_month = _month_start_utc(now).replace(tzinfo=None)
+    user = await session.get(User, user_id)
+    if user and user.quota_reset_at:
+        start_of_month = max(start_of_month, user.quota_reset_at)
     stmt = select(func.count(Analysis.id)).where(
-        and_(Analysis.user_id == user_id, Analysis.created_at >= start_of_month)
+        and_(Analysis.user_id == user_id, Analysis.created_at >= start_of_month, Analysis.incomplete.is_(False))
     )
     result = await session.execute(stmt)
     history_count = int(result.scalar_one() or 0)
@@ -627,6 +634,7 @@ async def push_history(
                     pass
             if isinstance(full_result, dict) and full_result:
                 existing.result_json = full_result
+                existing.incomplete = bool(full_result.get("incomplete", False))
             await session.flush()
             return existing
 

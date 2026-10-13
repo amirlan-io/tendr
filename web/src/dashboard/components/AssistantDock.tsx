@@ -1,3 +1,4 @@
+import { accountLocalStorage } from "../../accountStorage";
 import { FormEvent, useEffect, useState } from "react";
 import { Bot, ExternalLink, Send, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -26,7 +27,7 @@ function cleanText(value: string): string {
 
 function loadMessages(): DockMessage[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const parsed = JSON.parse(accountLocalStorage.getItem(STORAGE_KEY) || "[]");
     return Array.isArray(parsed) ? parsed.slice(-12) : [];
   } catch {
     return [];
@@ -47,7 +48,7 @@ export function AssistantDock() {
   const dialogRef = useModalFocus<HTMLElement>(open, () => setOpen(false));
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-12)));
+    accountLocalStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-12)));
   }, [messages]);
 
   if (location.pathname === "/dashboard/analyze") return null;

@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+from app.services.operations import metered
+
 import time
 from typing import Annotated, Any, Literal
 
@@ -68,6 +70,7 @@ class SandboxRequest(BaseModel):
 
 
 @router.post("/suppliers")
+@metered("supplier_sandbox")
 async def run_supplier_sandbox(
     payload: SandboxRequest,
     auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],

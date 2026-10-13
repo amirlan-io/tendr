@@ -1,5 +1,4 @@
-#!/bin/bash
-# Запускает Vite dev-сервер на порту 5173
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 cd "$(dirname "$0")/../web"
-exec npm run dev -- --host 0.0.0.0
+exec npm run dev -- --host 127.0.0.1

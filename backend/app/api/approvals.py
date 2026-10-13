@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from app.services.operations import metered
+
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,6 +27,7 @@ outreach_router = APIRouter(prefix="/outreach", tags=["outreach"])
 
 #: Соответствие внутренних ошибок политики на стабильные коды API.
 _BLOCK_REASONS: dict[str, int] = {
+    "APPROVAL_ALREADY_EXECUTED": 409,
     "APPROVAL_NOT_FOUND": 404,
     "APPROVAL_REQUIRED": 403,
     "APPROVAL_KIND_MISMATCH": 400,
@@ -185,6 +188,7 @@ async def get_outreach_capabilities(
 
 
 @outreach_router.post("/email")
+@metered("outreach_email")
 async def send_email(
     payload: SendEmailRequest,
     auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],
@@ -221,6 +225,7 @@ class CallRequest(BaseModel):
 
 
 @outreach_router.post("/call")
+@metered("outreach_call")
 async def place_call(
     payload: CallRequest,
     auth_user: Annotated[SupabaseUser, Depends(require_supabase_user)],

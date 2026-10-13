@@ -5,7 +5,11 @@
 
 from __future__ import annotations
 
+import asyncio
+from datetime import date
+
 from app.agents.base import Agent
+from app.core.config import get_settings
 from app.rag import RAGStore
 from app.schemas.lot import (
     LegalCheckItem,
@@ -17,6 +21,14 @@ def _s(value, default: str = "") -> str:
     if value is None:
         return default
     return str(value)
+
+
+def _source_url(metadata: dict) -> str:
+    return _s(metadata.get("official_url") or metadata.get("source_url") or metadata.get("url"))
+
+
+def _source_revision(metadata: dict) -> str:
+    return _s(metadata.get("version") or metadata.get("revision") or metadata.get("legal_text_revision"))
 
 
 class LegalAgent(Agent):
@@ -77,7 +89,7 @@ class LegalAgent(Agent):
         self.rag = rag or RAGStore(collection="law_kz")
 
     async def run(self, lot_text: str, *, lot_id: str) -> LegalCheckResult:
-        rag_count = self.rag.count() if self.rag is not None else 0
+        rag_count = await asyncio.to_thread(self.rag.count) if self.rag is not None else 0
         if rag_count == 0:
             return LegalCheckResult(
                 lot_id=lot_id,
@@ -93,17 +105,39 @@ class LegalAgent(Agent):
                 corpus_revision=None,
             )
 
+        settings = get_settings()
+        try:
+            age = (date.today() - date.fromisoformat(settings.legal_corpus_reviewed_at)).days
+            verified = settings.legal_corpus_verified and 0 <= age <= settings.legal_corpus_max_age_days
+        except ValueError:
+            verified = False
+        if not verified:
+            return LegalCheckResult(
+                lot_id=lot_id,
+                overall_risk="needs_review",
+                summary="Нормативная база не проверена или устарела. Требуется проверка специалистом.",
+            )
+
         context_chunks: list[str] = []
-        source_hints: list[str] = []
-        quote_hints: list[str] = []
         query = (
             f"Проверка соответствия государственных закупок требованиям Закона РК. "
             f"Лот: {lot_text[:500]}"
         )
         hits = await self.rag.search(query, top_k=6)
-        context_chunks = [h.chunk.text for h in hits]
-        source_hints = [h.chunk.source for h in hits if h.chunk.source]
-        quote_hints = [h.chunk.text for h in hits if h.chunk.text]
+        hits = [hit for hit in hits if hit.chunk.metadata.get("verified")
+                and _source_url(hit.chunk.metadata).startswith("https://")
+                and _source_revision(hit.chunk.metadata)]
+        if not hits:
+            return LegalCheckResult(
+                lot_id=lot_id, overall_risk="needs_review",
+                summary="В проверенном корпусе не найдены нормы для этой закупки.",
+            )
+        context_chunks = [
+            f"Источник: {h.chunk.source}\n"
+            f"URL: {_source_url(h.chunk.metadata)}\n"
+            f"Редакция: {_source_revision(h.chunk.metadata)}\n"
+            f"{h.chunk.text}" for h in hits
+        ]
 
         context_block = "\n\n---\n\n".join(context_chunks) if context_chunks else "(RAG пуст)"
         prompt = (
@@ -122,7 +156,16 @@ class LegalAgent(Agent):
             )
 
         items = []
+        rejected = 0
         for it in data.get("items", []):
+            quote = _s(it.get("quote") or it.get("law_quote"))
+            citation_url = _s(it.get("citation_url"))
+            matched = next((hit for hit in hits if quote.strip()
+                and " ".join(quote.split()) in " ".join(hit.chunk.text.split())
+                and citation_url == _source_url(hit.chunk.metadata)), None)
+            if matched is None:
+                rejected += 1
+                continue
             item = LegalCheckItem(
                 category=_s(it.get("category") or it.get("rule_id") or "general"),
                 title=_s(it.get("title") or it.get("rule_title") or ""),
@@ -134,18 +177,19 @@ class LegalAgent(Agent):
                 rule_title=_s(it.get("rule_title")) or None,
                 law_reference=_s(it.get("law_reference") or it.get("article")) or None,
                 article=_s(it.get("article") or it.get("law_reference")) or None,
-                source=_s(it.get("source")) or (source_hints[0] if source_hints else None),
-                quote=_s(it.get("quote")) or (quote_hints[0] if quote_hints else None),
-                citation_url=_s(it.get("citation_url")) or None,
-                legal_text_revision=_s(it.get("legal_text_revision")) or None,
+                source=matched.chunk.source,
+                quote=quote,
+                citation_url=citation_url,
+                legal_text_revision=_source_revision(matched.chunk.metadata),
             )
             items.append(item)
         return LegalCheckResult(
             lot_id=lot_id,
             checks=items,
             items=items,
-            overall_risk=_s(data.get("overall_risk"), "needs_review"),
-            summary=_s(data.get("summary")),
+            overall_risk="needs_review" if rejected else _s(data.get("overall_risk"), "needs_review"),
+            summary=("Часть правовых выводов не подтверждена источниками. Требуется проверка специалистом."
+                     if rejected else _s(data.get("summary"))),
             can_complain_to_counting_committee=False,
             complaint_draft=None,
             corpus_revision=_s(data.get("corpus_revision")) or None,

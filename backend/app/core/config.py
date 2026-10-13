@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     llm_provider: Literal["mistral", "alem", "openai-compatible"] = "mistral"
     llm_api_key: str = ""
     llm_api_key_fallback: str = ""  # ключ резервного провайдера
+    mistral_ocr_api_key: str = ""
+    max_analysis_chars: int = 300_000
+    legal_corpus_verified: bool = False
+    legal_corpus_reviewed_at: str = ""
+    legal_corpus_max_age_days: int = 90
     llm_base_url: str = "https://api.mistral.ai/v1"
     llm_model: str = "mistral-large-latest"
     llm_embedding_model: str = "mistral-embed"
@@ -100,6 +105,8 @@ class Settings(BaseSettings):
 
     # === Telegram ===
     bot_token: str = ""
+    bot_api_secret: str = ""
+    telegram_bot_username: str = ""
     admin_telegram_ids: str = ""  # CSV
 
     # === goszakup.gov.kz ===

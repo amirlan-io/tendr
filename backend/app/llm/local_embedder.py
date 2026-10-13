@@ -74,5 +74,6 @@ _local_embedder: LocalEmbedder | None = None
 def get_local_embedder() -> LocalEmbedder:
     global _local_embedder
     if _local_embedder is None:
-        _local_embedder = LocalEmbedder()
+        from app.core.config import get_settings
+        _local_embedder = LocalEmbedder(get_settings().embedding_local_model)
     return _local_embedder

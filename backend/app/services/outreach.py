@@ -17,6 +17,8 @@
 from __future__ import annotations
 
 import asyncio
+from sqlalchemy import update
+from app.db.models import ApprovalQueue
 import smtplib
 import ssl
 from dataclasses import dataclass
@@ -248,6 +250,8 @@ class OutreachService:
         approval = await repo.get_approval(session, user_id, approval_id)
         if approval is None:
             raise OutreachNotAllowed("APPROVAL_NOT_FOUND")
+        if approval.status in {"executing", "executed", "needs_review"}:
+            raise OutreachNotAllowed("APPROVAL_ALREADY_EXECUTED")
         if approval.status != "approved":
             # Главный гейт: без явного одобрения пользователя — никаких действий.
             raise OutreachNotAllowed("APPROVAL_REQUIRED")
@@ -271,6 +275,14 @@ class OutreachService:
         return effective_mode(
             requested, blocked=blocked, daily_sent=sent, daily_limit=limit
         )
+
+    async def _claim_execution(self, session, approval, user_id):
+        result = await session.execute(update(ApprovalQueue).where(
+            ApprovalQueue.id == approval.id, ApprovalQueue.user_id == user_id,
+            ApprovalQueue.status == "approved",
+        ).values(status="executing"))
+        if not result.rowcount:
+            raise OutreachNotAllowed("APPROVAL_ALREADY_EXECUTED")
 
     # ── Письма (F4) ────────────────────────────────────────────────────
     async def send_approved_email(
@@ -314,6 +326,7 @@ class OutreachService:
             # Без явного адресата письмо уходить не может — риск «письма в никуда».
             raise OutreachNotAllowed("RECIPIENT_EMAIL_MISSING")
 
+        await self._claim_execution(session, approval, user_id)
         job = await repo.create_outreach_job(
             session,
             user_id=user_id,
@@ -322,6 +335,7 @@ class OutreachService:
             recipient=recipient,
             status="queued",
         )
+        await session.commit()
         try:
             result = await self._email.send(
                 to_email=recipient,
@@ -330,6 +344,8 @@ class OutreachService:
                 reply_to=contacts.work_email or None,
             )
         except OutreachNotAllowed:
+            approval.status = "needs_review"
+            job.status = "failed"
             await repo.log_action(
                 session,
                 user_id=user_id,
@@ -341,6 +357,7 @@ class OutreachService:
         except Exception as exc:
             logger.warning("[outreach] email failed: {}", exc)
             job.status = "failed"
+            approval.status = "needs_review"
             await session.flush()
             await repo.log_action(
                 session,
@@ -351,6 +368,7 @@ class OutreachService:
             )
             raise OutreachNotAllowed("EMAIL_SEND_FAILED") from exc
 
+        approval.status = "executed"
         job.status = str(result.get("status") or "sent")
         job.external_id = (result.get("id") or None)
         job.cost_usd = float(result.get("cost_usd") or 0.0)
@@ -415,6 +433,7 @@ class OutreachService:
         if not phone:
             raise OutreachNotAllowed("RECIPIENT_PHONE_MISSING")
 
+        await self._claim_execution(session, approval, user_id)
         job = await repo.create_outreach_job(
             session,
             user_id=user_id,
@@ -423,6 +442,7 @@ class OutreachService:
             recipient=phone,
             status="queued",
         )
+        await session.commit()
         try:
             result = await self._call.place_call(
                 to_phone=phone,
@@ -434,6 +454,8 @@ class OutreachService:
                 },
             )
         except OutreachNotAllowed:
+            approval.status = "needs_review"
+            job.status = "failed"
             await repo.log_action(
                 session,
                 user_id=user_id,
@@ -445,6 +467,7 @@ class OutreachService:
         except Exception as exc:
             logger.warning("[outreach] call failed: {}", exc)
             job.status = "failed"
+            approval.status = "needs_review"
             await session.flush()
             await repo.log_action(
                 session,
@@ -455,6 +478,7 @@ class OutreachService:
             )
             raise OutreachNotAllowed("CALL_FAILED") from exc
 
+        approval.status = "executed"
         job.status = str(result.get("status") or "queued")
         job.external_id = (result.get("id") or None)
         job.cost_usd = float(result.get("cost_usd") or 0.0)

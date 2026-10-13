@@ -83,8 +83,8 @@ async def health(settings: Settings = Depends(get_settings)) -> dict:
         checks["qdrant"] = "qdrant unavailable"
         status = "degraded"
 
-    llm = get_llm()
     try:
+        llm = get_llm()
         llm_ok = await asyncio.wait_for(llm.healthcheck(), timeout=15.0)
         checks["llm"] = "ok" if llm_ok else "llm unavailable"
         if not llm_ok:

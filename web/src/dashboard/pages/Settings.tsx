@@ -1,3 +1,4 @@
+import { api, toSafeApiMessage } from "../../clientId";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -38,6 +39,15 @@ function Field({
 
 export function SettingsPage() {
   const { user, signOut } = useAuth();
+  const [linkCommand, setLinkCommand] = useState("");
+  const [linkError, setLinkError] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
+  async function linkTelegram() {
+    setLinkBusy(true); setLinkError("");
+    try { setLinkCommand((await api<{ command: string }>("/api/account/telegram/link-token", { method: "POST" })).command); }
+    catch (error) { setLinkError(toSafeApiMessage(error)); }
+    finally { setLinkBusy(false); }
+  }
   const navigate = useNavigate();
   const { form, set, reset, save, dirty, saving, error, savedOk, email } = useProfile();
   const [resetSent, setResetSent] = useState(false);
@@ -172,6 +182,13 @@ export function SettingsPage() {
                 <div className="flex items-center justify-between gap-4 px-4 py-4"><div><p className="text-sm text-white/75">Способ входа</p><p className="mt-1 text-[11px] text-white/28">Основной способ авторизации</p></div><span className="rounded-lg bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/65">{providerLabel}</span></div>
                 <div className="flex items-center justify-between gap-4 px-4 py-4"><div><p className="text-sm text-white/75">Аккаунт создан</p><p className="mt-1 text-[11px] text-white/28">Дата первой регистрации</p></div><span className="text-xs font-medium text-white/55">{createdAt}</span></div>
                 <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4"><div><p className="text-sm text-white/75">Пароль</p><p className="mt-1 text-[11px] text-white/28">Мы никогда не отображаем его в интерфейсе</p></div><button type="button" onClick={() => void sendReset()} disabled={resetSending || provider === "google"} title={provider === "google" ? "Для входа через Google смена пароля не требуется" : undefined} className="rounded-lg border border-white/[0.09] px-3.5 py-2 text-xs font-medium text-white/60 transition hover:bg-white/[0.04] hover:text-white disabled:cursor-not-allowed disabled:opacity-35">{resetSending ? "Отправка…" : "Восстановить пароль"}</button></div>
+              </div>
+              <div className="mt-6 rounded-xl border border-white/10 p-4">
+                <p className="text-sm text-white/75">Привязка Telegram</p>
+                <p className="mt-2 text-xs text-white/45">Получите команду и отправьте её боту. Она действует 10 минут; история и лимиты будут общими.</p>
+                <button type="button" disabled={linkBusy} onClick={() => void linkTelegram()} className="mt-3 rounded-lg border border-white/10 px-4 py-2 text-sm">{linkBusy ? "Готовим команду…" : "Получить команду привязки"}</button>
+                {linkCommand && <code className="mt-3 block select-all break-all text-xs text-emerald-300">{linkCommand}</code>}
+                {linkError && <p role="alert" className="mt-3 text-xs text-red-300">{linkError}</p>}
               </div>
               {resetSent && <p role="status" className="mt-4 text-xs text-emerald-300">Письмо отправлено на {email}.</p>}
               {resetError && <p role="alert" className="mt-4 text-xs text-red-300">{resetError}</p>}

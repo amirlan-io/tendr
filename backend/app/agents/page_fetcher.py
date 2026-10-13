@@ -109,6 +109,8 @@ def is_public_http_url(raw: str) -> bool:
     except (socket.gaierror, UnicodeError, OSError):
         # Не резолвится — считаем небезопасным и не тратим время на запрос.
         return False
+    if not infos:
+        return False
     for info in infos:
         address = info[4][0]
         try:
